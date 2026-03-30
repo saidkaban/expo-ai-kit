@@ -1138,7 +1138,7 @@ const { text } = await sendMessage(messages, { systemPrompt: '...' });
 | Web/generic fallback | Idea | Medium |
 | Configurable hyperparameters (temperature, etc.) | Idea | Low |
 
-Have a feature request? [Open an issue](https://github.com/laraelmas/expo-ai-kit/issues)!
+Have a feature request? [Open an issue](https://github.com/saidkaban/expo-ai-kit/issues)!
 
 ## License
 
@@ -1152,6 +1152,6 @@ Contributions are welcome! Please refer to guidelines described in the [contribu
 
 - [Documentation](https://expo-ai-kit.com)
 - [npm package](https://www.npmjs.com/package/expo-ai-kit)
-- [GitHub repository](https://github.com/laraelmas/expo-ai-kit)
+- [GitHub repository](https://github.com/saidkaban/expo-ai-kit)
 - [Apple Foundation Models](https://developer.apple.com/documentation/foundationmodels)
 - [Google ML Kit Prompt API](https://developers.google.com/ml-kit/genai)

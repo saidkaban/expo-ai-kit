@@ -34,11 +34,11 @@
     "expo-ai-kit",
     "ExpoAiKit"
   ],
-  "repository": "https://github.com/laraelmas/expo-ai-kit",
+  "repository": "https://github.com/saidkaban/expo-ai-kit",
   "bugs": {
-    "url": "https://github.com/laraelmas/expo-ai-kit/issues"
+    "url": "https://github.com/saidkaban/expo-ai-kit/issues"
   },
-  "author": "Lara Elmas (https://github.com/laraelmas)",
+  "author": "Said Kaban (https://github.com/saidkaban)",
   "license": "MIT",
   "homepage": "https://expo-ai-kit.dev",
   "dependencies": {},
