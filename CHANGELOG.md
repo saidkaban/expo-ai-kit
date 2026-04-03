@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+### Fixed
+
+- **iOS crash fix**: Added native stubs for all model abstraction API functions (`getBuiltInModels`, `getDownloadableModelStatus`, `getDeviceRamBytes`, `setModel`, `getActiveModel`, `unloadModel`, `downloadModel`, `deleteModel`) to `ExpoAiKitModule.swift`. Without these, any call to the new model APIs would crash on iOS at runtime. Built-in model (`apple-fm`) selection works; downloadable model operations throw descriptive "not yet supported" errors until Phase 3 (llama.cpp) lands.
+- **Device capability gating**: Added `meetsRequirements` field to `DownloadableModel` type. `getDownloadableModels()` now checks device RAM and `downloadModel()` rejects downloads on devices that don't meet minimum RAM requirements.
+
 ## 0.2.0
 
 ### Added

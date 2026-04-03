@@ -339,6 +339,8 @@ export type DownloadableModel = {
   contextWindow: number;
   /** Minimum device RAM in bytes required to run */
   minRamBytes: number;
+  /** Whether this device meets the model's minimum RAM requirement */
+  meetsRequirements: boolean;
   /** Current lifecycle status */
   status: DownloadableModelStatus;
 };

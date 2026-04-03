@@ -33,6 +33,7 @@ export interface ExpoAiKitNativeModule {
   // Model discovery
   getBuiltInModels(): BuiltInModel[];
   getDownloadableModelStatus(modelId: string): DownloadableModelStatus;
+  getDeviceRamBytes(): number;
 
   // Model selection & memory management
   // setModel is async: switching to a downloadable model loads it into memory.

@@ -1177,6 +1177,13 @@ export async function getDownloadableModels(): Promise<DownloadableModel[]> {
     entry.supportedPlatforms.includes(Platform.OS as 'ios' | 'android')
   );
 
+  let deviceRamBytes = 0;
+  try {
+    deviceRamBytes = ExpoAiKitModule.getDeviceRamBytes();
+  } catch {
+    // Native call unavailable -- default to 0 (all models will show meetsRequirements: false)
+  }
+
   return platformModels.map((entry) => {
     const status = ExpoAiKitModule.getDownloadableModelStatus(entry.id);
     return {
@@ -1186,6 +1193,7 @@ export async function getDownloadableModels(): Promise<DownloadableModel[]> {
       sizeBytes: entry.sizeBytes,
       contextWindow: entry.contextWindow,
       minRamBytes: entry.minRamBytes,
+      meetsRequirements: deviceRamBytes >= entry.minRamBytes,
       status,
     };
   });
@@ -1221,6 +1229,20 @@ export async function downloadModel(
       modelId,
       `Model ${modelId} is not supported on ${Platform.OS}`
     );
+  }
+
+  try {
+    const deviceRamBytes = ExpoAiKitModule.getDeviceRamBytes();
+    if (deviceRamBytes < entry.minRamBytes) {
+      throw new ModelError(
+        'DEVICE_NOT_SUPPORTED',
+        modelId,
+        `Device has ${Math.round(deviceRamBytes / 1e9)}GB RAM, model requires ${Math.round(entry.minRamBytes / 1e9)}GB`
+      );
+    }
+  } catch (e) {
+    if (e instanceof ModelError) throw e;
+    // If getDeviceRamBytes is unavailable, skip the check
   }
 
   let subscription: ReturnType<typeof ExpoAiKitModule.addListener> | undefined;
