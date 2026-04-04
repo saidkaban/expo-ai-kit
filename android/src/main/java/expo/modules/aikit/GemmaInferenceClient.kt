@@ -5,6 +5,7 @@ import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.Backend
+import com.google.ai.edge.litertlm.Message
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -64,7 +65,7 @@ class GemmaInferenceClient(private val context: Context) {
       withContext(Dispatchers.IO) {
         val engineConfig = EngineConfig(
           modelPath = modelPath,
-          backend = Backend.GPU()
+          backend = Backend.GPU
         )
         val newEngine = Engine(engineConfig)
         newEngine.initialize()
@@ -122,7 +123,7 @@ class GemmaInferenceClient(private val context: Context) {
 
     try {
       withContext(Dispatchers.IO) {
-        conv.sendMessage(contents = fullPrompt).toString()
+        conv.sendMessage(Message.of(fullPrompt)).toString()
       }
     } catch (e: OutOfMemoryError) {
       throw RuntimeException("INFERENCE_OOM:${loadedModelId ?: "unknown"}:Out of memory during inference")
@@ -153,7 +154,7 @@ class GemmaInferenceClient(private val context: Context) {
       withContext(Dispatchers.IO) {
         var previousText = ""
 
-        conv.sendMessageAsync(contents = fullPrompt).collect { message ->
+        conv.sendMessageAsync(Message.of(fullPrompt)).collect { message ->
           val accumulated = message.toString()
           val token = if (accumulated.length > previousText.length) {
             accumulated.substring(previousText.length)
