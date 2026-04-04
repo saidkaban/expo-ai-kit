@@ -2,6 +2,8 @@
 
 On-device AI for Expo apps. Run language models locally—no API keys, no cloud, just native intelligence.
 
+**Now with Gemma 4 support** — Download and run Google's [Gemma 4](https://blog.google/technology/developers/gemma-4/) E2B (2.3B) and E4B (4.5B) models directly on Android devices via [LiteRT-LM](https://ai.google.dev/edge/litert-lm). Full on-device inference with GPU acceleration, streaming, and zero cloud dependency.
+
 [![npm version](https://img.shields.io/npm/v/expo-ai-kit.svg)](https://www.npmjs.com/package/expo-ai-kit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -35,7 +37,8 @@ On-device AI for Expo apps. Run language models locally—no API keys, no cloud,
 - **Privacy-first** — All inference happens on-device; no data leaves the user's device
 - **Zero latency** — No network round-trips required
 - **Free forever** — No API costs, rate limits, or subscriptions
-- **Native performance** — Built on Apple Foundation Models (iOS) and Google ML Kit Prompt API (Android)
+- **Gemma 4 on-device** — Download and run Gemma 4 E2B/E4B models directly on Android with GPU acceleration
+- **Native performance** — Built on Apple Foundation Models (iOS), ML Kit (Android), and LiteRT-LM (Gemma 4)
 - **Multi-turn conversations** — Full conversation context support
 - **Streaming support** — Progressive token streaming for responsive UIs
 - **Simple API** — Core functions plus prompt helpers for common tasks

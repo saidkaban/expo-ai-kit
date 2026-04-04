@@ -1,7 +1,7 @@
 {
   "name": "expo-ai-kit",
   "version": "0.3.0",
-  "description": "Expo AI Kit module",
+  "description": "On-device AI for Expo apps — run Gemma 4, Apple Foundation Models, and ML Kit locally with zero API keys",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "files": [
@@ -31,6 +31,14 @@
   "keywords": [
     "react-native",
     "expo",
+    "gemma",
+    "gemma-4",
+    "on-device-ai",
+    "llm",
+    "litert",
+    "apple-foundation-models",
+    "ml-kit",
+    "local-inference",
     "expo-ai-kit",
     "ExpoAiKit"
   ],
