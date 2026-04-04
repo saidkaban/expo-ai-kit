@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0
+
+### Changed
+
+- **Android: Migrated from MediaPipe to LiteRT-LM** for downloadable model inference. MediaPipe LLM Inference is deprecated by Google; LiteRT-LM is its successor with better model support, GPU/NPU acceleration, and active development.
+- **Model registry updated to `.litertlm` format.** Gemma 4 E2B and E4B models now point to `litert-community/gemma-4-E2B-it-litert-lm` and `gemma-4-E4B-it-litert-lm` on Hugging Face. File sizes updated (2.58GB / 3.65GB).
+- **ML Kit bumped to `1.0.0-beta2`** (from `1.0.0-alpha1`) for built-in model support.
+- **Downloadable models are Android-only for now.** `supportedPlatforms` narrowed to `['android']`. iOS downloadable model support is planned for when Google ships LiteRT-LM Swift APIs.
+
+### Removed
+
+- `com.google.mediapipe:tasks-genai` dependency (replaced by LiteRT-LM)
+- llama.cpp submodule and all C bridge plans (no longer needed)
+
+### Note
+
+iOS continues to work with Apple Foundation Models (iOS 26+). Downloadable model APIs (`downloadModel`, `setModel` with Gemma models) are functional on Android only. On iOS, these throw descriptive "not yet supported" errors — no crashes.
+
 ## 0.2.1
 
 ### Fixed

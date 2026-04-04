@@ -14,6 +14,15 @@ On-device AI for Expo apps. Run language models locally—no API keys, no cloud,
 | iOS 26+ | [Apple Foundation Models](https://developer.apple.com/documentation/FoundationModels) |
 | Android (supported devices) | [ML Kit Prompt API](https://developers.google.com/ml-kit/genai#prompt-device) |
 
+### Downloadable Models (Gemma 4)
+
+| Platform | Status |
+|----------|--------|
+| Android | Gemma 4 E2B (2.3B) and E4B (4.5B) via [LiteRT-LM](https://ai.google.dev/edge/litert-lm) |
+| iOS | Coming soon — waiting for LiteRT-LM Swift APIs from Google |
+
+> **Note:** iOS downloadable model support (Gemma 4 E2B/E4B) is planned for a future release. We are waiting for Google to ship native Swift APIs for LiteRT-LM. Built-in Apple Foundation Models work on iOS 26+ today.
+
 ### Unsupported
 
 | Platform | Fallback Behavior |

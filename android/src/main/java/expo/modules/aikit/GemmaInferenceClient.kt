@@ -1,8 +1,10 @@
 package expo.modules.aikit
 
 import android.content.Context
-import com.google.mediapipe.tasks.genai.llminference.LlmInference
-import kotlinx.coroutines.CompletableDeferred
+import com.google.ai.edge.litertlm.Engine
+import com.google.ai.edge.litertlm.EngineConfig
+import com.google.ai.edge.litertlm.Conversation
+import com.google.ai.edge.litertlm.Backend
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -16,7 +18,7 @@ import java.net.URL
 import java.security.MessageDigest
 
 /**
- * Wrapper around MediaPipe LlmInference for Gemma 4 models.
+ * Wrapper around LiteRT-LM Engine for Gemma 4 models.
  *
  * Concurrency model:
  * - A Mutex guards all state transitions (load, unload, inference).
@@ -28,7 +30,8 @@ import java.security.MessageDigest
 class GemmaInferenceClient(private val context: Context) {
 
   private val mutex = Mutex()
-  private var llmInference: LlmInference? = null
+  private var engine: Engine? = null
+  private var conversation: Conversation? = null
   private var loadedModelId: String? = null
 
   @Volatile
@@ -39,33 +42,50 @@ class GemmaInferenceClient(private val context: Context) {
   // -------------------------------------------------------------------------
 
   /**
-   * Load a model into memory. Unloads any previously loaded model first.
+   * Load a model into memory using LiteRT-LM Engine.
+   * Unloads any previously loaded model first.
    * Caller is responsible for emitting onModelStateChange events.
    */
   suspend fun loadModel(modelId: String, modelPath: String) = mutex.withLock {
     // Unload previous model if different
     if (loadedModelId != null && loadedModelId != modelId) {
-      llmInference?.close()
-      llmInference = null
+      conversation?.close()
+      engine?.close()
+      conversation = null
+      engine = null
       loadedModelId = null
     }
 
-    if (loadedModelId == modelId && llmInference != null) {
+    if (loadedModelId == modelId && engine != null) {
       return@withLock // Already loaded
     }
 
     try {
-      val options = LlmInference.LlmInferenceOptions.builder()
-        .setModelPath(modelPath)
-        .build()
-      llmInference = LlmInference.createFromOptions(context, options)
-      loadedModelId = modelId
+      withContext(Dispatchers.IO) {
+        val engineConfig = EngineConfig(
+          modelPath = modelPath,
+          backend = Backend.GPU()
+        )
+        val newEngine = Engine(engineConfig)
+        newEngine.initialize()
+        val newConversation = newEngine.createConversation()
+
+        engine = newEngine
+        conversation = newConversation
+        loadedModelId = modelId
+      }
     } catch (e: OutOfMemoryError) {
-      llmInference = null
+      conversation?.close()
+      engine?.close()
+      conversation = null
+      engine = null
       loadedModelId = null
       throw RuntimeException("INFERENCE_OOM:$modelId:Device does not have enough memory to load model")
     } catch (e: Exception) {
-      llmInference = null
+      conversation?.close()
+      engine?.close()
+      conversation = null
+      engine = null
       loadedModelId = null
       throw RuntimeException("MODEL_LOAD_FAILED:$modelId:${e.message}")
     }
@@ -75,14 +95,16 @@ class GemmaInferenceClient(private val context: Context) {
    * Unload the current model from memory.
    */
   suspend fun unloadModel() = mutex.withLock {
-    llmInference?.close()
-    llmInference = null
+    conversation?.close()
+    engine?.close()
+    conversation = null
+    engine = null
     loadedModelId = null
   }
 
   fun getLoadedModelId(): String? = loadedModelId
 
-  fun isModelLoaded(): Boolean = llmInference != null
+  fun isModelLoaded(): Boolean = engine != null
 
   // -------------------------------------------------------------------------
   // Inference
@@ -93,14 +115,14 @@ class GemmaInferenceClient(private val context: Context) {
    * The mutex ensures this cannot run concurrently with load/unload.
    */
   suspend fun generateText(prompt: String, systemPrompt: String): String = mutex.withLock {
-    val inference = llmInference
+    val conv = conversation
       ?: throw RuntimeException("MODEL_NOT_DOWNLOADED:${loadedModelId ?: "unknown"}:No model loaded")
 
     val fullPrompt = buildFullPrompt(prompt, systemPrompt)
 
     try {
       withContext(Dispatchers.IO) {
-        inference.generateResponse(fullPrompt)
+        conv.sendMessage(contents = fullPrompt).toString()
       }
     } catch (e: OutOfMemoryError) {
       throw RuntimeException("INFERENCE_OOM:${loadedModelId ?: "unknown"}:Out of memory during inference")
@@ -113,47 +135,37 @@ class GemmaInferenceClient(private val context: Context) {
    * Generate a streaming response. The onChunk callback receives
    * (token=delta, accumulatedText=full, isDone) matching the PromptApiClient contract.
    *
-   * MediaPipe's generateResponseAsync passes accumulated text in its partial result
-   * listener, so we diff against previousText to extract the delta token.
-   *
-   * We use a CompletableDeferred to keep the mutex held until streaming completes,
-   * preventing concurrent load/unload during active inference.
+   * LiteRT-LM's sendMessageAsync() returns a Flow<Message>. Each emission
+   * contains accumulated text, so we diff against previousText to extract
+   * the delta token.
    */
   suspend fun generateTextStream(
     prompt: String,
     systemPrompt: String,
     onChunk: (token: String, accumulatedText: String, isDone: Boolean) -> Unit
   ) = mutex.withLock {
-    val inference = llmInference
+    val conv = conversation
       ?: throw RuntimeException("MODEL_NOT_DOWNLOADED:${loadedModelId ?: "unknown"}:No model loaded")
 
     val fullPrompt = buildFullPrompt(prompt, systemPrompt)
 
     try {
       withContext(Dispatchers.IO) {
-        val completion = CompletableDeferred<String>()
         var previousText = ""
 
-        // MediaPipe streaming: generateResponseAsync calls the listener with
-        // accumulated text (not deltas). We normalize to match PromptApiClient's
-        // (token=delta, accumulatedText=full, isDone) contract.
-        inference.generateResponseAsync(fullPrompt) { partialResult, done ->
-          val accumulated = partialResult ?: ""
+        conv.sendMessageAsync(contents = fullPrompt).collect { message ->
+          val accumulated = message.toString()
           val token = if (accumulated.length > previousText.length) {
             accumulated.substring(previousText.length)
           } else {
             ""
           }
           previousText = accumulated
-          onChunk(token, accumulated, done)
-
-          if (done) {
-            completion.complete(accumulated)
-          }
+          onChunk(token, accumulated, false)
         }
 
-        // Wait until streaming finishes so the mutex stays held
-        completion.await()
+        // Final done event for consistency with PromptApiClient
+        onChunk("", previousText, true)
       }
     } catch (e: OutOfMemoryError) {
       throw RuntimeException("INFERENCE_OOM:${loadedModelId ?: "unknown"}:Out of memory during inference")
@@ -189,8 +201,8 @@ class GemmaInferenceClient(private val context: Context) {
         val modelsDir = File(context.filesDir, "models")
         modelsDir.mkdirs()
 
-        val targetFile = File(modelsDir, "$modelId.gguf")
-        val tempFile = File(modelsDir, "$modelId.gguf.tmp")
+        val targetFile = File(modelsDir, "$modelId.litertlm")
+        val tempFile = File(modelsDir, "$modelId.litertlm.tmp")
 
         try {
           val connection = URL(url).openConnection() as HttpURLConnection
@@ -256,17 +268,19 @@ class GemmaInferenceClient(private val context: Context) {
   suspend fun deleteModelFile(modelId: String) = mutex.withLock {
     // Unload if this model is currently loaded
     if (loadedModelId == modelId) {
-      llmInference?.close()
-      llmInference = null
+      conversation?.close()
+      engine?.close()
+      conversation = null
+      engine = null
       loadedModelId = null
     }
 
-    val modelFile = File(context.filesDir, "models/$modelId.gguf")
+    val modelFile = File(context.filesDir, "models/$modelId.litertlm")
     if (modelFile.exists()) {
       modelFile.delete()
     }
     // Also clean up any partial downloads
-    val tempFile = File(context.filesDir, "models/$modelId.gguf.tmp")
+    val tempFile = File(context.filesDir, "models/$modelId.litertlm.tmp")
     if (tempFile.exists()) {
       tempFile.delete()
     }
@@ -276,14 +290,14 @@ class GemmaInferenceClient(private val context: Context) {
    * Check if a model file exists on disk.
    */
   fun isModelFileDownloaded(modelId: String): Boolean {
-    return File(context.filesDir, "models/$modelId.gguf").exists()
+    return File(context.filesDir, "models/$modelId.litertlm").exists()
   }
 
   /**
    * Get the file path for a downloaded model.
    */
   fun getModelFilePath(modelId: String): String {
-    return File(context.filesDir, "models/$modelId.gguf").absolutePath
+    return File(context.filesDir, "models/$modelId.litertlm").absolutePath
   }
 
   // -------------------------------------------------------------------------

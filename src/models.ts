@@ -15,7 +15,7 @@ export type ModelRegistryEntry = {
   parameterCount: string;
   /** Quantization variant */
   quantization: string;
-  /** URL to download the GGUF model file */
+  /** URL to download the LiteRT-LM model file */
   downloadUrl: string;
   /** SHA256 hash for integrity verification after download */
   sha256: string;
@@ -24,10 +24,9 @@ export type ModelRegistryEntry = {
   /**
    * Practical context window (max tokens) for this model on constrained devices.
    *
-   * These are conservative defaults, NOT the base model's theoretical max (128k).
-   * On a memory-constrained mobile device running quantized inference, KV cache
-   * cannot fit the full 128k context. These values should be benchmarked and
-   * adjusted during Phase 2 testing with real devices.
+   * These are conservative defaults, NOT the base model's theoretical max.
+   * These values should be benchmarked and adjusted during testing with
+   * real devices.
    */
   contextWindow: number;
   /** Minimum device RAM in bytes required to run this model */
@@ -41,31 +40,31 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     id: 'gemma-e2b',
     name: 'Gemma 4 E2B',
     parameterCount: '2.3B',
-    quantization: 'Q4_K_M',
+    quantization: 'mixed-2/4/8-bit',
     downloadUrl:
-      'https://huggingface.co/google/gemma-4-e2b-it-GGUF/resolve/main/gemma-4-e2b-it-Q4_K_M.gguf',
+      'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm',
     sha256: '', // TODO: Fill with actual hash once model file is verified
-    sizeBytes: 1_400_000_000, // ~1.4GB
-    // Conservative limit for 4GB RAM devices. Base model supports 128k but
-    // KV cache won't fit. TODO: Benchmark during Phase 2 testing.
+    sizeBytes: 2_580_000_000, // ~2.58GB
+    // Conservative limit for 4GB RAM devices.
+    // TODO: Benchmark during Phase 2 testing.
     contextWindow: 8_000,
     minRamBytes: 4_000_000_000, // 4GB
-    supportedPlatforms: ['ios', 'android'],
+    supportedPlatforms: ['android'], // iOS waiting for LiteRT-LM Swift APIs
   },
   {
     id: 'gemma-e4b',
     name: 'Gemma 4 E4B',
     parameterCount: '4.5B',
-    quantization: 'Q4_K_M',
+    quantization: 'mixed-4/8-bit',
     downloadUrl:
-      'https://huggingface.co/google/gemma-4-e4b-it-GGUF/resolve/main/gemma-4-e4b-it-Q4_K_M.gguf',
+      'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm',
     sha256: '', // TODO: Fill with actual hash once model file is verified
-    sizeBytes: 2_800_000_000, // ~2.8GB
-    // Conservative limit for 6GB RAM devices. Base model supports 128k but
-    // KV cache won't fit. TODO: Benchmark during Phase 2 testing.
+    sizeBytes: 3_650_000_000, // ~3.65GB
+    // Conservative limit for 6GB RAM devices.
+    // TODO: Benchmark during Phase 2 testing.
     contextWindow: 16_000,
     minRamBytes: 6_000_000_000, // 6GB
-    supportedPlatforms: ['ios', 'android'],
+    supportedPlatforms: ['android'], // iOS waiting for LiteRT-LM Swift APIs
   },
 ];
 
