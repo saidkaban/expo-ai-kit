@@ -42,7 +42,16 @@ android {
   }
 }
 
+// litertlm-android 0.10.0 ships Kotlin 2.3.0 metadata. Expo SDK 55 pins
+// the Kotlin compiler to 2.1.x which can only read up to 2.2.0 metadata.
+// This flag tells the compiler to skip the metadata version check.
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+  kotlinOptions {
+    freeCompilerArgs += ["-Xskip-metadata-version-check"]
+  }
+}
+
 dependencies {
   implementation "com.google.mlkit:genai-prompt:1.0.0-beta2"
-  implementation "com.google.ai.edge.litertlm:litertlm-android:0.8.0"
+  implementation "com.google.ai.edge.litertlm:litertlm-android:0.10.0"
 }

@@ -1,15 +1,20 @@
 package expo.modules.aikit
 
+import android.app.ActivityManager
 import android.content.Context
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Conversation
+import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Message
+import com.google.ai.edge.litertlm.MessageCallback
+import com.google.ai.edge.litertlm.Contents
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -17,6 +22,8 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * Wrapper around LiteRT-LM Engine for Gemma 4 models.
@@ -47,7 +54,7 @@ class GemmaInferenceClient(private val context: Context) {
    * Unloads any previously loaded model first.
    * Caller is responsible for emitting onModelStateChange events.
    */
-  suspend fun loadModel(modelId: String, modelPath: String) = mutex.withLock {
+  suspend fun loadModel(modelId: String, modelPath: String, minRamBytes: Long = 0, backend: String = "auto") = mutex.withLock {
     // Unload previous model if different
     if (loadedModelId != null && loadedModelId != modelId) {
       conversation?.close()
@@ -61,15 +68,56 @@ class GemmaInferenceClient(private val context: Context) {
       return@withLock // Already loaded
     }
 
+    // Soft memory check. LiteRT-LM memory-maps model weights so actual RSS
+    // is much lower than file size. We log a warning but always attempt the
+    // load — Engine.initialize() may still succeed. If it truly OOMs, Android's
+    // lmkd kills the process (uncatchable signal 9), but that's better than
+    // blocking devices that could have worked.
+    val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+    if (activityManager != null && minRamBytes > 0) {
+      val memInfo = ActivityManager.MemoryInfo()
+      activityManager.getMemoryInfo(memInfo)
+      if (memInfo.availMem < minRamBytes) {
+        android.util.Log.w("ExpoAiKit",
+          "Low memory warning for $modelId: " +
+          "available ${memInfo.availMem / 1_000_000}MB, recommended ${minRamBytes / 1_000_000}MB. " +
+          "Attempting load anyway (LiteRT-LM uses memory-mapped I/O)."
+        )
+      }
+    }
+
     try {
       withContext(Dispatchers.IO) {
-        val engineConfig = EngineConfig(
-          modelPath = modelPath,
-          backend = Backend.GPU
-        )
-        val newEngine = Engine(engineConfig)
-        newEngine.initialize()
-        val newConversation = newEngine.createConversation()
+        val newEngine = when (backend) {
+          "gpu" -> {
+            val config = EngineConfig(modelPath = modelPath, backend = Backend.GPU())
+            val eng = Engine(config)
+            eng.initialize()
+            eng
+          }
+          "cpu" -> {
+            val config = EngineConfig(modelPath = modelPath, backend = Backend.CPU())
+            val eng = Engine(config)
+            eng.initialize()
+            eng
+          }
+          else -> {
+            // "auto": try GPU first, fall back to CPU
+            try {
+              val gpuConfig = EngineConfig(modelPath = modelPath, backend = Backend.GPU())
+              val eng = Engine(gpuConfig)
+              eng.initialize()
+              eng
+            } catch (e: Exception) {
+              val cpuConfig = EngineConfig(modelPath = modelPath, backend = Backend.CPU())
+              val eng = Engine(cpuConfig)
+              eng.initialize()
+              eng
+            }
+          }
+        }
+
+        val newConversation = newEngine.createConversation(ConversationConfig())
 
         engine = newEngine
         conversation = newConversation
@@ -123,7 +171,25 @@ class GemmaInferenceClient(private val context: Context) {
 
     try {
       withContext(Dispatchers.IO) {
-        conv.sendMessage(Message.of(fullPrompt)).toString()
+        suspendCancellableCoroutine<String> { continuation ->
+          val result = StringBuilder()
+          conv.sendMessageAsync(
+            Contents.of(fullPrompt),
+            object : MessageCallback {
+              override fun onMessage(message: Message) {
+                result.clear()
+                result.append(message.toString())
+              }
+              override fun onDone() {
+                continuation.resume(result.toString())
+              }
+              override fun onError(throwable: Throwable) {
+                continuation.resumeWithException(throwable)
+              }
+            },
+            emptyMap()
+          )
+        }
       }
     } catch (e: OutOfMemoryError) {
       throw RuntimeException("INFERENCE_OOM:${loadedModelId ?: "unknown"}:Out of memory during inference")
@@ -136,7 +202,7 @@ class GemmaInferenceClient(private val context: Context) {
    * Generate a streaming response. The onChunk callback receives
    * (token=delta, accumulatedText=full, isDone) matching the PromptApiClient contract.
    *
-   * LiteRT-LM's sendMessageAsync() returns a Flow<Message>. Each emission
+   * LiteRT-LM 0.10.0 uses a MessageCallback interface. Each onMessage emission
    * contains accumulated text, so we diff against previousText to extract
    * the delta token.
    */
@@ -152,21 +218,32 @@ class GemmaInferenceClient(private val context: Context) {
 
     try {
       withContext(Dispatchers.IO) {
-        var previousText = ""
-
-        conv.sendMessageAsync(Message.of(fullPrompt)).collect { message ->
-          val accumulated = message.toString()
-          val token = if (accumulated.length > previousText.length) {
-            accumulated.substring(previousText.length)
-          } else {
-            ""
-          }
-          previousText = accumulated
-          onChunk(token, accumulated, false)
+        suspendCancellableCoroutine<Unit> { continuation ->
+          var previousText = ""
+          conv.sendMessageAsync(
+            Contents.of(fullPrompt),
+            object : MessageCallback {
+              override fun onMessage(message: Message) {
+                val accumulated = message.toString()
+                val token = if (accumulated.length > previousText.length) {
+                  accumulated.substring(previousText.length)
+                } else {
+                  ""
+                }
+                previousText = accumulated
+                onChunk(token, accumulated, false)
+              }
+              override fun onDone() {
+                onChunk("", previousText, true)
+                continuation.resume(Unit)
+              }
+              override fun onError(throwable: Throwable) {
+                continuation.resumeWithException(throwable)
+              }
+            },
+            emptyMap()
+          )
         }
-
-        // Final done event for consistency with PromptApiClient
-        onChunk("", previousText, true)
       }
     } catch (e: OutOfMemoryError) {
       throw RuntimeException("INFERENCE_OOM:${loadedModelId ?: "unknown"}:Out of memory during inference")
@@ -206,14 +283,7 @@ class GemmaInferenceClient(private val context: Context) {
         val tempFile = File(modelsDir, "$modelId.litertlm.tmp")
 
         try {
-          val connection = URL(url).openConnection() as HttpURLConnection
-          connection.connectTimeout = 30_000
-          connection.readTimeout = 30_000
-          connection.connect()
-
-          if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-            throw IOException("HTTP ${connection.responseCode}: ${connection.responseMessage}")
-          }
+          val connection = openConnectionFollowingRedirects(url)
 
           val totalBytes = connection.contentLengthLong
           var bytesRead = 0L
@@ -310,6 +380,49 @@ class GemmaInferenceClient(private val context: Context) {
       "$systemPrompt\n\n$prompt"
     } else {
       prompt
+    }
+  }
+
+  /**
+   * Open an HTTP connection, manually following up to 5 redirects across hosts.
+   *
+   * HttpURLConnection follows redirects by default but only within the same host.
+   * HuggingFace LFS redirects from huggingface.co to cdn-lfs-us-1.huggingface.co,
+   * which is a cross-host redirect that HttpURLConnection silently does NOT follow —
+   * it returns the 302 response as-is (or on some Android versions, returns a small
+   * HTML/error body instead of the actual file). This caused downloaded model files
+   * to contain garbage instead of the real model weights.
+   */
+  private fun openConnectionFollowingRedirects(url: String): HttpURLConnection {
+    var currentUrl = url
+    var redirects = 0
+    while (true) {
+      val connection = URL(currentUrl).openConnection() as HttpURLConnection
+      connection.connectTimeout = 30_000
+      connection.readTimeout = 30_000
+      connection.instanceFollowRedirects = false
+      connection.connect()
+
+      val code = connection.responseCode
+      if (code in listOf(
+          HttpURLConnection.HTTP_MOVED_PERM,
+          HttpURLConnection.HTTP_MOVED_TEMP,
+          HttpURLConnection.HTTP_SEE_OTHER,
+          307, 308
+        )) {
+        val location = connection.getHeaderField("Location")
+          ?: throw IOException("Redirect with no Location header")
+        connection.disconnect()
+        redirects++
+        if (redirects > 5) throw IOException("Too many redirects")
+        currentUrl = location
+        continue
+      }
+
+      if (code != HttpURLConnection.HTTP_OK) {
+        throw IOException("HTTP $code: ${connection.responseMessage}")
+      }
+      return connection
     }
   }
 
