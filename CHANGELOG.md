@@ -1,5 +1,75 @@
 # Changelog
 
+## 0.4.0
+
+> **Breaking change.** Prompt helpers, smart suggestions, React hooks, and the
+> chat-memory utilities have been removed. The core inference and model-management
+> APIs are unchanged.
+
+### Removed
+
+- **Prompt helpers** — `summarize`, `translate`, `rewrite`, `extractKeyPoints`, `answerQuestion` and their `stream*` variants.
+- **Smart suggestions** — `suggest`, `smartReply`, `autocomplete`, `parseSuggestResponse` and their `stream*` variants.
+- **React hooks** (`hooks.ts`) — `useChat`, `useCompletion`, `useOnDeviceAI`, `useModel`, `useAvailableModels`.
+- **Chat memory** (`memory.ts`) — `ChatMemoryManager` and `buildPrompt`.
+- All associated option/return types (`LLMSummarizeOptions`, `LLMSuggestOptions`, `UseChatOptions`, `ChatMemoryOptions`, etc.).
+
+### Changed
+
+- **README rewritten** — trimmed from 515 to ~130 lines and reorganised for a quick scan. Added a "Downloadable models (Gemma 4)" section documenting the previously undocumented model-management API.
+
+### Migration
+
+Call `sendMessage` / `streamMessage` directly with your own system prompt in place
+of the removed helpers. For conversation history, keep your own message array and
+pass it on each call. The inference API (`isAvailable`, `sendMessage`,
+`streamMessage`) and the model API (`getBuiltInModels`, `getDownloadableModels`,
+`downloadModel`, `deleteModel`, `setModel`, `unloadModel`, `getActiveModel`) are
+unchanged.
+
+## 0.3.6
+
+### Fixed
+
+- **Android: stopped double-formatting Gemma prompts.** The Gemma path was sending `USER: ...\nASSISTANT:` markers to the LiteRT-LM Conversation API, which already wraps messages in Gemma's turn format internally — producing garbled, badly-spaced output. ML Kit and Gemma paths now format prompts independently (ML Kit keeps role prefixes, Gemma passes raw content). Streaming token extraction is also now robust to both accumulated and delta `onMessage` behavior.
+
+## 0.3.5
+
+### Fixed
+
+- **Android: `accumulatedText` now holds the full text.** Native clients were sending only the latest token as `accumulatedText` in `onStreamToken` events, violating the JS API contract. Tokens are now properly accumulated.
+
+## 0.3.4
+
+### Added
+
+- **`setModel` backend option.** `setModel(id, { backend })` accepts `'auto'` (default — GPU with CPU fallback), `'gpu'`, or `'cpu'`. CPU is slower (~2-5 tok/s) but runs on low-RAM devices where GPU would trigger OOM kills. Added a soft RAM pre-check that logs a warning when available memory is below the model minimum but still attempts the load (LiteRT-LM uses memory-mapped I/O).
+
+### Changed
+
+- **Android: upgraded LiteRT-LM to 0.10.0.** 0.8.0 could not parse the current `.litertlm` model files on Hugging Face (SIGABRT, "Unknown model type"). 0.10.0 supports the current format. Added `-Xskip-metadata-version-check` to bridge the Kotlin metadata mismatch.
+- **Lowered `minRamBytes` for Gemma 4 models.** LiteRT-LM memory-maps weights, so real usage is far below file size. E2B: 4GB → 2GB, E4B: 6GB → 3GB. Verified E2B runs on a Samsung A16 (~3GB available) with the CPU backend.
+
+### Fixed
+
+- **Android: Hugging Face model downloads.** `HttpURLConnection` doesn't follow cross-host redirects (`huggingface.co` → `cdn-lfs-us-1.huggingface.co`), so downloaded files could contain garbage. Added manual redirect handling.
+
+## 0.3.3
+
+### Fixed
+
+- **Android: adapted `GemmaInferenceClient` to the LiteRT-LM 0.8.0 API** — `Backend.GPU()` → `Backend.GPU`, and `sendMessage`/`sendMessageAsync` now use `Message.of()` instead of raw strings.
+
+## 0.3.2
+
+### Fixed
+
+- **Android: pinned `litertlm-android` to 0.8.0** for Kotlin 2.1 compatibility. The version range resolved to 0.10.0, which requires Kotlin 2.2+ (metadata 2.3.0) and is incompatible with Expo's Kotlin 2.1 compiler. Also fixed a coroutine overload ambiguity in `unloadModel`.
+
+## 0.3.1
+
+Maintenance release — version bump only, no functional changes.
+
 ## 0.3.0
 
 ### Changed

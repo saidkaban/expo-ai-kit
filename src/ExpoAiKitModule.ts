@@ -1,11 +1,11 @@
 import { requireNativeModule } from 'expo-modules-core';
 import type { EventSubscription } from 'expo-modules-core';
 import {
+  BuiltInModel,
+  DownloadableModelStatus,
   LLMMessage,
   LLMResponse,
   LLMStreamEvent,
-  BuiltInModel,
-  DownloadableModelStatus,
   ModelDownloadProgressEvent,
   ModelStateChangeEvent,
 } from './types';
