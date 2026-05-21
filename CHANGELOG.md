@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+### Fixed
+
+- **Packaging: stopped shipping `android/build/` artifacts.** The `files` allowlist in `package.json` included the entire `android` directory, dragging stale native build output (`.dex`/`.jar` files, Kotlin compile caches) into the published tarball. Narrowed it to `android/src` and `android/build.gradle` — the package drops from ~190 files / 1.7 MB to 31 files / 132 KB unpacked.
+
 ## 0.4.0
 
 > **Breaking change.** Prompt helpers, smart suggestions, React hooks, and the
