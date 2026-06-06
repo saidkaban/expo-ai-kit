@@ -16,15 +16,21 @@ Pod::Spec.new do |s|
   }
   s.swift_version  = '5.9'
   s.source         = { git: 'https://github.com/saidkaban/expo-ai-kit' }
-  s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
 
-  # Swift/Objective-C compatibility
+  # LiteRT-LM C xcframework is downloaded into ios/Vendor/ on pod install.
+  # Swift wrapper sources (Apache 2.0) live alongside in ios/Vendor/LiteRTLM/.
+  s.prepare_command = 'bash ../scripts/install-litertlm.sh'
+
+  s.vendored_frameworks = 'Vendor/CLiteRTLM.xcframework'
+
+  s.source_files = [
+    '*.swift',
+    'Vendor/LiteRTLM/*.swift',
+  ]
+
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
   }
-
-  s.source_files = "**/*.swift"
 end
-

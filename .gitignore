@@ -59,3 +59,7 @@ yarn-error.log
 
 # Example
 example/
+
+# LiteRT-LM C xcframework — downloaded on pod install by scripts/install-litertlm.sh
+ios/Vendor/CLiteRTLM.xcframework/
+ios/Vendor/.litertlm-version

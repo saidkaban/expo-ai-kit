@@ -4,9 +4,26 @@ import FoundationModels
 public class ExpoAiKitModule: Module {
   // Track active streaming tasks for cancellation
   private var activeStreamTasks: [String: Task<Void, Never>] = [:]
+  // Track in-flight (non-streaming) sendMessage tasks so stopStreaming can cancel them.
+  private var activeSendTasks: [String: Task<[String: Any], Error>] = [:]
 
   // Active model ID: "apple-fm" (default) or a downloadable model ID
   private var activeModelId: String = "apple-fm"
+
+  // Best-effort sampling defaults for the active session (set by setModel).
+  // Only the Apple FM path reads this; Gemma applies sampling at conversation creation.
+  private var generationConfig: [String: Double] = [:]
+
+  // Gemma/LiteRT-LM client. Constructor is cheap — no engine load until setModel.
+  private let gemmaClient = GemmaInferenceClient()
+
+  // Build Apple Foundation Models generation options from the stored config.
+  @available(iOS 26.0, *)
+  private func appleGenerationOptions() -> GenerationOptions {
+    let temperature = generationConfig["temperature"]
+    let maxTokens = generationConfig["maxTokens"].map { Int($0) }
+    return GenerationOptions(temperature: temperature, maximumResponseTokens: maxTokens)
+  }
 
   public func definition() -> ModuleDefinition {
     Name("ExpoAiKit")
@@ -15,24 +32,28 @@ public class ExpoAiKitModule: Module {
     Events("onStreamToken", "onDownloadProgress", "onModelStateChange")
 
     // ==================================================================
-    // Existing inference API -- Apple Foundation Models path unchanged
+    // Inference API
     // ==================================================================
 
-    Function("isAvailable") {
+    Function("isAvailable") { () -> Bool in
+      // iOS 26 alone isn't enough: Apple Intelligence must be enabled and the
+      // model actually available on this device. Check the real availability.
       if #available(iOS 26.0, *) {
-        return true
-      } else {
+        if case .available = SystemLanguageModel.default.availability {
+          return true
+        }
         return false
       }
+      return false
     }
 
     AsyncFunction("sendMessage") {
       (
         messages: [[String: Any]],
-        fallbackSystemPrompt: String
+        fallbackSystemPrompt: String,
+        sessionId: String
       ) async throws -> [String: Any] in
 
-      // Extract base system prompt from messages, or use fallback
       let baseSystemPrompt =
         messages
         .first { ($0["role"] as? String) == "system" }?["content"] as? String
@@ -40,24 +61,44 @@ public class ExpoAiKitModule: Module {
           ? "You are a helpful, friendly assistant."
           : fallbackSystemPrompt)
 
-      // Build conversation history prompt from all non-system messages
-      // On-device models are stateless, so we must include full history in each request
-      let conversationPrompt = messages
-        .filter { ($0["role"] as? String) != "system" }
-        .map { msg -> String in
-          let role = (msg["role"] as? String ?? "user").uppercased()
-          let content = msg["content"] as? String ?? ""
-          return "\(role): \(content)"
-        }
-        .joined(separator: "\n") + "\nASSISTANT:"
+      let nonSystemMessages = messages.filter { ($0["role"] as? String) != "system" }
 
-      if #available(iOS 26.0, *) {
-        let session = LanguageModelSession(instructions: baseSystemPrompt)
-        let response = try await session.respond(to: conversationPrompt)
-        return ["text": response.content]
-      } else {
-        return ["text": "[On-device AI requires iOS 26+]"]
+      // Wrap in a tracked Task so stopStreaming(sessionId) can cancel it.
+      let task = Task { () async throws -> [String: Any] in
+        if self.activeModelId == "apple-fm" {
+          // Apple FM: role-prefixed conversation prompt (FM has no native turn API in our usage).
+          let conversationPrompt = nonSystemMessages
+            .map { msg -> String in
+              let role = (msg["role"] as? String ?? "user").uppercased()
+              let content = msg["content"] as? String ?? ""
+              return "\(role): \(content)"
+            }
+            .joined(separator: "\n") + "\nASSISTANT:"
+
+          if #available(iOS 26.0, *) {
+            let session = LanguageModelSession(instructions: baseSystemPrompt)
+            let response = try await session.respond(
+              to: conversationPrompt, options: self.appleGenerationOptions()
+            )
+            return ["text": response.content]
+          } else {
+            return ["text": "[On-device AI requires iOS 26+]"]
+          }
+        } else {
+          // Gemma/LiteRT-LM: Conversation API handles turn formatting; pass raw content joined.
+          let conversationPrompt = nonSystemMessages
+            .map { ($0["content"] as? String) ?? "" }
+            .joined(separator: "\n")
+
+          let text = try await self.gemmaClient.generateText(
+            prompt: conversationPrompt, systemPrompt: baseSystemPrompt
+          )
+          return ["text": text]
+        }
       }
+      self.activeSendTasks[sessionId] = task
+      defer { self.activeSendTasks.removeValue(forKey: sessionId) }
+      return try await task.value
     }
 
     AsyncFunction("startStreaming") {
@@ -67,7 +108,6 @@ public class ExpoAiKitModule: Module {
         sessionId: String
       ) in
 
-      // Extract base system prompt from messages, or use fallback
       let baseSystemPrompt =
         messages
         .first { ($0["role"] as? String) == "system" }?["content"] as? String
@@ -75,53 +115,87 @@ public class ExpoAiKitModule: Module {
           ? "You are a helpful, friendly assistant."
           : fallbackSystemPrompt)
 
-      // Build conversation history prompt from all non-system messages
-      // On-device models are stateless, so we must include full history in each request
-      let conversationPrompt = messages
-        .filter { ($0["role"] as? String) != "system" }
-        .map { msg -> String in
-          let role = (msg["role"] as? String ?? "user").uppercased()
-          let content = msg["content"] as? String ?? ""
-          return "\(role): \(content)"
-        }
-        .joined(separator: "\n") + "\nASSISTANT:"
+      let nonSystemMessages = messages.filter { ($0["role"] as? String) != "system" }
 
-      if #available(iOS 26.0, *) {
-        // Create a task for streaming that can be cancelled
-        let task = Task {
-          do {
-            let session = LanguageModelSession(instructions: baseSystemPrompt)
-            let stream = session.streamResponse(to: conversationPrompt)
-            var accumulatedText = ""
+      if self.activeModelId == "apple-fm" {
+        let conversationPrompt = nonSystemMessages
+          .map { msg -> String in
+            let role = (msg["role"] as? String ?? "user").uppercased()
+            let content = msg["content"] as? String ?? ""
+            return "\(role): \(content)"
+          }
+          .joined(separator: "\n") + "\nASSISTANT:"
 
-            for try await partialResponse in stream {
-              // Check for cancellation
-              if Task.isCancelled { break }
+        if #available(iOS 26.0, *) {
+          let task = Task {
+            do {
+              let session = LanguageModelSession(instructions: baseSystemPrompt)
+              let stream = session.streamResponse(
+                to: conversationPrompt, options: self.appleGenerationOptions()
+              )
+              var accumulatedText = ""
 
-              let currentText = partialResponse.content
-              let newToken = String(currentText.dropFirst(accumulatedText.count))
-              accumulatedText = currentText
+              for try await partialResponse in stream {
+                if Task.isCancelled { break }
+                let currentText = partialResponse.content
+                let newToken = String(currentText.dropFirst(accumulatedText.count))
+                accumulatedText = currentText
 
-              // Send token event to JavaScript
-              self.sendEvent("onStreamToken", [
-                "sessionId": sessionId,
-                "token": newToken,
-                "accumulatedText": accumulatedText,
-                "isDone": false
-              ])
-            }
+                self.sendEvent("onStreamToken", [
+                  "sessionId": sessionId,
+                  "token": newToken,
+                  "accumulatedText": accumulatedText,
+                  "isDone": false
+                ])
+              }
 
-            // Send final event
-            if !Task.isCancelled {
+              // Always emit terminal done — covers normal completion AND cancellation —
+              // so the JS stream settles instead of hanging.
               self.sendEvent("onStreamToken", [
                 "sessionId": sessionId,
                 "token": "",
                 "accumulatedText": accumulatedText,
                 "isDone": true
               ])
+            } catch {
+              self.sendEvent("onStreamToken", [
+                "sessionId": sessionId,
+                "token": "",
+                "accumulatedText": "[Error: \(error.localizedDescription)]",
+                "isDone": true
+              ])
+            }
+            self.activeStreamTasks.removeValue(forKey: sessionId)
+          }
+          self.activeStreamTasks[sessionId] = task
+        } else {
+          self.sendEvent("onStreamToken", [
+            "sessionId": sessionId,
+            "token": "[On-device AI requires iOS 26+]",
+            "accumulatedText": "[On-device AI requires iOS 26+]",
+            "isDone": true
+          ])
+        }
+      } else {
+        // Gemma/LiteRT-LM path
+        let conversationPrompt = nonSystemMessages
+          .map { ($0["content"] as? String) ?? "" }
+          .joined(separator: "\n")
+
+        let task = Task {
+          do {
+            try await self.gemmaClient.generateTextStream(
+              prompt: conversationPrompt,
+              systemPrompt: baseSystemPrompt
+            ) { token, accumulatedText, isDone in
+              self.sendEvent("onStreamToken", [
+                "sessionId": sessionId,
+                "token": token,
+                "accumulatedText": accumulatedText,
+                "isDone": isDone
+              ])
             }
           } catch {
-            // Send error as final event
             self.sendEvent("onStreamToken", [
               "sessionId": sessionId,
               "token": "",
@@ -129,20 +203,9 @@ public class ExpoAiKitModule: Module {
               "isDone": true
             ])
           }
-
-          // Clean up
           self.activeStreamTasks.removeValue(forKey: sessionId)
         }
-
         self.activeStreamTasks[sessionId] = task
-      } else {
-        // Fallback for older iOS versions - send single response
-        self.sendEvent("onStreamToken", [
-          "sessionId": sessionId,
-          "token": "[On-device AI requires iOS 26+]",
-          "accumulatedText": "[On-device AI requires iOS 26+]",
-          "isDone": true
-        ])
       }
     }
 
@@ -150,6 +213,10 @@ public class ExpoAiKitModule: Module {
       if let task = self.activeStreamTasks[sessionId] {
         task.cancel()
         self.activeStreamTasks.removeValue(forKey: sessionId)
+      }
+      if let task = self.activeSendTasks[sessionId] {
+        task.cancel()
+        self.activeSendTasks.removeValue(forKey: sessionId)
       }
     }
 
@@ -160,7 +227,9 @@ public class ExpoAiKitModule: Module {
     Function("getBuiltInModels") { () -> [[String: Any]] in
       var available = false
       if #available(iOS 26.0, *) {
-        available = true
+        if case .available = SystemLanguageModel.default.availability {
+          available = true
+        }
       }
       return [
         [
@@ -168,14 +237,22 @@ public class ExpoAiKitModule: Module {
           "name": "Apple Foundation Model",
           "available": available,
           "platform": "ios",
-          // Apple FM context window is not publicly documented; use conservative default
           "contextWindow": 4096
         ]
       ]
     }
 
-    Function("getDownloadableModelStatus") { (modelId: String) -> String in
-      // No downloadable models supported on iOS yet (Phase 3: llama.cpp)
+    AsyncFunction("getDownloadableModelStatus") { (modelId: String) async -> String in
+      let loadedId = await self.gemmaClient.getLoadedModelId()
+      let isLoaded = await self.gemmaClient.isModelLoaded()
+      if loadedId == modelId && isLoaded {
+        return "ready"
+      }
+      // File on disk but not loaded -> "downloaded". This is what lets callers
+      // skip a redundant (re-)download across app launches.
+      if self.gemmaClient.isModelFileDownloaded(modelId) {
+        return "downloaded"
+      }
       return "not-downloaded"
     }
 
@@ -187,46 +264,129 @@ public class ExpoAiKitModule: Module {
     // Model selection & memory management
     // ==================================================================
 
-    AsyncFunction("setModel") { (modelId: String) in
+    AsyncFunction("setModel") { (modelId: String, minRamBytes: Int, backend: String, generation: [String: Double]) async throws in
+      // Sampling defaults for this session. Apple FM reads this per-call; Gemma
+      // applies it below at conversation creation.
+      self.generationConfig = generation
       if modelId == "apple-fm" {
+        if await self.gemmaClient.isModelLoaded() {
+          let previousId = self.activeModelId
+          await self.gemmaClient.unloadModel()
+          if previousId != "apple-fm" {
+            self.sendEvent("onModelStateChange", [
+              "modelId": previousId,
+              "status": self.gemmaClient.isModelFileDownloaded(previousId) ? "downloaded" : "not-downloaded"
+            ])
+          }
+        }
         self.activeModelId = "apple-fm"
         return
       }
-      // Downloadable models not yet supported on iOS
-      throw NSError(
-        domain: "ExpoAiKit",
-        code: 0,
-        userInfo: [NSLocalizedDescriptionKey: "MODEL_LOAD_FAILED:\(modelId):Downloadable models are not yet supported on iOS. Coming in a future release (Phase 3: llama.cpp)."]
-      )
+
+      // Downloadable model: verify file exists
+      if !self.gemmaClient.isModelFileDownloaded(modelId) {
+        throw NSError(
+          domain: "ExpoAiKit",
+          code: 0,
+          userInfo: [NSLocalizedDescriptionKey: "MODEL_NOT_DOWNLOADED:\(modelId):Model file not found on disk"]
+        )
+      }
+
+      self.sendEvent("onModelStateChange", [
+        "modelId": modelId,
+        "status": "loading"
+      ])
+
+      do {
+        try await self.gemmaClient.loadModel(
+          modelId: modelId,
+          backend: backend,
+          temperature: generation["temperature"].map { Float($0) },
+          topK: generation["topK"].map { Int($0) },
+          topP: generation["topP"].map { Float($0) },
+          seed: generation["seed"].map { Int($0) }
+        )
+        self.activeModelId = modelId
+        self.sendEvent("onModelStateChange", [
+          "modelId": modelId,
+          "status": "ready"
+        ])
+      } catch {
+        // Load failed, but the file is still on disk -> "downloaded", not "not-downloaded".
+        self.sendEvent("onModelStateChange", [
+          "modelId": modelId,
+          "status": self.gemmaClient.isModelFileDownloaded(modelId) ? "downloaded" : "not-downloaded"
+        ])
+        throw error
+      }
     }
 
     Function("getActiveModel") { () -> String in
       return self.activeModelId
     }
 
-    AsyncFunction("unloadModel") { () in
-      // No downloadable model can be loaded on iOS yet; just reset to default
-      self.activeModelId = "apple-fm"
+    AsyncFunction("unloadModel") { () async in
+      if self.activeModelId != "apple-fm", await self.gemmaClient.isModelLoaded() {
+        let previousId = self.activeModelId
+        await self.gemmaClient.unloadModel()
+        self.activeModelId = "apple-fm"
+        self.sendEvent("onModelStateChange", [
+          "modelId": previousId,
+          "status": self.gemmaClient.isModelFileDownloaded(previousId) ? "downloaded" : "not-downloaded"
+        ])
+      }
     }
 
     // ==================================================================
-    // Model lifecycle (downloadable models only -- stubs for iOS)
+    // Model lifecycle (downloadable models only)
     // ==================================================================
 
-    AsyncFunction("downloadModel") { (modelId: String, url: String, sha256: String) in
-      throw NSError(
-        domain: "ExpoAiKit",
-        code: 0,
-        userInfo: [NSLocalizedDescriptionKey: "DOWNLOAD_FAILED:\(modelId):Downloadable models are not yet supported on iOS. Coming in a future release (Phase 3: llama.cpp)."]
-      )
+    AsyncFunction("downloadModel") {
+      (modelId: String, url: String, sha256: String) async throws in
+
+      self.sendEvent("onModelStateChange", [
+        "modelId": modelId,
+        "status": "downloading"
+      ])
+
+      do {
+        try await self.gemmaClient.downloadModelFile(
+          modelId: modelId, urlString: url, sha256: sha256
+        ) { bytesRead, totalBytes in
+          self.sendEvent("onDownloadProgress", [
+            "modelId": modelId,
+            "progress": totalBytes > 0 ? Double(bytesRead) / Double(totalBytes) : 0.0
+          ])
+        }
+
+        // Download succeeded: file is on disk, awaiting setModel() to load it.
+        self.sendEvent("onModelStateChange", [
+          "modelId": modelId,
+          "status": "downloaded"
+        ])
+      } catch {
+        // On failure, report whatever is actually on disk (a prior good copy may remain).
+        self.sendEvent("onModelStateChange", [
+          "modelId": modelId,
+          "status": self.gemmaClient.isModelFileDownloaded(modelId) ? "downloaded" : "not-downloaded"
+        ])
+        throw error
+      }
     }
 
-    AsyncFunction("deleteModel") { (modelId: String) in
-      throw NSError(
-        domain: "ExpoAiKit",
-        code: 0,
-        userInfo: [NSLocalizedDescriptionKey: "MODEL_NOT_FOUND:\(modelId):Downloadable models are not yet supported on iOS. Coming in a future release (Phase 3: llama.cpp)."]
-      )
+    AsyncFunction("cancelDownload") { (modelId: String) async in
+      await self.gemmaClient.cancelDownload(modelId)
+    }
+
+    AsyncFunction("deleteModel") { (modelId: String) async in
+      if self.activeModelId == modelId {
+        self.activeModelId = "apple-fm"
+      }
+      await self.gemmaClient.deleteModelFile(modelId: modelId)
+      self.sendEvent("onModelStateChange", [
+        "modelId": modelId,
+        "status": "not-downloaded"
+      ])
     }
   }
 }
