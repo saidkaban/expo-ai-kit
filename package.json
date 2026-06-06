@@ -1,14 +1,17 @@
 {
   "name": "expo-ai-kit",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "On-device AI for Expo apps — run Gemma 4, Apple Foundation Models, and ML Kit locally with zero API keys",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "files": [
     "build",
-    "ios",
+    "ios/*.swift",
+    "ios/ExpoAiKit.podspec",
+    "ios/Vendor/LiteRTLM",
     "android/src",
     "android/build.gradle",
+    "scripts/install-litertlm.sh",
     "src",
     "expo-module.config.json"
   ],

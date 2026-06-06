@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.5.0
+
+> Headline: **downloadable Gemma 4 (E2B / E4B) now runs on iOS**, not just Android,
+> via LiteRT-LM. Plus sampling controls, cancellation, and a typed error surface.
+> All additive — no breaking changes.
+
+### Added
+
+- **iOS downloadable Gemma 4.** `downloadModel` / `setModel` / `sendMessage` / `streamMessage` now run Gemma 4 E2B and E4B on iOS through LiteRT-LM, alongside the built-in Apple Foundation Model. The LiteRT-LM C xcframework is fetched automatically during `pod install`.
+- **`GenerationConfig` sampling controls.** `setModel(id, { generation: { temperature, topK, topP, seed, maxTokens } })` sets per-session sampling. Support is best-effort per backend (see the capability matrix in the `GenerationConfig` docs): Gemma honors temperature/topK/topP[/seed]; Apple FM honors temperature/maxTokens.
+- **`getRecommendedModel()`** — returns the most capable downloadable model the device can actually run (e.g. E4B on high-RAM phones, E2B otherwise), or `null`.
+- **`cancelDownload(modelId)`** — aborts an in-flight download; the `downloadModel` promise rejects with `DOWNLOAD_CANCELLED`.
+- **`AbortSignal` support in `sendMessage`** via `options.signal`. (To truly interrupt a long generation, prefer `streamMessage().stop()`.)
+- **New model status `'downloaded'`** — `getDownloadableModelStatus` now distinguishes a file that's on disk but not loaded from one that was never downloaded, so a re-download isn't triggered after an app restart.
+- **New `ModelError` codes**: `INFERENCE_BUSY`, `INFERENCE_CANCELLED`, `DOWNLOAD_CANCELLED`, `UNKNOWN`.
+
+### Changed
+
+- **Native errors are normalized to `ModelError`.** Failures thrown by the native layer now surface as a `ModelError` with a reliable `.code` and `.modelId`, instead of a raw string message — so `catch (e) { if (e.code === 'MODEL_NOT_DOWNLOADED') … }` works.
+- **Single-flight inference.** Concurrent `sendMessage`/`streamMessage` calls (which would corrupt the shared on-device KV cache) are rejected with `INFERENCE_BUSY` instead of running in parallel.
+- **`isAvailable()` is accurate on iOS.** It now reflects `SystemLanguageModel` availability (Apple Intelligence enabled and ready), not merely "iOS 26+".
+- **Gemma downloads are integrity-checked.** E2B/E4B registry entries now ship real SHA256 hashes, so a corrupted or truncated download is rejected.
+- **Packaging.** Stopped shipping the ~122 MB LiteRT-LM xcframework in the npm tarball — it's downloaded on `pod install` anyway. The package drops to ~68 KB / 43 files.
+
+### Fixed
+
+- **`streamMessage().stop()` no longer hangs.** The returned `promise` now always settles (resolving with the text so far) and the event listener is removed on done/error/stop — previously `stop()` could leave the promise pending forever and leak a subscription. Native now also emits a terminal event on cancellation.
+- **iOS `getDownloadableModelStatus` contract.** It is async on iOS (reads actor state); the JS layer now awaits it, so `DownloadableModel.status` is a string rather than an unresolved Promise.
+
 ## 0.4.1
 
 ### Fixed
