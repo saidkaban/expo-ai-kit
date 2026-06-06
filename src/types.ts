@@ -8,11 +8,53 @@
 export type InferenceBackend = 'auto' | 'gpu' | 'cpu';
 
 /**
+ * Sampling / generation parameters applied to a model session.
+ *
+ * Support is per-backend (on-device runtimes expose different knobs), so these
+ * are best-effort — unsupported fields are ignored rather than erroring:
+ *
+ * | field       | Gemma (LiteRT-LM) | Apple Foundation Models | ML Kit |
+ * |-------------|:-----------------:|:-----------------------:|:------:|
+ * | temperature | ✓                 | ✓                       | —      |
+ * | topK        | ✓                 | —                       | —      |
+ * | topP        | ✓                 | —                       | —      |
+ * | seed        | ✓ (iOS only)      | —                       | —      |
+ * | maxTokens   | —                 | ✓ (max output)          | —      |
+ *
+ * Notes:
+ * - Gemma/LiteRT-LM has no per-generation output-token cap (its `maxNumTokens`
+ *   is the total KV-cache size, set at load), so `maxTokens` is not honored
+ *   there. Its sampler (topK/topP/temperature[/seed]) is fixed at conversation
+ *   creation, which is why generation config lives on setModel() rather than
+ *   per-call. `seed` is currently wired on iOS only.
+ * - The ML Kit built-in (Android default) does not yet apply generation config;
+ *   it uses its own defaults.
+ */
+export type GenerationConfig = {
+  /** Sampling temperature. Lower = more deterministic. Typically 0.0–2.0. */
+  temperature?: number;
+  /** Nucleus sampling: number of top logits to consider. Must be > 0. */
+  topK?: number;
+  /** Nucleus sampling: cumulative probability threshold in [0, 1]. */
+  topP?: number;
+  /** RNG seed for reproducible sampling (Gemma only). */
+  seed?: number;
+  /** Maximum number of output tokens to generate (Apple FM / ML Kit only). */
+  maxTokens?: number;
+};
+
+/**
  * Options for setModel.
  */
 export type SetModelOptions = {
   /** Hardware backend to use for inference. Defaults to 'auto'. */
   backend?: InferenceBackend;
+  /**
+   * Default sampling parameters for this model session. Applied when the model
+   * is activated and used for all subsequent sendMessage/streamMessage calls
+   * until the next setModel(). See {@link GenerationConfig} for per-backend support.
+   */
+  generation?: GenerationConfig;
 };
 
 /**
@@ -37,6 +79,17 @@ export type LLMSendOptions = {
    * If a system message exists in the array, this is ignored.
    */
   systemPrompt?: string;
+  /**
+   * Abort the request. When the signal fires, the returned promise rejects with
+   * an INFERENCE_CANCELLED {@link ModelError}.
+   *
+   * Note: on-device, non-streaming generation cannot always be interrupted
+   * mid-decode — abort always unblocks the caller, but the model may keep
+   * computing in the background until it finishes, during which a new
+   * sendMessage/streamMessage will throw INFERENCE_BUSY. To truly interrupt a
+   * long generation, prefer streamMessage().stop().
+   */
+  signal?: AbortSignal;
 };
 
 /**
@@ -56,6 +109,16 @@ export type LLMStreamOptions = {
    * If a system message exists in the array, this is ignored.
    */
   systemPrompt?: string;
+};
+
+/**
+ * Handle returned by streamMessage.
+ */
+export type LLMStreamHandle = {
+  /** Resolves with the final text when streaming completes or is stopped. */
+  promise: Promise<LLMResponse>;
+  /** Stop streaming. Resolves `promise` with the text accumulated so far. */
+  stop: () => void;
 };
 
 /**
@@ -127,12 +190,16 @@ export type DownloadableModel = {
  *
  * - 'not-downloaded': Model file is not on disk
  * - 'downloading': Model file is being downloaded
+ * - 'downloaded': Model file is on disk but not loaded into memory. Call
+ *   setModel() to load it. This survives app restarts, so use it to decide
+ *   whether a (re-)download is needed.
  * - 'loading': File is on disk, model is being loaded into memory for inference
  * - 'ready': Model is loaded in memory and ready for inference
  */
 export type DownloadableModelStatus =
   | 'not-downloaded'
   | 'downloading'
+  | 'downloaded'
   | 'loading'
   | 'ready';
 
@@ -145,10 +212,14 @@ export type ModelErrorCode =
   | 'DOWNLOAD_FAILED'
   | 'DOWNLOAD_CORRUPT'
   | 'DOWNLOAD_STORAGE_FULL'
+  | 'DOWNLOAD_CANCELLED'
   | 'INFERENCE_OOM'
   | 'INFERENCE_FAILED'
+  | 'INFERENCE_BUSY'
+  | 'INFERENCE_CANCELLED'
   | 'MODEL_LOAD_FAILED'
-  | 'DEVICE_NOT_SUPPORTED';
+  | 'DEVICE_NOT_SUPPORTED'
+  | 'UNKNOWN';
 
 /**
  * Structured error for model operations.

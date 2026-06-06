@@ -10,6 +10,7 @@ import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Message
 import com.google.ai.edge.litertlm.MessageCallback
 import com.google.ai.edge.litertlm.Contents
+import com.google.ai.edge.litertlm.SamplerConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -45,6 +46,9 @@ class GemmaInferenceClient(private val context: Context) {
   @Volatile
   private var isDownloading = false
 
+  @Volatile
+  private var cancelDownloadRequested = false
+
   // -------------------------------------------------------------------------
   // Model lifecycle
   // -------------------------------------------------------------------------
@@ -54,7 +58,15 @@ class GemmaInferenceClient(private val context: Context) {
    * Unloads any previously loaded model first.
    * Caller is responsible for emitting onModelStateChange events.
    */
-  suspend fun loadModel(modelId: String, modelPath: String, minRamBytes: Long = 0, backend: String = "auto") = mutex.withLock {
+  suspend fun loadModel(
+    modelId: String,
+    modelPath: String,
+    minRamBytes: Long = 0,
+    backend: String = "auto",
+    temperature: Double? = null,
+    topK: Int? = null,
+    topP: Double? = null
+  ) = mutex.withLock {
     // Unload previous model if different
     if (loadedModelId != null && loadedModelId != modelId) {
       conversation?.close()
@@ -117,7 +129,21 @@ class GemmaInferenceClient(private val context: Context) {
           }
         }
 
-        val newConversation = newEngine.createConversation(ConversationConfig())
+        // Sampling knobs are fixed at conversation creation by LiteRT-LM. If any
+        // is provided, build a SamplerConfig (filling unspecified values with
+        // Gemma-typical defaults); otherwise use the engine/model defaults.
+        val convConfig = if (temperature != null || topK != null || topP != null) {
+          ConversationConfig(
+            samplerConfig = SamplerConfig(
+              topK = topK ?: 64,
+              topP = topP ?: 0.95,
+              temperature = temperature ?: 1.0
+            )
+          )
+        } else {
+          ConversationConfig()
+        }
+        val newConversation = newEngine.createConversation(convConfig)
 
         engine = newEngine
         conversation = newConversation
@@ -191,6 +217,9 @@ class GemmaInferenceClient(private val context: Context) {
           )
         }
       }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+      // Cooperative cancellation — propagate, don't mask as an inference failure.
+      throw e
     } catch (e: OutOfMemoryError) {
       throw RuntimeException("INFERENCE_OOM:${loadedModelId ?: "unknown"}:Out of memory during inference")
     } catch (e: Exception) {
@@ -260,6 +289,9 @@ class GemmaInferenceClient(private val context: Context) {
           )
         }
       }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+      // Cooperative cancellation — propagate, don't mask as an inference failure.
+      throw e
     } catch (e: OutOfMemoryError) {
       throw RuntimeException("INFERENCE_OOM:${loadedModelId ?: "unknown"}:Out of memory during inference")
     } catch (e: Exception) {
@@ -288,6 +320,7 @@ class GemmaInferenceClient(private val context: Context) {
       throw RuntimeException("DOWNLOAD_FAILED:$modelId:Download already in progress")
     }
     isDownloading = true
+    cancelDownloadRequested = false
 
     try {
       withContext(Dispatchers.IO) {
@@ -308,6 +341,9 @@ class GemmaInferenceClient(private val context: Context) {
               val buffer = ByteArray(8192)
               var read: Int
               while (input.read(buffer).also { read = it } != -1) {
+                if (cancelDownloadRequested) {
+                  throw RuntimeException("DOWNLOAD_CANCELLED:$modelId:Download cancelled")
+                }
                 output.write(buffer, 0, read)
                 bytesRead += read
                 if (totalBytes > 0) {
@@ -336,6 +372,7 @@ class GemmaInferenceClient(private val context: Context) {
           tempFile.delete()
           when {
             e is RuntimeException && e.message?.startsWith("DOWNLOAD_CORRUPT") == true -> throw e
+            e is RuntimeException && e.message?.startsWith("DOWNLOAD_CANCELLED") == true -> throw e
             context.filesDir.freeSpace < 100_000_000 ->
               throw RuntimeException("DOWNLOAD_STORAGE_FULL:$modelId:Insufficient disk space")
             else ->
@@ -370,6 +407,14 @@ class GemmaInferenceClient(private val context: Context) {
     if (tempFile.exists()) {
       tempFile.delete()
     }
+  }
+
+  /**
+   * Request cancellation of the in-flight download, if any. The download loop
+   * checks this flag and throws DOWNLOAD_CANCELLED. No-op if nothing is downloading.
+   */
+  fun cancelDownload(modelId: String) {
+    cancelDownloadRequested = true
   }
 
   /**

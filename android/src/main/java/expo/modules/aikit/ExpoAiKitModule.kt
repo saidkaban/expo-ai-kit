@@ -40,7 +40,9 @@ class ExpoAiKitModule : Module() {
       promptClient.isAvailableBlocking()
     }
 
-    AsyncFunction("sendMessage") Coroutine { messages: List<Map<String, Any>>, fallbackSystemPrompt: String ->
+    // sessionId is accepted for API parity with iOS. Non-streaming generation on
+    // Android isn't separately cancellable (best-effort), so the id is unused here.
+    AsyncFunction("sendMessage") Coroutine { messages: List<Map<String, Any>>, fallbackSystemPrompt: String, sessionId: String ->
       // Extract system prompt from messages, or use fallback
       val systemPrompt = messages
         .firstOrNull { it["role"] == "system" }
@@ -144,11 +146,12 @@ class ExpoAiKitModule : Module() {
     }
 
     Function("getDownloadableModelStatus") { modelId: String ->
-      // Status reflects runtime state: "ready" if loaded in memory,
-      // "not-downloaded" otherwise (even if file is on disk -- setModel
-      // is the gatekeeper that transitions through loading -> ready).
+      // "ready" if loaded in memory; "downloaded" if the file is on disk but not
+      // loaded (survives restarts -- use it to skip a redundant re-download);
+      // "not-downloaded" if no file is present.
       when {
         gemmaClient.getLoadedModelId() == modelId && gemmaClient.isModelLoaded() -> "ready"
+        gemmaClient.isModelFileDownloaded(modelId) -> "downloaded"
         else -> "not-downloaded"
       }
     }
@@ -168,7 +171,7 @@ class ExpoAiKitModule : Module() {
     // Model selection & memory management
     // ==================================================================
 
-    AsyncFunction("setModel") Coroutine { modelId: String, minRamBytes: Long, backend: String ->
+    AsyncFunction("setModel") Coroutine { modelId: String, minRamBytes: Long, backend: String, generation: Map<String, Double> ->
       if (modelId == "mlkit") {
         // Switch to built-in: unload any Gemma model
         if (gemmaClient.isModelLoaded()) {
@@ -177,7 +180,7 @@ class ExpoAiKitModule : Module() {
           if (previousId != "mlkit") {
             sendEvent("onModelStateChange", mapOf(
               "modelId" to previousId,
-              "status" to "not-downloaded"
+              "status" to if (gemmaClient.isModelFileDownloaded(previousId)) "downloaded" else "not-downloaded"
             ))
           }
         }
@@ -198,7 +201,12 @@ class ExpoAiKitModule : Module() {
 
       try {
         val modelPath = gemmaClient.getModelFilePath(modelId)
-        gemmaClient.loadModel(modelId, modelPath, minRamBytes, backend)
+        gemmaClient.loadModel(
+          modelId, modelPath, minRamBytes, backend,
+          temperature = generation["temperature"],
+          topK = generation["topK"]?.toInt(),
+          topP = generation["topP"]
+        )
         activeModelId = modelId
 
         // Emit ready state
@@ -207,10 +215,10 @@ class ExpoAiKitModule : Module() {
           "status" to "ready"
         ))
       } catch (e: Exception) {
-        // Emit failure -- revert status
+        // Load failed, but the file is still on disk -> "downloaded", not "not-downloaded".
         sendEvent("onModelStateChange", mapOf(
           "modelId" to modelId,
-          "status" to "not-downloaded"
+          "status" to if (gemmaClient.isModelFileDownloaded(modelId)) "downloaded" else "not-downloaded"
         ))
         throw e
       }
@@ -227,7 +235,7 @@ class ExpoAiKitModule : Module() {
         activeModelId = "mlkit"
         sendEvent("onModelStateChange", mapOf(
           "modelId" to previousId,
-          "status" to "not-downloaded"
+          "status" to if (gemmaClient.isModelFileDownloaded(previousId)) "downloaded" else "not-downloaded"
         ))
       }
     }
@@ -250,18 +258,23 @@ class ExpoAiKitModule : Module() {
           ))
         }
 
-        // Download complete -- file is on disk but not loaded
+        // Download succeeded: file is on disk, awaiting setModel() to load it.
         sendEvent("onModelStateChange", mapOf(
           "modelId" to modelId,
-          "status" to "not-downloaded"
+          "status" to "downloaded"
         ))
       } catch (e: Exception) {
+        // On failure, report whatever is actually on disk (a prior good copy may remain).
         sendEvent("onModelStateChange", mapOf(
           "modelId" to modelId,
-          "status" to "not-downloaded"
+          "status" to if (gemmaClient.isModelFileDownloaded(modelId)) "downloaded" else "not-downloaded"
         ))
         throw e
       }
+    }
+
+    AsyncFunction("cancelDownload") Coroutine { modelId: String ->
+      gemmaClient.cancelDownload(modelId)
     }
 
     AsyncFunction("deleteModel") Coroutine { modelId: String ->

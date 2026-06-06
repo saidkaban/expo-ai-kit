@@ -43,13 +43,13 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     quantization: 'mixed-2/4/8-bit',
     downloadUrl:
       'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm',
-    sha256: '', // TODO: Fill with actual hash once model file is verified
-    sizeBytes: 2_580_000_000, // ~2.58GB
+    sha256: '181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c',
+    sizeBytes: 2_588_147_712, // 2.59GB (exact, HF LFS)
     // Conservative limit for 4GB RAM devices.
     // TODO: Benchmark during Phase 2 testing.
     contextWindow: 8_000,
     minRamBytes: 2_000_000_000, // 2GB — LiteRT-LM memory-maps weights, actual RSS ~1.5GB
-    supportedPlatforms: ['android'], // iOS waiting for LiteRT-LM Swift APIs
+    supportedPlatforms: ['ios', 'android'],
   },
   {
     id: 'gemma-e4b',
@@ -58,11 +58,11 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     quantization: 'mixed-4/8-bit',
     downloadUrl:
       'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm',
-    sha256: '', // TODO: Fill with actual hash once model file is verified
-    sizeBytes: 3_650_000_000, // ~3.65GB
+    sha256: '0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0',
+    sizeBytes: 3_659_530_240, // 3.66GB (exact, HF LFS)
     contextWindow: 16_000,
     minRamBytes: 3_000_000_000, // 3GB — LiteRT-LM memory-maps weights
-    supportedPlatforms: ['android'], // iOS waiting for LiteRT-LM Swift APIs
+    supportedPlatforms: ['ios', 'android'],
   },
 ];
 

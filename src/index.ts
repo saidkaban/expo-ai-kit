@@ -1,4 +1,4 @@
-import ExpoAiKitModule from './ExpoAiKitModule';
+import ExpoAiKitModule, { type NativeGenerationConfig } from './ExpoAiKitModule';
 import { Platform } from 'react-native';
 import {
   LLMMessage,
@@ -7,9 +7,12 @@ import {
   LLMStreamOptions,
   LLMStreamEvent,
   LLMStreamCallback,
+  LLMStreamHandle,
   BuiltInModel,
   DownloadableModel,
+  GenerationConfig,
   ModelError,
+  ModelErrorCode,
   SetModelOptions,
 } from './types';
 import { MODEL_REGISTRY, getRegistryEntry } from './models';
@@ -22,7 +25,112 @@ const DEFAULT_SYSTEM_PROMPT =
 
 let streamIdCounter = 0;
 function generateSessionId(): string {
-  return `stream_${Date.now()}_${++streamIdCounter}`;
+  return `gen_${Date.now()}_${++streamIdCounter}`;
+}
+
+// The set of codes the native layer encodes in error messages as "CODE:modelId:reason".
+const KNOWN_ERROR_CODES = new Set<ModelErrorCode>([
+  'MODEL_NOT_FOUND',
+  'MODEL_NOT_DOWNLOADED',
+  'DOWNLOAD_FAILED',
+  'DOWNLOAD_CORRUPT',
+  'DOWNLOAD_STORAGE_FULL',
+  'DOWNLOAD_CANCELLED',
+  'INFERENCE_OOM',
+  'INFERENCE_FAILED',
+  'INFERENCE_BUSY',
+  'INFERENCE_CANCELLED',
+  'MODEL_LOAD_FAILED',
+  'DEVICE_NOT_SUPPORTED',
+]);
+
+/**
+ * Normalize an error from the native layer into a {@link ModelError}.
+ *
+ * The native modules format failures as "CODE:modelId:reason" (see the
+ * GemmaError/GemmaInferenceClient contract). Expo surfaces that string as the
+ * error's message, so we parse it here and rethrow a typed ModelError with a
+ * reliable `.code` and `.modelId`. Anything unrecognized becomes UNKNOWN.
+ */
+function toModelError(e: unknown): never {
+  if (e instanceof ModelError) throw e;
+  const message = String((e as any)?.message ?? e ?? '');
+  const match = /^([A-Z_]+):([^:]*):([\s\S]*)$/.exec(message);
+  if (match && KNOWN_ERROR_CODES.has(match[1] as ModelErrorCode)) {
+    throw new ModelError(match[1] as ModelErrorCode, match[2], match[3]);
+  }
+  throw new ModelError('UNKNOWN', '', message);
+}
+
+/** Run a native promise, normalizing any rejection into a ModelError. */
+async function wrapNative<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (e) {
+    toModelError(e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Single-flight inference guard
+// ---------------------------------------------------------------------------
+// On-device models are backed by a single native context + KV cache that is not
+// safe for concurrent decodes (interleaving can corrupt the cache and crash the
+// native side). JS is single-threaded, so a synchronous check-and-set of this
+// flag before any `await` is race-free. The flag is shared by sendMessage and
+// streamMessage and is held until the *native* call settles — not until an
+// early abort — so a detached-but-still-running generation still blocks a new one.
+let inferenceInFlight = false;
+
+function acquireInference(): void {
+  if (inferenceInFlight) {
+    throw new ModelError(
+      'INFERENCE_BUSY',
+      '',
+      'A generation is already in flight. Wait for it to finish, or stop the active stream first.'
+    );
+  }
+  inferenceInFlight = true;
+}
+
+/**
+ * Map the public GenerationConfig to the native shape, dropping undefined fields
+ * and validating ranges up front so callers get a clear error instead of an
+ * opaque native MODEL_LOAD_FAILED from the sampler.
+ */
+function toNativeGeneration(g?: GenerationConfig): NativeGenerationConfig {
+  const out: NativeGenerationConfig = {};
+  if (g?.temperature != null) {
+    if (g.temperature < 0) {
+      throw new Error('generation.temperature must be >= 0');
+    }
+    out.temperature = g.temperature;
+  }
+  if (g?.topK != null) {
+    if (!Number.isInteger(g.topK) || g.topK <= 0) {
+      throw new Error('generation.topK must be a positive integer');
+    }
+    out.topK = g.topK;
+  }
+  if (g?.topP != null) {
+    if (g.topP < 0 || g.topP > 1) {
+      throw new Error('generation.topP must be within [0, 1]');
+    }
+    out.topP = g.topP;
+  }
+  if (g?.seed != null) {
+    if (!Number.isInteger(g.seed)) {
+      throw new Error('generation.seed must be an integer');
+    }
+    out.seed = g.seed;
+  }
+  if (g?.maxTokens != null) {
+    if (!Number.isInteger(g.maxTokens) || g.maxTokens <= 0) {
+      throw new Error('generation.maxTokens must be a positive integer');
+    }
+    out.maxTokens = g.maxTokens;
+  }
+  return out;
 }
 
 // ============================================================================
@@ -87,13 +195,64 @@ export async function sendMessage(
     throw new Error('messages array cannot be empty');
   }
 
+  if (options?.signal?.aborted) {
+    throw new ModelError('INFERENCE_CANCELLED', '', 'Aborted before start');
+  }
+
   // Determine system prompt: use from messages array if present, else options, else default
   const hasSystemMessage = messages.some((m) => m.role === 'system');
   const systemPrompt = hasSystemMessage
     ? '' // Native will extract from messages
     : options?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
 
-  return ExpoAiKitModule.sendMessage(messages, systemPrompt);
+  acquireInference(); // throws INFERENCE_BUSY if a generation is already running
+  const sessionId = generateSessionId();
+
+  // Hold the single-flight flag until the NATIVE call settles — even if the
+  // caller aborts early — because the model may keep computing in the background.
+  const native = ExpoAiKitModule.sendMessage(messages, systemPrompt, sessionId);
+  const release = () => {
+    inferenceInFlight = false;
+  };
+  native.then(release, release);
+
+  const signal = options?.signal;
+  if (!signal) {
+    try {
+      return await native;
+    } catch (e) {
+      toModelError(e);
+    }
+  }
+
+  // Race the native result against the abort signal. On abort we unblock the
+  // caller immediately and best-effort ask native to cancel; the flag stays
+  // held (via `release` above) until the native call actually finishes.
+  return await new Promise<LLMResponse>((resolve, reject) => {
+    let done = false;
+    const finish = (action: () => void) => {
+      if (done) return;
+      done = true;
+      signal.removeEventListener('abort', onAbort);
+      action();
+    };
+    function onAbort() {
+      ExpoAiKitModule.stopStreaming(sessionId).catch(() => {});
+      finish(() => reject(new ModelError('INFERENCE_CANCELLED', '', 'Aborted by caller')));
+    }
+    signal.addEventListener('abort', onAbort);
+    native.then(
+      (r) => finish(() => resolve(r)),
+      (e) =>
+        finish(() => {
+          try {
+            toModelError(e);
+          } catch (me) {
+            reject(me);
+          }
+        })
+    );
+  });
 }
 
 /**
@@ -133,7 +292,7 @@ export function streamMessage(
   messages: LLMMessage[],
   onToken: LLMStreamCallback,
   options?: LLMStreamOptions
-): { promise: Promise<LLMResponse>; stop: () => void } {
+): LLMStreamHandle {
   // Handle unsupported platforms
   if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
     return {
@@ -149,9 +308,21 @@ export function streamMessage(
     };
   }
 
+  if (inferenceInFlight) {
+    return {
+      promise: Promise.reject(
+        new ModelError(
+          'INFERENCE_BUSY',
+          '',
+          'A generation is already in flight. Stop the active stream first.'
+        )
+      ),
+      stop: () => {},
+    };
+  }
+  inferenceInFlight = true; // set synchronously — race-free with other JS
+
   const sessionId = generateSessionId();
-  let finalText = '';
-  let stopped = false;
 
   // Determine system prompt: use from messages array if present, else options, else default
   const hasSystemMessage = messages.some((m) => m.role === 'system');
@@ -159,42 +330,53 @@ export function streamMessage(
     ? '' // Native will extract from messages
     : options?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
 
+  let finalText = '';
+  let settled = false;
+  let subscription: ReturnType<typeof ExpoAiKitModule.addListener> | undefined;
+  let resolveOuter!: (r: LLMResponse) => void;
+  let rejectOuter!: (e: unknown) => void;
+
+  // Settle exactly once: remove the listener and release the single-flight flag.
+  const settle = (action: () => void) => {
+    if (settled) return;
+    settled = true;
+    subscription?.remove();
+    inferenceInFlight = false;
+    action();
+  };
+
   const promise = new Promise<LLMResponse>((resolve, reject) => {
-    // Subscribe to stream events
-    const subscription = ExpoAiKitModule.addListener(
-      'onStreamToken',
-      (event: LLMStreamEvent) => {
-        // Only process events for this session
-        if (event.sessionId !== sessionId) return;
-
-        finalText = event.accumulatedText;
-
-        // Call the user's callback
-        onToken(event);
-
-        // If done, clean up and resolve
-        if (event.isDone) {
-          subscription.remove();
-          resolve({ text: finalText });
-        }
-      }
-    );
-
-    // Start streaming on native side
-    ExpoAiKitModule.startStreaming(messages, systemPrompt, sessionId).catch(
-      (error) => {
-        subscription.remove();
-        reject(error);
-      }
-    );
+    resolveOuter = resolve;
+    rejectOuter = reject;
   });
 
+  subscription = ExpoAiKitModule.addListener(
+    'onStreamToken',
+    (event: LLMStreamEvent) => {
+      if (event.sessionId !== sessionId) return;
+      finalText = event.accumulatedText;
+      onToken(event);
+      if (event.isDone) settle(() => resolveOuter({ text: finalText }));
+    }
+  );
+
+  ExpoAiKitModule.startStreaming(messages, systemPrompt, sessionId).catch(
+    (error) => {
+      settle(() => {
+        try {
+          toModelError(error);
+        } catch (me) {
+          rejectOuter(me);
+        }
+      });
+    }
+  );
+
   const stop = () => {
-    if (stopped) return;
-    stopped = true;
-    ExpoAiKitModule.stopStreaming(sessionId).catch(() => {
-      // Ignore errors when stopping
-    });
+    // Best-effort native cancel (native also emits a terminal isDone on cancel),
+    // but resolve immediately with the text so far so `promise` can never hang.
+    ExpoAiKitModule.stopStreaming(sessionId).catch(() => {});
+    settle(() => resolveOuter({ text: finalText }));
   };
 
   return { promise, stop };
@@ -243,19 +425,50 @@ export async function getDownloadableModels(): Promise<DownloadableModel[]> {
     // Native call unavailable -- default to 0 (all models will show meetsRequirements: false)
   }
 
-  return platformModels.map((entry) => {
-    const status = ExpoAiKitModule.getDownloadableModelStatus(entry.id);
-    return {
-      id: entry.id,
-      name: entry.name,
-      parameterCount: entry.parameterCount,
-      sizeBytes: entry.sizeBytes,
-      contextWindow: entry.contextWindow,
-      minRamBytes: entry.minRamBytes,
-      meetsRequirements: deviceRamBytes >= entry.minRamBytes,
-      status,
-    };
-  });
+  return Promise.all(
+    platformModels.map(async (entry) => {
+      // Await: on iOS this bridges as a Promise (reads actor state); on Android
+      // it's synchronous and awaiting a plain value is a no-op.
+      const status = await ExpoAiKitModule.getDownloadableModelStatus(entry.id);
+      return {
+        id: entry.id,
+        name: entry.name,
+        parameterCount: entry.parameterCount,
+        sizeBytes: entry.sizeBytes,
+        contextWindow: entry.contextWindow,
+        minRamBytes: entry.minRamBytes,
+        meetsRequirements: deviceRamBytes >= entry.minRamBytes,
+        status,
+      };
+    })
+  );
+}
+
+/**
+ * Pick the best downloadable model the current device can run.
+ *
+ * Returns the most capable model (largest, by RAM requirement) whose
+ * `meetsRequirements` is true — e.g. Gemma 4 E4B on high-spec phones, falling
+ * back to E2B on more constrained ones — or `null` if the device can't run any.
+ *
+ * This is a convenience over {@link getDownloadableModels}; the caller still
+ * downloads + activates explicitly. Pass `platform` is implicit (current OS).
+ *
+ * @example
+ * ```ts
+ * const best = await getRecommendedModel();
+ * if (best) {
+ *   await downloadModel(best.id, { onProgress });
+ *   await setModel(best.id);
+ * }
+ * ```
+ */
+export async function getRecommendedModel(): Promise<DownloadableModel | null> {
+  const models = await getDownloadableModels();
+  const runnable = models.filter((m) => m.meetsRequirements);
+  if (runnable.length === 0) return null;
+  // Higher RAM requirement ⇒ larger/more capable model. Prefer the biggest that fits.
+  return runnable.sort((a, b) => b.minRamBytes - a.minRamBytes)[0];
 }
 
 /**
@@ -317,14 +530,27 @@ export async function downloadModel(
   }
 
   try {
-    await ExpoAiKitModule.downloadModel(
-      modelId,
-      entry.downloadUrl,
-      entry.sha256
+    await wrapNative(() =>
+      ExpoAiKitModule.downloadModel(modelId, entry.downloadUrl, entry.sha256)
     );
   } finally {
     subscription?.remove();
   }
+}
+
+/**
+ * Cancel an in-flight download for a model.
+ *
+ * The in-progress {@link downloadModel} promise rejects with a
+ * DOWNLOAD_CANCELLED {@link ModelError}. No-op if the model isn't downloading.
+ *
+ * @param modelId - ID of the model whose download should be cancelled
+ */
+export async function cancelDownload(modelId: string): Promise<void> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    return;
+  }
+  await wrapNative(() => ExpoAiKitModule.cancelDownload(modelId));
 }
 
 /**
@@ -341,7 +567,7 @@ export async function deleteModel(modelId: string): Promise<void> {
     throw new ModelError('MODEL_NOT_FOUND', modelId);
   }
 
-  await ExpoAiKitModule.deleteModel(modelId);
+  await wrapNative(() => ExpoAiKitModule.deleteModel(modelId));
 }
 
 /**
@@ -371,7 +597,10 @@ export async function setModel(modelId: string, options?: SetModelOptions): Prom
   const entry = getRegistryEntry(modelId);
   const minRamBytes = entry?.minRamBytes ?? 0;
   const backend = options?.backend ?? 'auto';
-  await ExpoAiKitModule.setModel(modelId, minRamBytes, backend);
+  const generation = toNativeGeneration(options?.generation);
+  await wrapNative(() =>
+    ExpoAiKitModule.setModel(modelId, minRamBytes, backend, generation)
+  );
 }
 
 /**
@@ -390,6 +619,6 @@ export function getActiveModel(): string {
  * No-op if no downloadable model is currently loaded.
  */
 export async function unloadModel(): Promise<void> {
-  await ExpoAiKitModule.unloadModel();
+  await wrapNative(() => ExpoAiKitModule.unloadModel());
 }
 
