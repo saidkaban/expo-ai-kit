@@ -14,7 +14,17 @@ import {
   ModelError,
   ModelErrorCode,
   SetModelOptions,
+  JSONSchema,
+  GenerateObjectOptions,
+  GenerateObjectResult,
 } from './types';
+import {
+  buildSchemaInstruction,
+  buildSchemaRepair,
+  extractJson,
+  validateAgainstSchema,
+  REPAIR_INVALID_JSON,
+} from './structured';
 import { MODEL_REGISTRY, getRegistryEntry } from './models';
 
 export * from './types';
@@ -22,6 +32,9 @@ export * from './models';
 
 const DEFAULT_SYSTEM_PROMPT =
   'You are a helpful, friendly assistant. Answer the user directly and concisely.';
+
+const DEFAULT_OBJECT_SYSTEM_PROMPT =
+  'You output structured data as JSON. Follow the provided JSON Schema exactly.';
 
 let streamIdCounter = 0;
 function generateSessionId(): string {
@@ -380,6 +393,121 @@ export function streamMessage(
   };
 
   return { promise, stop };
+}
+
+/**
+ * Generate a typed object instead of free text.
+ *
+ * You describe the shape you want with a JSON Schema. expo-ai-kit appends a
+ * strict instruction to the system prompt, runs the on-device model, extracts
+ * the JSON from its output (tolerating prose and ```json fences), validates it
+ * against the schema, and — on a parse error or schema mismatch — feeds the
+ * error back and re-prompts up to `maxRepairAttempts` times.
+ *
+ * Works on every backend (Apple Foundation Models, ML Kit, Gemma) because it is
+ * orchestrated over {@link sendMessage}: it honors the same single-flight guard,
+ * `AbortSignal`, and `systemPrompt` semantics. Keep schemas small and shallow —
+ * on-device models follow flat shapes far more reliably than deeply nested ones.
+ *
+ * @param messages - The conversation, same shape as {@link sendMessage}.
+ * @param schema - A JSON Schema describing the desired result.
+ * @param options - Optional settings (systemPrompt, signal, maxRepairAttempts).
+ * @returns `{ object, text }` — the validated value and the raw output.
+ * @throws {ModelError} INFERENCE_FAILED if no schema-valid JSON is produced
+ *   after the repair attempts. Also propagates INFERENCE_BUSY / INFERENCE_CANCELLED
+ *   from the underlying generation.
+ *
+ * @example
+ * ```ts
+ * type Recipe = { title: string; minutes: number; ingredients: string[] };
+ *
+ * const { object } = await generateObject<Recipe>(
+ *   [{ role: 'user', content: 'A quick weeknight pasta.' }],
+ *   {
+ *     type: 'object',
+ *     properties: {
+ *       title: { type: 'string' },
+ *       minutes: { type: 'integer' },
+ *       ingredients: { type: 'array', items: { type: 'string' } },
+ *     },
+ *     required: ['title', 'minutes', 'ingredients'],
+ *   },
+ * );
+ * object.title; // typed Recipe
+ * ```
+ */
+export async function generateObject<T = unknown>(
+  messages: LLMMessage[],
+  schema: JSONSchema,
+  options?: GenerateObjectOptions
+): Promise<GenerateObjectResult<T>> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    throw new ModelError(
+      'DEVICE_NOT_SUPPORTED',
+      '',
+      'generateObject is only available on iOS and Android'
+    );
+  }
+  if (!messages || messages.length === 0) {
+    throw new Error('messages array cannot be empty');
+  }
+  if (!schema || typeof schema !== 'object') {
+    throw new Error('schema must be a JSON Schema object');
+  }
+
+  const maxRepairAttempts = Math.max(0, options?.maxRepairAttempts ?? 2);
+  const instruction = buildSchemaInstruction(schema);
+
+  // Inject the schema instruction. If the caller supplied a system message we
+  // append to it (sendMessage reads system from the array); otherwise we carry
+  // the instruction via the systemPrompt option, which sendMessage applies when
+  // the array has no system message — including on the repair turns we append.
+  const sysIdx = messages.findIndex((m) => m.role === 'system');
+  let working: LLMMessage[];
+  let systemPrompt: string | undefined;
+  if (sysIdx >= 0) {
+    working = messages.map((m, i) =>
+      i === sysIdx ? { role: m.role, content: `${m.content}\n\n${instruction}` } : m
+    );
+    systemPrompt = undefined; // the array carries the system message
+  } else {
+    working = [...messages];
+    systemPrompt = `${options?.systemPrompt ?? DEFAULT_OBJECT_SYSTEM_PROMPT}\n\n${instruction}`;
+  }
+
+  let lastText = '';
+  for (let attempt = 0; attempt <= maxRepairAttempts; attempt++) {
+    const { text } = await sendMessage(working, { systemPrompt, signal: options?.signal });
+    lastText = text;
+
+    const parsed = extractJson(text);
+    if (parsed.ok) {
+      const errors = validateAgainstSchema(parsed.value, schema);
+      if (errors.length === 0) {
+        return { object: parsed.value as T, text };
+      }
+      if (attempt < maxRepairAttempts) {
+        working = [
+          ...working,
+          { role: 'assistant', content: text },
+          { role: 'user', content: buildSchemaRepair(errors) },
+        ];
+      }
+    } else if (attempt < maxRepairAttempts) {
+      working = [
+        ...working,
+        { role: 'assistant', content: text },
+        { role: 'user', content: REPAIR_INVALID_JSON },
+      ];
+    }
+  }
+
+  throw new ModelError(
+    'INFERENCE_FAILED',
+    getActiveModel(),
+    `generateObject: model did not return schema-valid JSON after ${maxRepairAttempts + 1} attempt(s). ` +
+      `Last output: ${lastText.slice(0, 200)}`
+  );
 }
 
 // ============================================================================

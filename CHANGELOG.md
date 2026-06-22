@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.0
+
+> Headline: **structured output** — `generateObject()` returns a typed object
+> validated against a JSON Schema, on every backend. Additive — no breaking changes.
+
+### Added
+
+- **`generateObject(messages, schema, options?)`** — get a typed object back instead of a string. You describe the shape with a JSON Schema; expo-ai-kit appends a strict instruction to the system prompt, runs the on-device model, extracts the JSON from its output (tolerating surrounding prose and ` ```json ` code fences), validates it against the schema, and — on a parse error or schema mismatch — feeds the error back and re-prompts up to `maxRepairAttempts` times (default 2). Returns `{ object, text }`; throws `INFERENCE_FAILED` if no schema-valid JSON is produced after the attempts. Works across Apple Foundation Models, ML Kit, and Gemma.
+- **New public types**: `JSONSchema`, `JSONSchemaType`, `GenerateObjectOptions`, `GenerateObjectResult`.
+
+### Notes
+
+- The local validator enforces a pragmatic JSON Schema subset (`type`, `properties`, `required`, `items`, `enum`, type unions) and is intentionally lenient about unknown keywords and extra properties — enough to catch structural mistakes worth re-prompting over. Keep schemas small and shallow; on-device models follow flat shapes far more reliably than deeply nested ones.
+- Structured output is orchestrated in the JS layer over `sendMessage`, so it honors the same single-flight inference guard, `systemPrompt`, and `AbortSignal` semantics. This keeps the call signature stable so native constrained decoding (Apple guided generation / LiteRT-LM) can slot in behind it later without changing call sites.
+
 ## 0.5.0
 
 > Headline: **downloadable Gemma 4 (E2B / E4B) now runs on iOS**, not just Android,

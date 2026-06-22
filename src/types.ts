@@ -142,6 +142,84 @@ export type LLMStreamCallback = (event: LLMStreamEvent) => void;
 
 
 // ============================================================================
+// Structured Output (generateObject)
+// ============================================================================
+
+/**
+ * The set of JSON Schema primitive `type` values understood by
+ * {@link generateObject}'s local validator.
+ */
+export type JSONSchemaType =
+  | 'object'
+  | 'array'
+  | 'string'
+  | 'number'
+  | 'integer'
+  | 'boolean'
+  | 'null';
+
+/**
+ * A JSON Schema describing the shape you want {@link generateObject} to return.
+ *
+ * A pragmatic subset is enforced locally — `type`, `properties`, `required`,
+ * `items`, and `enum` — which covers most extraction shapes. Any other JSON
+ * Schema keywords you include (e.g. `description`, `minLength`) are still sent
+ * to the model to guide it, but are not validated on-device. Keep schemas small:
+ * on-device models follow flat, shallow shapes far more reliably than deeply
+ * nested ones.
+ */
+export type JSONSchema = {
+  /** Expected JSON type (or a union of types). */
+  type?: JSONSchemaType | JSONSchemaType[];
+  /** Human-readable hint passed through to the model. */
+  description?: string;
+  /** For `object` schemas: the schema of each named property. */
+  properties?: Record<string, JSONSchema>;
+  /** For `object` schemas: property names that must be present. */
+  required?: string[];
+  /** For `array` schemas: the schema each element must satisfy. */
+  items?: JSONSchema;
+  /** Restrict the value to this set of literals. */
+  enum?: ReadonlyArray<string | number | boolean | null>;
+  /** Other JSON Schema keywords are accepted and forwarded to the model. */
+  [key: string]: unknown;
+};
+
+/**
+ * Options for {@link generateObject}.
+ */
+export type GenerateObjectOptions = {
+  /**
+   * System prompt used when the messages array has no system message. Defaults
+   * to a structured-output-oriented instruction. If a system message is present
+   * in the array, this is ignored (the schema instruction is appended to it).
+   */
+  systemPrompt?: string;
+  /**
+   * Abort the request. Behaves like {@link LLMSendOptions.signal} — the returned
+   * promise rejects with an INFERENCE_CANCELLED {@link ModelError}.
+   */
+  signal?: AbortSignal;
+  /**
+   * How many times to re-prompt the model when its output is not valid JSON or
+   * does not match the schema. Each repair feeds the error back to the model.
+   * Defaults to 2 (i.e. up to 3 generations total).
+   */
+  maxRepairAttempts?: number;
+};
+
+/**
+ * Result of {@link generateObject}.
+ */
+export type GenerateObjectResult<T = unknown> = {
+  /** The parsed value, validated against the schema. */
+  object: T;
+  /** The raw model output that produced `object` (useful for debugging). */
+  text: string;
+};
+
+
+// ============================================================================
 // Model Types
 // ============================================================================
 
