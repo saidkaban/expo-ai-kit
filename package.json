@@ -1,6 +1,6 @@
 {
   "name": "expo-ai-kit",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "On-device AI for Expo — run Gemma 4, Apple Foundation Models & ML Kit locally: streaming, structured output, tool calling, zero API keys",
   "main": "build/index.js",
   "types": "build/index.d.ts",
