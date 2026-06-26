@@ -75,6 +75,19 @@ or schema-invalid args are re-prompted up to `maxRepairAttempts` (default 2), th
 the proposed call (human-in-the-loop gate). Native constrained decoding can slot in behind the same
 signature later (see substrate facts below).
 
+## Downloadable models & bring-your-own (0.8.0 / 0.9.0)
+
+`src/models.ts` is the single source of truth for downloadable models — adding one needs **no native
+change** (the native layer loads any non-built-in id generically via LiteRT-LM). **0.8.0** grew the
+curated registry into a size ladder across families — Gemma 4 E2B/E4B, Qwen3 0.6B/1.7B/4B, Phi-4 Mini —
+each entry carrying a pinned SHA256, conservative RAM/context defaults, and a `license` field now
+surfaced on `DownloadableModel`. **0.9.0** opened it up: `registerModel(entry)` adds a custom model at
+runtime (in-memory store; re-register on each launch — the on-disk file persists, keyed by id), still
+integrity-checked against the dev-supplied `sha256`. `fetchModelMetadata(url)` pulls `{ sha256, sizeBytes }`
+from a HuggingFace resolve URL (dev-time convenience — pin the hash for a real supply-chain guarantee;
+it otherwise only catches transit corruption). `validateModelEntry` / `parseHuggingFaceUrl` are the
+pure, unit-tested building blocks. Curated + native ids are reserved; `registerModel` rejects collisions.
+
 ## Roadmap / strategic direction
 
 **Positioning (the wedge):** Expo-first install + **OS-native models** (Apple FM + ML Kit: zero
@@ -82,7 +95,9 @@ download, zero app-size bloat, OS-maintained) + robust model management. Don't t
 `react-native-executorch` (Stable Diffusion, CV models, Whisper/Kokoro, etc.) — lean into the
 zero-download OS path that ExecuTorch-based libraries structurally cannot offer.
 
-- **Done:** structured output — `generateObject` (0.6.0); tool / function calling — `generateText` (0.7.0).
+- **Done:** structured output — `generateObject` (0.6.0); tool / function calling — `generateText`
+  (0.7.0); expanded model registry — Qwen3 + Phi-4 Mini, `license` field (0.8.0); bring-your-own-model
+  — `registerModel` / `fetchModelMetadata` (0.9.0).
 - **Next (Tier 1):** embeddings + on-device RAG (EmbeddingGemma).
 - **Tier 2:** stateful session with KV-cache reuse (perf/battery win); vision input; voice (ASR/TTS).
 - **Tier 3:** Vercel AI SDK provider; download hardening (resumable / background / wifi-only).
