@@ -375,6 +375,8 @@ export type DownloadableModel = {
   name: string;
   /** Parameter count label (e.g. '2.3B') */
   parameterCount: string;
+  /** License the weights are distributed under (e.g. 'Apache-2.0', 'MIT', 'Gemma'). */
+  license: string;
   /** Download file size in bytes */
   sizeBytes: number;
   /** Maximum context window in tokens */

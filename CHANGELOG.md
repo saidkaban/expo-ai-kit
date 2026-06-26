@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.8.0
+
+> Headline: **more downloadable models** — a size ladder of Qwen3 (0.6B / 1.7B / 4B)
+> and Phi-4 Mini joins Gemma 4 in the registry, each tagged with its license.
+> Additive — no breaking changes, no native changes.
+
+### Added
+
+- **Four new downloadable models**, all official `litert-community` LiteRT-LM builds: `qwen3-0.6b` (~0.5 GB, Apache-2.0), `qwen3-1.7b` (~2.1 GB, Apache-2.0), `qwen3-4b` (~2.7 GB, Apache-2.0), and `phi-4-mini` (~3.9 GB, MIT). With Gemma 4 E2B/E4B this gives a sub-GB-to-~4 GB ladder spanning three model families — pick per device with `getRecommendedModel()` or browse `getDownloadableModels()`. They flow through the existing `downloadModel` / `setModel` / inference path with integrity-checked downloads; no new API.
+- **`license` on every model.** `DownloadableModel` (and the registry) now carries a `license` field — an SPDX id (`Apache-2.0`, `MIT`) or family name (`Gemma`) — so you can check your obligations before shipping a model to users.
+
+### Notes
+
+- Downloadable models are loaded generically by model id (the native layer routes any non-built-in id to LiteRT-LM), so adding models is a registry-only change — these required no iOS/Android code changes. Context-window and RAM values are conservative defaults; benchmark on real devices and file an issue if a model needs adjustment. `qwen3-0.6b` ships an int4 build with a 2048-token KV; the others default to 4096.
+
 ## 0.7.0
 
 > Headline: **tool / function calling** — `generateText()` lets the on-device model

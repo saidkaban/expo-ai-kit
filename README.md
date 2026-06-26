@@ -98,18 +98,34 @@ Omit a tool's `execute` to gate it yourself: the loop stops with `finishReason: 
 and hands you the proposed call to confirm before running. Keep tool sets small and parameter
 schemas flat — on-device models pick tools more reliably that way.
 
-## Downloadable Gemma 4
+## Downloadable models
+
+Beyond the OS built-ins, you can download open models (via LiteRT-LM) and switch to them at
+runtime — a size ladder from sub-GB to ~4 GB:
+
+| id | params | download | license |
+|---|---|---|---|
+| `qwen3-0.6b` | 0.6B | ~0.5 GB | Apache-2.0 |
+| `gemma-e2b` | 2.3B | ~2.6 GB | Gemma |
+| `qwen3-1.7b` | 1.7B | ~2.1 GB | Apache-2.0 |
+| `qwen3-4b` | 4B | ~2.7 GB | Apache-2.0 |
+| `gemma-e4b` | 4.5B | ~3.7 GB | Gemma |
+| `phi-4-mini` | 3.8B | ~3.9 GB | MIT |
 
 ```tsx
-import { getRecommendedModel, downloadModel, setModel } from 'expo-ai-kit';
+import { getDownloadableModels, getRecommendedModel, downloadModel, setModel } from 'expo-ai-kit';
 
-const best = await getRecommendedModel();          // E4B on high-RAM phones, else E2B
+await getDownloadableModels(); // full catalog + per-device status, size, and license
+
+const best = await getRecommendedModel();          // biggest model the device can run, else null
 if (best) {
   await downloadModel(best.id, { onProgress: (p) => console.log(p) });
   await setModel(best.id, { generation: { temperature: 0.7 } });
   // sendMessage / streamMessage / generateObject / generateText now use it; unloadModel() reverts to the OS model
 }
 ```
+
+Each entry carries a `license` — check it before shipping a model to your users.
 
 ## API
 

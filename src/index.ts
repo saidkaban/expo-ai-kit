@@ -781,6 +781,7 @@ export async function getDownloadableModels(): Promise<DownloadableModel[]> {
         id: entry.id,
         name: entry.name,
         parameterCount: entry.parameterCount,
+        license: entry.license,
         sizeBytes: entry.sizeBytes,
         contextWindow: entry.contextWindow,
         minRamBytes: entry.minRamBytes,
