@@ -2,8 +2,8 @@
 
 On-device AI for Expo & React Native: run LLMs locally (no API keys, no cloud, no cost) across
 **Apple Foundation Models** (iOS 26+), **ML Kit** (Android), and downloadable **Gemma 4** (E2B/E4B,
-iOS + Android via LiteRT-LM). Streaming, structured output, cancellation, runtime model switching —
-all on-device.
+iOS + Android via LiteRT-LM). Streaming, structured output, tool calling, cancellation, runtime
+model switching — all on-device.
 
 ## Build / test / publish
 
@@ -24,8 +24,8 @@ all on-device.
 - **Single-flight inference.** A module-level `inferenceInFlight` flag (`src/index.ts`) serializes
   generation: concurrent `sendMessage`/`streamMessage` reject with `INFERENCE_BUSY`. It's set
   synchronously before any `await` (race-free in single-threaded JS) and held until the *native* call
-  settles — even on early abort. Anything that runs inference (including `generateObject`) must go
-  through this path; don't add a parallel route around it.
+  settles — even on early abort. Anything that runs inference (including `generateObject` and
+  `generateText`) must go through this path; don't add a parallel route around it.
 - **Stateless models.** Full conversation history is passed every call. Sampling (temperature/topK/…)
   is fixed at `setModel()` time, not per-call — LiteRT-LM builds the sampler at conversation creation.
 - **Native error contract.** Native formats failures as `"CODE:modelId:reason"`; the JS layer
@@ -40,6 +40,8 @@ all on-device.
 - `src/index.ts` — public API (inference + model management), error normalization, single-flight guard.
 - `src/types.ts` — all public types. The per-backend `GenerationConfig` capability matrix lives here.
 - `src/structured.ts` — pure helpers for `generateObject` (schema→prompt, JSON extraction, validator).
+- `src/tools.ts` — pure helpers for `generateText` tool calling (tools→prompt, tool-call parsing,
+  repair/result formatting); reuses `structured.ts`'s JSON extraction + schema validator.
 - `src/models.ts` — hardcoded downloadable model registry (SHA256, RAM requirements, download URLs).
 - `ios/` — Swift. Apple FM + Gemma via vendored LiteRT-LM (`ios/Vendor/LiteRTLM/`; the C xcframework
   is fetched on `pod install`). `android/` — Kotlin. ML Kit + Gemma via the LiteRT-LM gradle dep.
@@ -55,6 +57,21 @@ backends. This was a deliberate choice over native constrained decoding — it s
 unit-tested, and keeps the call signature stable, so native guided generation can slot in behind the
 same function later with no call-site change.
 
+## Tool / function calling (shipped in 0.7.0)
+
+`generateText(messages, options)` is the same play as `generateObject`: **orchestrated in JS over
+`sendMessage`** (`src/tools.ts` holds the pure helpers). It appends a tool instruction to the system
+prompt, and the model requests a call by emitting a JSON envelope `{"tool":"<name>","arguments":{…}}`,
+which we parse back out of its text (reusing `extractJson`). The loop: parse → validate args against
+the tool's `parameters` (reusing `validateAgainstSchema`) → run `execute` → feed the result back →
+repeat until the model answers in plain text or `maxSteps` (default 5) is hit. It's deliberately
+defensive because on-device models are weak at tool selection: a malformed call, an unknown tool name,
+or schema-invalid args are re-prompted up to `maxRepairAttempts` (default 2), then throw
+`INFERENCE_FAILED` rather than execute bad input; a thrown `execute` is caught and fed back as
+`{ error }`. A tool with **no `execute`** stops the loop with `finishReason: 'tool-calls'` and returns
+the proposed call (human-in-the-loop gate). Native constrained decoding can slot in behind the same
+signature later (see substrate facts below).
+
 ## Roadmap / strategic direction
 
 **Positioning (the wedge):** Expo-first install + **OS-native models** (Apple FM + ML Kit: zero
@@ -62,16 +79,17 @@ download, zero app-size bloat, OS-maintained) + robust model management. Don't t
 `react-native-executorch` (Stable Diffusion, CV models, Whisper/Kokoro, etc.) — lean into the
 zero-download OS path that ExecuTorch-based libraries structurally cannot offer.
 
-- **Done:** structured output — `generateObject` (0.6.0).
-- **Next (Tier 1):** tool / function calling; embeddings + on-device RAG (EmbeddingGemma).
+- **Done:** structured output — `generateObject` (0.6.0); tool / function calling — `generateText` (0.7.0).
+- **Next (Tier 1):** embeddings + on-device RAG (EmbeddingGemma).
 - **Tier 2:** stateful session with KV-cache reuse (perf/battery win); vision input; voice (ASR/TTS).
 - **Tier 3:** Vercel AI SDK provider; download hardening (resumable / background / wifi-only).
 
 **Substrate facts that make the roadmap feasible** (verify before relying — checked June 2026):
 
 - LiteRT-LM supports tool/function calling (constrained decoding) and Gemma 3n vision/audio input.
-  The vendored Swift bindings already ship `ios/Vendor/LiteRTLM/Tool.swift` and `ToolManager.swift` —
-  present but **not yet wired to the JS API**.
+  Tool calling ships in 0.7.0 **JS-orchestrated over `sendMessage`** (`src/tools.ts`); the vendored
+  Swift bindings (`ios/Vendor/LiteRTLM/Tool.swift`, `ToolManager.swift`) for *native* constrained
+  decoding are still **not wired to the JS API** — they can slot in behind `generateText` later.
 - Apple Foundation Models support guided generation (`DynamicGenerationSchema`) and a `Tool` protocol
   natively.
 

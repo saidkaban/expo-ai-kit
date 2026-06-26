@@ -17,6 +17,11 @@ import {
   JSONSchema,
   GenerateObjectOptions,
   GenerateObjectResult,
+  GenerateTextOptions,
+  GenerateTextResult,
+  ToolCall,
+  ToolResult,
+  StepResult,
 } from './types';
 import {
   buildSchemaInstruction,
@@ -25,6 +30,13 @@ import {
   validateAgainstSchema,
   REPAIR_INVALID_JSON,
 } from './structured';
+import {
+  buildToolInstruction,
+  parseToolCall,
+  buildUnknownToolRepair,
+  buildToolArgsRepair,
+  formatToolResult,
+} from './tools';
 import { MODEL_REGISTRY, getRegistryEntry } from './models';
 
 export * from './types';
@@ -508,6 +520,213 @@ export async function generateObject<T = unknown>(
     `generateObject: model did not return schema-valid JSON after ${maxRepairAttempts + 1} attempt(s). ` +
       `Last output: ${lastText.slice(0, 200)}`
   );
+}
+
+/**
+ * Generate text, optionally letting the model call tools (functions) you provide.
+ *
+ * Unlike {@link generateObject} (where the JSON *is* the answer), tool calling is
+ * a loop: the model proposes a call, expo-ai-kit validates the arguments against
+ * the tool's `parameters`, runs your `execute`, feeds the result back, and lets
+ * the model continue — until it produces a plain-text answer or the `maxSteps`
+ * budget is reached. With no `tools`, this is a single text generation.
+ *
+ * Orchestrated in JS over {@link sendMessage}, so it works on every backend
+ * (Apple Foundation Models, ML Kit, Gemma) and inherits the single-flight guard,
+ * `AbortSignal`, and `systemPrompt` semantics. On-device models are imperfect at
+ * tool selection, so the loop is defensive: malformed calls, unknown tool names,
+ * and schema-invalid arguments are re-prompted up to `maxRepairAttempts` times,
+ * and a tool with no `execute` stops the loop and returns the proposed call for
+ * you to gate. Keep tool sets small and `parameters` flat for best reliability.
+ *
+ * @param messages - The conversation, same shape as {@link sendMessage}.
+ * @param options - Tools, `maxSteps`, `systemPrompt`, `signal`, `maxRepairAttempts`.
+ * @returns `{ text, steps, toolCalls, toolResults, finishReason }`.
+ * @throws {ModelError} INFERENCE_FAILED if the model keeps proposing an unknown
+ *   tool or schema-invalid arguments after the repair attempts. Also propagates
+ *   INFERENCE_BUSY / INFERENCE_CANCELLED from the underlying generation.
+ *
+ * @example
+ * ```ts
+ * const { text } = await generateText(
+ *   [{ role: 'user', content: 'What should I wear in Paris today?' }],
+ *   {
+ *     tools: {
+ *       getWeather: {
+ *         description: 'Get the current weather for a city.',
+ *         parameters: {
+ *           type: 'object',
+ *           properties: { city: { type: 'string' } },
+ *           required: ['city'],
+ *         },
+ *         execute: async ({ city }: { city: string }) => fetchWeather(city),
+ *       },
+ *     },
+ *   },
+ * );
+ * ```
+ *
+ * @example
+ * ```ts
+ * // Human-in-the-loop: omit `execute` to gate the call yourself.
+ * const res = await generateText(messages, {
+ *   tools: { deleteAccount: { description: '…', parameters: { type: 'object' } } },
+ * });
+ * if (res.finishReason === 'tool-calls') {
+ *   const call = res.toolCalls[0]; // confirm with the user before running
+ * }
+ * ```
+ */
+export async function generateText(
+  messages: LLMMessage[],
+  options?: GenerateTextOptions
+): Promise<GenerateTextResult> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    throw new ModelError(
+      'DEVICE_NOT_SUPPORTED',
+      '',
+      'generateText is only available on iOS and Android'
+    );
+  }
+  if (!messages || messages.length === 0) {
+    throw new Error('messages array cannot be empty');
+  }
+
+  const tools = options?.tools ?? {};
+  const toolNames = Object.keys(tools);
+  const maxSteps = Math.max(1, options?.maxSteps ?? 5);
+  const maxRepairAttempts = Math.max(0, options?.maxRepairAttempts ?? 2);
+
+  // Inject the tool instruction the same way generateObject injects its schema
+  // instruction: into the array's system message if present, else via the
+  // systemPrompt option. With no tools, this is a plain single-shot generation.
+  const instruction = toolNames.length > 0 ? buildToolInstruction(tools) : '';
+  const sysIdx = messages.findIndex((m) => m.role === 'system');
+  let working: LLMMessage[];
+  let systemPrompt: string | undefined;
+  if (instruction === '') {
+    working = [...messages];
+    systemPrompt = options?.systemPrompt;
+  } else if (sysIdx >= 0) {
+    working = messages.map((m, i) =>
+      i === sysIdx ? { role: m.role, content: `${m.content}\n\n${instruction}` } : m
+    );
+    systemPrompt = undefined; // the array carries the system message
+  } else {
+    working = [...messages];
+    systemPrompt = `${options?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT}\n\n${instruction}`;
+  }
+
+  const steps: StepResult[] = [];
+  const allToolCalls: ToolCall[] = [];
+  const allToolResults: ToolResult[] = [];
+
+  for (let step = 0; step < maxSteps; step++) {
+    // One model round-trip, with an inner repair loop for malformed/invalid calls.
+    let call: ToolCall | null = null;
+    let text = '';
+
+    for (let repair = 0; ; repair++) {
+      const r = await sendMessage(working, { systemPrompt, signal: options?.signal });
+      text = r.text;
+
+      if (toolNames.length === 0) break; // no tools → this is the final answer
+
+      const parsed = parseToolCall(text, toolNames);
+      if (parsed.kind === 'text') break; // plain answer, no tool call
+
+      if (parsed.kind === 'unknown-tool') {
+        if (repair >= maxRepairAttempts) {
+          throw new ModelError(
+            'INFERENCE_FAILED',
+            getActiveModel(),
+            `generateText: model called unknown tool "${parsed.toolName}" after ${maxRepairAttempts + 1} attempt(s).`
+          );
+        }
+        working = [
+          ...working,
+          { role: 'assistant', content: text },
+          { role: 'user', content: buildUnknownToolRepair(parsed.toolName, toolNames) },
+        ];
+        continue;
+      }
+
+      // parsed.kind === 'tool' — validate the proposed args before executing.
+      const errors = validateAgainstSchema(parsed.args, tools[parsed.toolName].parameters);
+      if (errors.length === 0) {
+        call = { toolName: parsed.toolName, args: parsed.args };
+        break;
+      }
+      if (repair >= maxRepairAttempts) {
+        throw new ModelError(
+          'INFERENCE_FAILED',
+          getActiveModel(),
+          `generateText: arguments for "${parsed.toolName}" failed schema validation after ` +
+            `${maxRepairAttempts + 1} attempt(s): ${errors.slice(0, 4).join('; ')}`
+        );
+      }
+      working = [
+        ...working,
+        { role: 'assistant', content: text },
+        { role: 'user', content: buildToolArgsRepair(parsed.toolName, errors) },
+      ];
+    }
+
+    // No tool call this step → the model produced its final text answer.
+    if (!call) {
+      steps.push({ text, toolCalls: [], toolResults: [] });
+      return {
+        text,
+        steps,
+        toolCalls: allToolCalls,
+        toolResults: allToolResults,
+        finishReason: 'stop',
+      };
+    }
+
+    allToolCalls.push(call);
+    const tool = tools[call.toolName];
+
+    // No execute → hand the proposed call back to the caller (human-in-the-loop).
+    if (typeof tool.execute !== 'function') {
+      steps.push({ text, toolCalls: [call], toolResults: [] });
+      return {
+        text,
+        steps,
+        toolCalls: allToolCalls,
+        toolResults: allToolResults,
+        finishReason: 'tool-calls',
+      };
+    }
+
+    // Run the tool. A thrown error is fed back as the result so the model can recover.
+    let result: unknown;
+    try {
+      result = await tool.execute(call.args);
+    } catch (e) {
+      result = { error: String((e as any)?.message ?? e) };
+    }
+    const toolResult: ToolResult = { toolName: call.toolName, args: call.args, result };
+    allToolResults.push(toolResult);
+    steps.push({ text, toolCalls: [call], toolResults: [toolResult] });
+
+    // Feed the call + result back into the conversation for the next step.
+    working = [
+      ...working,
+      { role: 'assistant', content: text },
+      { role: 'user', content: formatToolResult(call.toolName, result) },
+    ];
+  }
+
+  // Step budget exhausted while still calling tools — no final answer was
+  // produced. Signal it via finishReason so the caller can raise maxSteps.
+  return {
+    text: '',
+    steps,
+    toolCalls: allToolCalls,
+    toolResults: allToolResults,
+    finishReason: 'max-steps',
+  };
 }
 
 // ============================================================================

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.0
+
+> Headline: **tool / function calling** — `generateText()` lets the on-device model
+> call functions you provide (fetch data, take actions) and use the results to
+> answer, on every backend. Additive — no breaking changes.
+
+### Added
+
+- **`generateText(messages, options?)`** — generate text, optionally letting the model call tools. You pass a `tools` map (each with a `description`, a JSON-Schema `parameters`, and an optional `execute`); the model proposes a call, expo-ai-kit validates the arguments against the schema, runs your `execute`, feeds the result back, and loops until the model produces a plain-text answer or hits `maxSteps` (default 5). Returns `{ text, steps, toolCalls, toolResults, finishReason }`. With no `tools`, it's a single text generation. Works across Apple Foundation Models, ML Kit, and Gemma.
+- **Human-in-the-loop.** A tool with **no `execute`** stops the loop with `finishReason: 'tool-calls'` and returns the proposed call, so you can confirm or gate it before anything runs.
+- **New public types**: `Tool`, `ToolSet`, `ToolCall`, `ToolResult`, `StepResult`, `GenerateTextOptions`, `GenerateTextResult`, `GenerateTextFinishReason`.
+
+### Notes
+
+- On-device models are imperfect at tool selection, so the loop is defensive: a malformed call, an unknown tool name, or arguments that fail schema validation are re-prompted with the error up to `maxRepairAttempts` times (default 2); if the model still can't comply, `generateText` throws `INFERENCE_FAILED` rather than execute with bad input. A thrown `execute` is caught and fed back as `{ error }` so the model can recover. Keep tool sets small and `parameters` flat for best reliability.
+- Like `generateObject`, tool calling is orchestrated in the JS layer over `sendMessage`, so it honors the same single-flight inference guard, `systemPrompt`, and `AbortSignal` semantics. The protocol is a tiny JSON envelope (`{"tool": "<name>", "arguments": { … }}`) parsed back out of the model's text — which keeps the call signature stable so native guided generation (Apple `Tool` protocol / LiteRT-LM `ToolManager`) can slot in behind it later without changing call sites.
+
 ## 0.6.0
 
 > Headline: **structured output** — `generateObject()` returns a typed object

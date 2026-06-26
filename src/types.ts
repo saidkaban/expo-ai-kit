@@ -220,6 +220,130 @@ export type GenerateObjectResult<T = unknown> = {
 
 
 // ============================================================================
+// Tool / Function Calling (generateText)
+// ============================================================================
+
+/**
+ * A tool (function) the model may call to fetch data or take an action.
+ *
+ * The model never runs anything itself — it *proposes* a call (a name + JSON
+ * arguments), {@link generateText} validates the arguments against `parameters`,
+ * and only then invokes your `execute`. The result is fed back into the
+ * conversation so the model can use it to produce its final answer.
+ *
+ * @typeParam TArgs - Shape of the validated arguments passed to `execute`.
+ * @typeParam TResult - What `execute` returns (serialized back to the model).
+ */
+export type Tool<TArgs = any, TResult = any> = {
+  /**
+   * What the tool does and when to use it. This is how the model decides
+   * whether a request matches this tool — make it specific and action-oriented.
+   */
+  description: string;
+  /**
+   * JSON Schema for the tool's arguments. The model is told to conform to it,
+   * and the args it proposes are validated against it (same pragmatic subset as
+   * {@link generateObject}) before `execute` runs. Keep it small and shallow.
+   */
+  parameters: JSONSchema;
+  /**
+   * Runs the tool with the validated arguments and returns a result.
+   *
+   * **Optional on purpose.** If you omit it, {@link generateText} does not run
+   * anything — it stops with `finishReason: 'tool-calls'` and hands you the
+   * proposed call so you can confirm, gate, or execute it yourself.
+   */
+  execute?: (args: TArgs) => TResult | Promise<TResult>;
+};
+
+/** A map of tool name → {@link Tool}, passed to {@link generateText}. */
+export type ToolSet = Record<string, Tool>;
+
+/** A tool invocation the model proposed (name + validated arguments). */
+export type ToolCall = {
+  /** The tool's key in the {@link ToolSet}. */
+  toolName: string;
+  /** Arguments the model supplied, validated against the tool's `parameters`. */
+  args: unknown;
+};
+
+/** The outcome of running a {@link ToolCall} via its `execute`. */
+export type ToolResult = {
+  /** The tool's key in the {@link ToolSet}. */
+  toolName: string;
+  /** The arguments that were passed to `execute`. */
+  args: unknown;
+  /** Whatever `execute` returned (or `{ error }` if it threw). */
+  result: unknown;
+};
+
+/** One model round-trip in the {@link generateText} loop. */
+export type StepResult = {
+  /** Assistant text produced this step (empty when the step only called a tool). */
+  text: string;
+  /** Tool calls proposed this step (at most one in the current protocol). */
+  toolCalls: ToolCall[];
+  /** Results of the tool calls executed this step. */
+  toolResults: ToolResult[];
+};
+
+/**
+ * Why {@link generateText} stopped.
+ *
+ * - `'stop'`: the model produced a final text answer.
+ * - `'tool-calls'`: stopped because a proposed tool has no `execute` — the call
+ *   is returned for you to handle (human-in-the-loop).
+ * - `'max-steps'`: hit the `maxSteps` cap while still calling tools. Raise the cap.
+ */
+export type GenerateTextFinishReason = 'stop' | 'tool-calls' | 'max-steps';
+
+/**
+ * Options for {@link generateText}.
+ */
+export type GenerateTextOptions = {
+  /** Tools the model may call. Omit (or pass `{}`) for a plain text generation. */
+  tools?: ToolSet;
+  /**
+   * Maximum number of model round-trips (each call + tool execution is one step).
+   * Bounds the tool-calling chain so it can't run away. Defaults to 5.
+   */
+  maxSteps?: number;
+  /**
+   * System prompt used when the messages array has no system message. The tool
+   * instructions are appended to it (or to the array's system message if present).
+   */
+  systemPrompt?: string;
+  /**
+   * Abort the request. Behaves like {@link LLMSendOptions.signal} — the returned
+   * promise rejects with an INFERENCE_CANCELLED {@link ModelError}.
+   */
+  signal?: AbortSignal;
+  /**
+   * How many times to re-prompt within a step when the model emits a malformed
+   * tool call, an unknown tool name, or arguments that fail schema validation.
+   * Defaults to 2. If it still can't comply, `generateText` throws INFERENCE_FAILED.
+   */
+  maxRepairAttempts?: number;
+};
+
+/**
+ * Result of {@link generateText}.
+ */
+export type GenerateTextResult = {
+  /** The final assistant text (empty if it stopped on a tool call without `execute`). */
+  text: string;
+  /** Every step taken, in order — useful for tracing or debugging. */
+  steps: StepResult[];
+  /** All tool calls across every step, flattened. */
+  toolCalls: ToolCall[];
+  /** All tool results across every step, flattened. */
+  toolResults: ToolResult[];
+  /** Why generation stopped. See {@link GenerateTextFinishReason}. */
+  finishReason: GenerateTextFinishReason;
+};
+
+
+// ============================================================================
 // Model Types
 // ============================================================================
 
