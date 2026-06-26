@@ -137,10 +137,187 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Custom (developer-registered) models — "bring your own model".
+//
+// The built-in MODEL_REGISTRY above is curated: each entry's SHA256 is pinned by
+// a maintainer who verified the bytes. registerModel() lets app developers add
+// any LiteRT-LM model under the same contract — they supply the metadata
+// (including the SHA256), so the integrity check still holds end-to-end. Custom
+// entries live in memory only; call registerModel() at startup on every launch
+// (the downloaded file on disk persists and is keyed by id, so status survives
+// restarts once you re-register).
+// ---------------------------------------------------------------------------
+
+const customModels = new Map<string, ModelRegistryEntry>();
+
+/** Ids owned by the native built-in backends; not valid for custom models. */
+const RESERVED_MODEL_IDS = new Set(['apple-fm', 'mlkit']);
+
+const SHA256_RE = /^[a-f0-9]{64}$/i;
+
 /**
- * Look up a model registry entry by ID.
+ * Validate a model entry, returning a list of human-readable problems
+ * (empty ⇒ valid). Pure — used by {@link registerModel} and unit-tested.
+ */
+export function validateModelEntry(entry: ModelRegistryEntry): string[] {
+  const errors: string[] = [];
+  if (!entry || typeof entry !== 'object') return ['entry must be an object'];
+  if (!entry.id || typeof entry.id !== 'string') errors.push('id is required');
+  if (!entry.name || typeof entry.name !== 'string') errors.push('name is required');
+  if (!entry.parameterCount) errors.push('parameterCount is required (e.g. "1.7B")');
+  if (!entry.quantization) errors.push('quantization is required (e.g. "int4")');
+  if (typeof entry.downloadUrl !== 'string' || !/^https?:\/\//.test(entry.downloadUrl)) {
+    errors.push('downloadUrl must be an http(s) URL');
+  }
+  if (typeof entry.sha256 !== 'string' || !SHA256_RE.test(entry.sha256)) {
+    errors.push('sha256 must be a 64-character hex string (use fetchModelMetadata to obtain it)');
+  }
+  if (!Number.isFinite(entry.sizeBytes) || entry.sizeBytes <= 0) {
+    errors.push('sizeBytes must be a positive number');
+  }
+  if (!Number.isFinite(entry.minRamBytes) || entry.minRamBytes < 0) {
+    errors.push('minRamBytes must be >= 0');
+  }
+  if (!Number.isInteger(entry.contextWindow) || entry.contextWindow <= 0) {
+    errors.push('contextWindow must be a positive integer');
+  }
+  if (!Array.isArray(entry.supportedPlatforms) || entry.supportedPlatforms.length === 0) {
+    errors.push('supportedPlatforms must list at least one of "ios" / "android"');
+  } else if (!entry.supportedPlatforms.every((p) => p === 'ios' || p === 'android')) {
+    errors.push('supportedPlatforms may only contain "ios" or "android"');
+  }
+  if (!entry.license || typeof entry.license !== 'string') {
+    errors.push('license is required (e.g. "Apache-2.0", "MIT")');
+  }
+  return errors;
+}
+
+/**
+ * Register a custom downloadable model at runtime.
+ *
+ * After registering, the id works with `downloadModel` / `setModel` /
+ * `getDownloadableModels` exactly like a built-in. The download is integrity-
+ * checked against the `sha256` you provide — pin a value you trust (see
+ * {@link fetchModelMetadata}). Throws if the entry is invalid or the id
+ * collides with a built-in (curated or native) model.
+ *
+ * @example
+ * ```ts
+ * const { sha256, sizeBytes } = await fetchModelMetadata(url); // dev-time
+ * registerModel({
+ *   id: 'qwen3-8b', name: 'Qwen3 8B', parameterCount: '8B', quantization: 'int4',
+ *   downloadUrl: url, sha256, sizeBytes,
+ *   contextWindow: 4096, minRamBytes: 6_000_000_000,
+ *   supportedPlatforms: ['ios', 'android'], license: 'Apache-2.0',
+ * });
+ * ```
+ */
+export function registerModel(entry: ModelRegistryEntry): void {
+  const errors = validateModelEntry(entry);
+  if (errors.length > 0) {
+    throw new Error(`registerModel: invalid model entry — ${errors.join('; ')}`);
+  }
+  if (RESERVED_MODEL_IDS.has(entry.id) || MODEL_REGISTRY.some((m) => m.id === entry.id)) {
+    throw new Error(`registerModel: "${entry.id}" is a built-in model id; choose a different id`);
+  }
+  // Clone so later external mutation of the caller's object can't corrupt the registry.
+  customModels.set(entry.id, { ...entry, supportedPlatforms: [...entry.supportedPlatforms] });
+}
+
+/**
+ * Remove a previously {@link registerModel}'d custom model.
+ * Returns true if one was removed. Does not delete any downloaded file —
+ * use `deleteModel` for that. No-op for built-in models.
+ */
+export function unregisterModel(modelId: string): boolean {
+  return customModels.delete(modelId);
+}
+
+/** All custom models registered via {@link registerModel}, in registration order. */
+export function getRegisteredModels(): ModelRegistryEntry[] {
+  return [...customModels.values()];
+}
+
+/** Built-in registry plus all custom models. */
+export function getAllModels(): ModelRegistryEntry[] {
+  return [...MODEL_REGISTRY, ...customModels.values()];
+}
+
+/**
+ * Look up a model registry entry by ID (built-in or custom).
  * Returns undefined if not found.
  */
 export function getRegistryEntry(modelId: string): ModelRegistryEntry | undefined {
-  return MODEL_REGISTRY.find((m) => m.id === modelId);
+  return MODEL_REGISTRY.find((m) => m.id === modelId) ?? customModels.get(modelId);
+}
+
+/**
+ * Parse a HuggingFace "resolve" download URL into its parts.
+ * Returns null if the URL isn't a HuggingFace resolve URL. Pure — unit-tested.
+ *
+ * e.g. https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/model.litertlm
+ *   → { repo: 'litert-community/Qwen3-0.6B', revision: 'main', path: 'model.litertlm' }
+ */
+export function parseHuggingFaceUrl(
+  url: string
+): { repo: string; revision: string; path: string } | null {
+  if (typeof url !== 'string') return null;
+  const clean = url.split('#')[0].split('?')[0];
+  const m = /^https?:\/\/huggingface\.co\/([^/]+\/[^/]+)\/resolve\/([^/]+)\/(.+)$/.exec(clean);
+  if (!m) return null;
+  return { repo: m[1], revision: m[2], path: decodeURIComponent(m[3]) };
+}
+
+/**
+ * Look up a model file's SHA256 and byte size from HuggingFace, so you can fill
+ * in a {@link registerModel} entry without computing them by hand.
+ *
+ * Trust note: this reads the hash from the same host you'll download from, so it
+ * only guards against download corruption — NOT a maliciously changed upstream
+ * repo. For a real supply-chain guarantee, run this once at dev time and PIN the
+ * returned `sha256` in your source, exactly like the built-in registry.
+ *
+ * @param downloadUrl - A HuggingFace resolve URL (the one you'll register).
+ * @returns `{ sha256, sizeBytes }` ready to spread into a registry entry.
+ * @throws if the URL isn't a HuggingFace resolve URL, the API call fails, or the
+ *   file isn't an LFS object (no hash/size available).
+ */
+export async function fetchModelMetadata(
+  downloadUrl: string
+): Promise<{ sha256: string; sizeBytes: number }> {
+  const parsed = parseHuggingFaceUrl(downloadUrl);
+  if (!parsed) {
+    throw new Error(
+      'fetchModelMetadata: expected a HuggingFace resolve URL ' +
+        '(https://huggingface.co/<owner>/<repo>/resolve/<revision>/<file>)'
+    );
+  }
+  const { repo, revision, path } = parsed;
+  const slash = path.lastIndexOf('/');
+  const dir = slash >= 0 ? path.slice(0, slash) : '';
+  const treeUrl =
+    `https://huggingface.co/api/models/${repo}/tree/${revision}` + (dir ? `/${dir}` : '');
+
+  const res = await fetch(treeUrl);
+  if (!res.ok) {
+    throw new Error(`fetchModelMetadata: HuggingFace API returned ${res.status} for ${treeUrl}`);
+  }
+  const items = (await res.json()) as Array<{
+    path?: string;
+    size?: number;
+    lfs?: { oid?: string; size?: number };
+  }>;
+  const file = Array.isArray(items) ? items.find((it) => it?.path === path) : undefined;
+  if (!file) {
+    throw new Error(`fetchModelMetadata: "${path}" not found in ${repo}@${revision}`);
+  }
+  const sha256 = file.lfs?.oid;
+  const sizeBytes = file.lfs?.size ?? file.size;
+  if (!sha256 || !sizeBytes) {
+    throw new Error(
+      `fetchModelMetadata: "${path}" has no LFS hash/size — is it the actual model weight file?`
+    );
+  }
+  return { sha256, sizeBytes };
 }

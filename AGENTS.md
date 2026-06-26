@@ -42,8 +42,10 @@ tool calling, cancellation, runtime model switching — all on-device.
 - `src/structured.ts` — pure helpers for `generateObject` (schema→prompt, JSON extraction, validator).
 - `src/tools.ts` — pure helpers for `generateText` tool calling (tools→prompt, tool-call parsing,
   repair/result formatting); reuses `structured.ts`'s JSON extraction + schema validator.
-- `src/models.ts` — hardcoded downloadable model registry (Gemma 4 / Qwen3 / Phi-4: SHA256, RAM
-  requirements, download URLs, license). Adding a model is registry-only — native loads any id generically.
+- `src/models.ts` — downloadable model registry (curated Gemma 4 / Qwen3 / Phi-4: SHA256, RAM
+  requirements, download URLs, license) plus runtime "bring your own model" (`registerModel` +
+  in-memory custom store, `fetchModelMetadata` to pull SHA/size from HF). Adding a model is
+  registry-only — native loads any non-built-in id generically through LiteRT-LM.
 - `ios/` — Swift. Apple FM + Gemma via vendored LiteRT-LM (`ios/Vendor/LiteRTLM/`; the C xcframework
   is fetched on `pod install`). `android/` — Kotlin. ML Kit + Gemma via the LiteRT-LM gradle dep.
 - `example/` — local dev-harness app. Git-ignored and not published; edits there are for manual testing.

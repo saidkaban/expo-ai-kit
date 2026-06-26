@@ -127,11 +127,48 @@ if (best) {
 
 Each entry carries a `license` — check it before shipping a model to your users.
 
+### Bring your own model
+
+Not just the built-in list — register any LiteRT-LM model at runtime with `registerModel()`.
+The download is still integrity-checked against the `sha256` you provide. Use
+`fetchModelMetadata()` once at dev time to grab the hash + size from HuggingFace, then **pin**
+them in your code so the integrity guarantee is real and not just corruption-detection.
+
+```tsx
+import { registerModel, fetchModelMetadata, downloadModel, setModel } from 'expo-ai-kit';
+
+const url = 'https://huggingface.co/litert-community/Qwen3-4B/resolve/main/qwen3_4b_mixed_int4.litertlm';
+
+// Dev time: log these once, then hardcode the returned sha256 below.
+// const { sha256, sizeBytes } = await fetchModelMetadata(url);
+
+registerModel({
+  id: 'qwen3-4b-custom',
+  name: 'Qwen3 4B',
+  parameterCount: '4B',
+  quantization: 'int4',
+  downloadUrl: url,
+  sha256: 'f0794bc77efeaaf4f7af815f04c483b19b8f2ae4a102cef1b7b760a25848a18e', // pinned
+  sizeBytes: 2_659_057_664,
+  contextWindow: 4096,
+  minRamBytes: 3_000_000_000,
+  supportedPlatforms: ['ios', 'android'],
+  license: 'Apache-2.0',
+});
+
+await downloadModel('qwen3-4b-custom');
+await setModel('qwen3-4b-custom');
+```
+
+Custom models are in-memory — call `registerModel()` at startup each launch (the downloaded
+file persists on disk, so its `'downloaded'` status survives restarts once re-registered).
+
 ## API
 
 Inference: `isAvailable`, `sendMessage`, `streamMessage`, `generateObject`, `generateText`.
 Models: `getBuiltInModels`, `getDownloadableModels`, `getRecommendedModel`,
 `downloadModel`, `cancelDownload`, `deleteModel`, `setModel`, `unloadModel`, `getActiveModel`.
+Custom models: `registerModel`, `unregisterModel`, `getRegisteredModels`, `fetchModelMetadata`.
 
 Failures throw `ModelError` with a typed `.code`. Full TypeScript definitions ship with
 the package — see [the docs](https://expo-ai-kit.dev) for the complete reference.

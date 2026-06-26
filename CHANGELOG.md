@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.0
+
+> Headline: **bring your own model** — `registerModel()` lets developers add any
+> LiteRT-LM model to the registry at runtime, and `fetchModelMetadata()` looks up
+> its SHA256/size from HuggingFace. Additive — no breaking changes.
+
+### Added
+
+- **`registerModel(entry)`** — register a custom downloadable model at runtime. Once registered, the id works with `downloadModel` / `setModel` / `getDownloadableModels` exactly like a built-in, and the download is integrity-checked against the `sha256` you supply. Validates the entry and rejects ids that collide with a built-in (curated or native) model. Pairs with **`unregisterModel(id)`** and **`getRegisteredModels()`**.
+- **`fetchModelMetadata(downloadUrl)`** — look up a model file's `{ sha256, sizeBytes }` from a HuggingFace resolve URL so you can fill in a `registerModel` entry without computing them by hand. Trust note: it reads the hash from the same host you download from, so it only guards against transit corruption — for a real supply-chain guarantee, run it once at dev time and **pin** the returned hash in your source (like the built-in registry does).
+- **`validateModelEntry(entry)`** and **`parseHuggingFaceUrl(url)`** — the pure building blocks, exported and unit-tested.
+
+### Notes
+
+- Custom models live in memory; call `registerModel()` at startup on every launch. The downloaded file persists on disk (keyed by id), so a model's `'downloaded'` status survives restarts once you re-register it.
+- Adding a model still requires no native changes — the native layer loads any non-built-in id generically through LiteRT-LM. The same on-device caveat applies: a given `.litertlm` must be compatible with the vendored LiteRT-LM runtime to actually load.
+
 ## 0.8.0
 
 > Headline: **more downloadable models** — a size ladder of Qwen3 (0.6B / 1.7B / 4B)

@@ -37,7 +37,7 @@ import {
   buildToolArgsRepair,
   formatToolResult,
 } from './tools';
-import { MODEL_REGISTRY, getRegistryEntry } from './models';
+import { getAllModels, getRegistryEntry } from './models';
 
 export * from './types';
 export * from './models';
@@ -761,7 +761,7 @@ export async function getDownloadableModels(): Promise<DownloadableModel[]> {
     return [];
   }
 
-  const platformModels = MODEL_REGISTRY.filter((entry) =>
+  const platformModels = getAllModels().filter((entry) =>
     entry.supportedPlatforms.includes(Platform.OS as 'ios' | 'android')
   );
 
