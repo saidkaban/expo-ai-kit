@@ -3,7 +3,7 @@
 On-device AI for Expo & React Native: run LLMs locally (no API keys, no cloud, no cost) across
 **Apple Foundation Models** (iOS 26+), **ML Kit** (Android), and downloadable open models
 (**Gemma 4**, **Qwen3**, **Phi-4 Mini**; iOS + Android via LiteRT-LM). Streaming, structured output,
-tool calling, cancellation, runtime model switching — all on-device.
+tool calling, embeddings & on-device RAG, cancellation, runtime model switching — all on-device.
 
 ## Build / test / publish
 
@@ -42,6 +42,9 @@ tool calling, cancellation, runtime model switching — all on-device.
 - `src/structured.ts` — pure helpers for `generateObject` (schema→prompt, JSON extraction, validator).
 - `src/tools.ts` — pure helpers for `generateText` tool calling (tools→prompt, tool-call parsing,
   repair/result formatting); reuses `structured.ts`'s JSON extraction + schema validator.
+- `src/rag.ts` — pure, dep-free RAG toolkit: `chunkText`, `cosineSimilarity`, and an in-memory
+  `createVectorStore` (add / top-k `search` / `toJSON` snapshot). No native import → unit-tested.
+  `embed()` itself lives in `index.ts` (it's the one native call).
 - `src/models.ts` — downloadable model registry (curated Gemma 4 / Qwen3 / Phi-4: SHA256, RAM
   requirements, download URLs, license) plus runtime "bring your own model" (`registerModel` +
   in-memory custom store, `fetchModelMetadata` to pull SHA/size from HF). Adding a model is
@@ -75,6 +78,25 @@ or schema-invalid args are re-prompted up to `maxRepairAttempts` (default 2), th
 the proposed call (human-in-the-loop gate). Native constrained decoding can slot in behind the same
 signature later (see substrate facts below).
 
+## Embeddings & RAG (0.10.0)
+
+`embed(texts)` (`src/index.ts`) returns `{ embeddings, dimensions }` — one vector per input. It's the
+**one native call** of this feature, and it's **iOS-only**: backed by Apple's `NLContextualEmbedding`
+(NaturalLanguage, iOS 17+), a zero-download OS-maintained model that mean-pools per-token vectors into
+a sentence vector (`ios/ExpoAiKitModule.swift`). This fits the wedge — zero app-size cost, OS-maintained,
+and works even where Apple Intelligence isn't enabled. Android `embed()` throws `DEVICE_NOT_SUPPORTED`
+(JS guards the platform; the Kotlin stub mirrors the error contract). **EmbeddingGemma was the original
+plan but isn't wireable** — the vendored LiteRT-LM C bindings expose only generation, no embedding entry
+point — so Android's real path is MediaPipe Text Embedder (a follow-up). `embed()` is deliberately
+**outside the single-flight `INFERENCE_BUSY` guard** (embeddings don't use the generation KV-cache).
+
+The retrieval **toolkit lives in `src/rag.ts`** — pure, dep-free, unit-tested, both platforms, and works
+with **any** vector source (built-in `embed`, a cloud embedder, your own module): `chunkText` (overlapping,
+sentence-aware splitting), `cosineSimilarity` (magnitude-invariant), and `createVectorStore` (in-memory;
+`add`/`addMany`/`search` top-k with `minScore`/`toJSON` snapshot). The store does a linear scan per search
+(fine at on-device scale) and owns no I/O — persistence is the caller's (`toJSON()` → AsyncStorage/disk →
+`createVectorStore(snapshot)`).
+
 ## Downloadable models & bring-your-own (0.8.0 / 0.9.0)
 
 `src/models.ts` is the single source of truth for downloadable models — adding one needs **no native
@@ -97,8 +119,10 @@ zero-download OS path that ExecuTorch-based libraries structurally cannot offer.
 
 - **Done:** structured output — `generateObject` (0.6.0); tool / function calling — `generateText`
   (0.7.0); expanded model registry — Qwen3 + Phi-4 Mini, `license` field (0.8.0); bring-your-own-model
-  — `registerModel` / `fetchModelMetadata` (0.9.0).
-- **Next (Tier 1):** embeddings + on-device RAG (EmbeddingGemma).
+  — `registerModel` / `fetchModelMetadata` (0.9.0); embeddings & on-device RAG — `embed` (iOS) +
+  `chunkText`/`cosineSimilarity`/`createVectorStore` toolkit (0.10.0).
+- **Next (Tier 1):** Android `embed()` via MediaPipe Text Embedder (close the cross-platform gap — see
+  the embeddings section: EmbeddingGemma can't ride the vendored LiteRT-LM bindings).
 - **Tier 2:** stateful session with KV-cache reuse (perf/battery win); vision input; voice (ASR/TTS).
 - **Tier 3:** Vercel AI SDK provider; download hardening (resumable / background / wifi-only).
 

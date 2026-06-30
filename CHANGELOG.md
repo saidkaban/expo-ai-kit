@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.10.0
+
+> Headline: **embeddings & on-device RAG** — `embed()` turns text into vectors
+> (iOS, via Apple's zero-download `NLContextualEmbedding`), and a pure-JS toolkit
+> (`chunkText`, `cosineSimilarity`, `createVectorStore`) does retrieval on both
+> platforms. Additive — no breaking changes.
+
+### Added
+
+- **`embed(texts)`** — turn an array of strings into embedding vectors for semantic search / RAG. Returns `{ embeddings, dimensions }` with one vector per input, in order. Backed by Apple's **`NLContextualEmbedding`**: a zero-download, OS-maintained model (iOS 17+, works even where Apple Intelligence isn't enabled). Embeddings don't touch the generation KV-cache, so `embed()` is **not** subject to the single-flight `INFERENCE_BUSY` guard.
+- **RAG toolkit (pure JS, both platforms, any vector source):**
+  - **`chunkText(text, options?)`** — split a document into overlapping, sentence/paragraph-aware chunks sized for embedding (`chunkSize`, `overlap`).
+  - **`cosineSimilarity(a, b)`** — magnitude-invariant relevance score in `[-1, 1]`.
+  - **`createVectorStore(initial?)`** — a lightweight in-memory vector store: `add` / `addMany` / `get` / `remove` / `clear` / `size`, top-k `search(query, { topK, minScore })`, and `toJSON()` to snapshot for persistence (rehydrate by passing the snapshot back to `createVectorStore`).
+- **New public types**: `EmbedResult`, `VectorRecord`, `VectorSearchResult`, `VectorSearchOptions`, `VectorStore`, `ChunkOptions`.
+
+### Notes
+
+- **iOS-only for `embed()` right now.** On Android/web it throws `DEVICE_NOT_SUPPORTED` — Android support is planned via MediaPipe Text Embedder. The RAG toolkit is pure JS and works everywhere; you can pair it with any embedding source (the built-in `embed()`, a cloud embedder, or your own native module) since it only ever deals in plain `number[]` vectors.
+- The vector store does a linear scan per `search`, which is plenty for the thousands-of-chunks scale typical of on-device RAG; reach for a dedicated vector DB only past that. Persistence is intentionally yours to own — `toJSON()` gives a plain-array snapshot to write to AsyncStorage/disk.
+- The toolkit (`chunkText`, `cosineSimilarity`, `createVectorStore`) is dependency-free and fully unit-tested. The only native surface is `embed()` (iOS).
+
 ## 0.9.0
 
 > Headline: **bring your own model** — `registerModel()` lets developers add any
