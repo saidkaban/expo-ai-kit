@@ -121,8 +121,14 @@ zero-download OS path that ExecuTorch-based libraries structurally cannot offer.
   (0.7.0); expanded model registry — Qwen3 + Phi-4 Mini, `license` field (0.8.0); bring-your-own-model
   — `registerModel` / `fetchModelMetadata` (0.9.0); embeddings & on-device RAG — `embed` (iOS) +
   `chunkText`/`cosineSimilarity`/`createVectorStore` toolkit (0.10.0).
-- **Next (Tier 1):** Android `embed()` via MediaPipe Text Embedder (close the cross-platform gap — see
-  the embeddings section: EmbeddingGemma can't ride the vendored LiteRT-LM bindings).
+- **Next (Tier 1) — open follow-up, do when there's time:** Android `embed()` via MediaPipe Text
+  Embedder. `embed()` shipped iOS-only in 0.10.0, so this is the known cross-platform gap to close.
+  Why MediaPipe: EmbeddingGemma can't ride the vendored LiteRT-LM bindings (they expose only
+  generation — see the embeddings section), and Android has no zero-download OS embedder like Apple's
+  `NLContextualEmbedding`. The JS toolkit (`chunkText`/`cosineSimilarity`/`createVectorStore`) and the
+  `embed()` signature already work on both platforms, so this is purely the Android native side: add the
+  MediaPipe Text Embedder dep, wire an `embed` `AsyncFunction` in the Kotlin module (replacing the
+  current `DEVICE_NOT_SUPPORTED` stub), and drop the iOS-only platform guard in `src/index.ts#embed`.
 - **Tier 2:** stateful session with KV-cache reuse (perf/battery win); vision input; voice (ASR/TTS).
 - **Tier 3:** Vercel AI SDK provider; download hardening (resumable / background / wifi-only).
 
