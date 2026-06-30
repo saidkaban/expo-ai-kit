@@ -1,5 +1,6 @@
 import ExpoModulesCore
 import FoundationModels
+import NaturalLanguage
 
 public class ExpoAiKitModule: Module {
   // Track active streaming tasks for cancellation
@@ -217,6 +218,82 @@ public class ExpoAiKitModule: Module {
       if let task = self.activeSendTasks[sessionId] {
         task.cancel()
         self.activeSendTasks.removeValue(forKey: sessionId)
+      }
+    }
+
+    // ==================================================================
+    // Embeddings
+    // ==================================================================
+    // Apple's NLContextualEmbedding is a zero-download, OS-maintained model
+    // (NaturalLanguage framework, iOS 17+). It yields one contextual vector per
+    // token; we mean-pool over a text's tokens to get a single sentence vector.
+    // The model's asset is downloaded on demand by the OS the first time, not
+    // bundled into the app. Independent of the FoundationModels generation path,
+    // so this is not gated by the single-flight inference guard.
+
+    AsyncFunction("embed") { (texts: [String]) async throws -> [String: Any] in
+      if #available(iOS 17.0, *) {
+        guard let model = NLContextualEmbedding(language: .english) else {
+          throw NSError(
+            domain: "ExpoAiKit", code: 0,
+            userInfo: [NSLocalizedDescriptionKey:
+              "DEVICE_NOT_SUPPORTED::No contextual embedding model is available on this device"]
+          )
+        }
+
+        // First use may need the OS to fetch the model asset.
+        if !model.hasAvailableAssets {
+          try await withCheckedThrowingContinuation {
+            (cont: CheckedContinuation<Void, Error>) in
+            model.requestEmbeddingAssets { _, error in
+              if let error = error {
+                cont.resume(throwing: error)
+              } else {
+                cont.resume(returning: ())
+              }
+            }
+          }
+        }
+
+        if !model.isLoaded {
+          try model.load()
+        }
+
+        let dimension = model.dimension
+        var embeddings: [[Double]] = []
+        embeddings.reserveCapacity(texts.count)
+
+        for text in texts {
+          // An empty string has no tokens — return a zero vector so output length
+          // always matches input length (callers index embeddings[i] by texts[i]).
+          if text.isEmpty {
+            embeddings.append([Double](repeating: 0.0, count: dimension))
+            continue
+          }
+
+          let result = try model.embeddingResult(for: text, language: .english)
+          var sum = [Double](repeating: 0.0, count: dimension)
+          var count = 0
+          result.enumerateTokenVectors(in: text.startIndex..<text.endIndex) {
+            (vector, _) -> Bool in
+            let n = min(sum.count, vector.count)
+            for i in 0..<n { sum[i] += vector[i] }
+            count += 1
+            return true
+          }
+          if count > 0 {
+            for i in 0..<sum.count { sum[i] /= Double(count) }
+          }
+          embeddings.append(sum)
+        }
+
+        return ["embeddings": embeddings, "dimensions": dimension]
+      } else {
+        throw NSError(
+          domain: "ExpoAiKit", code: 0,
+          userInfo: [NSLocalizedDescriptionKey:
+            "DEVICE_NOT_SUPPORTED::On-device embeddings require iOS 17 or later"]
+        )
       }
     }
 

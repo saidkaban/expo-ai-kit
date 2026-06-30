@@ -42,6 +42,10 @@ export interface ExpoAiKitNativeModule {
   // Cancels either a streaming session or a sendMessage session by id.
   stopStreaming(sessionId: string): Promise<void>;
 
+  // Embeddings. iOS-only (Apple NLContextualEmbedding); the JS layer guards the
+  // platform, so this is never reached on Android/web.
+  embed(texts: string[]): Promise<{ embeddings: number[][]; dimensions: number }>;
+
   // Model discovery
   getBuiltInModels(): BuiltInModel[];
   // Async: iOS reads actor-isolated state (so it bridges as a Promise); Android

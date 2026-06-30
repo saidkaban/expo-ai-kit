@@ -344,6 +344,24 @@ export type GenerateTextResult = {
 
 
 // ============================================================================
+// Embeddings (embed)
+// ============================================================================
+
+/**
+ * Result of {@link embed}.
+ */
+export type EmbedResult = {
+  /**
+   * One embedding vector per input text, in the same order as the input. Each is
+   * a fixed-length `number[]` you can compare with `cosineSimilarity` or store in
+   * a `VectorStore`.
+   */
+  embeddings: number[][];
+  /** Dimensionality of every vector (all vectors in one result share this). */
+  dimensions: number;
+};
+
+// ============================================================================
 // Model Types
 // ============================================================================
 

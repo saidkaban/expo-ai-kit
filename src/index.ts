@@ -22,6 +22,7 @@ import {
   ToolCall,
   ToolResult,
   StepResult,
+  EmbedResult,
 } from './types';
 import {
   buildSchemaInstruction,
@@ -41,6 +42,7 @@ import { getAllModels, getRegistryEntry } from './models';
 
 export * from './types';
 export * from './models';
+export * from './rag';
 
 const DEFAULT_SYSTEM_PROMPT =
   'You are a helpful, friendly assistant. Answer the user directly and concisely.';
@@ -727,6 +729,70 @@ export async function generateText(
     toolResults: allToolResults,
     finishReason: 'max-steps',
   };
+}
+
+// ============================================================================
+// Embeddings API
+// ============================================================================
+
+/**
+ * Turn text into embedding vectors for semantic search / on-device RAG.
+ *
+ * Returns one vector per input string (in order), which you can compare with
+ * {@link cosineSimilarity} or store in a {@link createVectorStore} to retrieve
+ * the most relevant chunks before a {@link sendMessage} / {@link generateText}
+ * call. Pair with {@link chunkText} to split documents first.
+ *
+ * **iOS-only for now**, backed by Apple's `NLContextualEmbedding` — a zero-
+ * download, OS-maintained model (no app-size cost, works even where Apple
+ * Intelligence isn't enabled, iOS 17+). On Android/web it throws
+ * `DEVICE_NOT_SUPPORTED`; the RAG toolkit (`chunkText`, `cosineSimilarity`,
+ * `createVectorStore`) still works there with any vector source you bring.
+ *
+ * Embeddings don't use the generation KV-cache, so `embed()` is **not** subject
+ * to the single-flight `INFERENCE_BUSY` guard — it can run alongside other work.
+ *
+ * @param texts - Non-empty array of strings to embed.
+ * @returns `{ embeddings, dimensions }` — `embeddings[i]` is the vector for `texts[i]`.
+ * @throws {ModelError} DEVICE_NOT_SUPPORTED off iOS, or if no embedding model is
+ *   available on the device.
+ *
+ * @example
+ * ```ts
+ * import { embed, chunkText, createVectorStore } from 'expo-ai-kit';
+ *
+ * const chunks = chunkText(document);
+ * const { embeddings } = await embed(chunks);
+ *
+ * const store = createVectorStore<{ text: string }>();
+ * store.addMany(chunks.map((text, i) => ({ id: `c${i}`, vector: embeddings[i], metadata: { text } })));
+ *
+ * const { embeddings: [q] } = await embed([question]);
+ * const context = store.search(q, { topK: 4 }).map((h) => h.metadata!.text).join('\n\n');
+ * const { text } = await sendMessage([
+ *   { role: 'system', content: `Answer using only this context:\n${context}` },
+ *   { role: 'user', content: question },
+ * ]);
+ * ```
+ */
+export async function embed(texts: string[]): Promise<EmbedResult> {
+  if (Platform.OS !== 'ios') {
+    throw new ModelError(
+      'DEVICE_NOT_SUPPORTED',
+      '',
+      Platform.OS === 'android'
+        ? 'embed() is iOS-only for now (Apple NLContextualEmbedding); Android support via MediaPipe is planned. ' +
+          'The RAG toolkit (chunkText, cosineSimilarity, createVectorStore) works on Android with any vector source.'
+        : 'embed() is only available on iOS'
+    );
+  }
+  if (!Array.isArray(texts) || texts.length === 0) {
+    throw new Error('texts array cannot be empty');
+  }
+  if (!texts.every((t) => typeof t === 'string')) {
+    throw new Error('texts must be an array of strings');
+  }
+  return wrapNative(() => ExpoAiKitModule.embed(texts));
 }
 
 // ============================================================================

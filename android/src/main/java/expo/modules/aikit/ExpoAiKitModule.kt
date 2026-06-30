@@ -129,6 +129,20 @@ class ExpoAiKitModule : Module() {
     }
 
     // ==================================================================
+    // Embeddings
+    // ==================================================================
+    // iOS-only for now (Apple NLContextualEmbedding). The JS layer guards the
+    // platform and throws before reaching native, so this is a defensive stub
+    // that honors the same "CODE::reason" error contract. Android support via
+    // MediaPipe Text Embedder is planned.
+    AsyncFunction("embed") { _: List<String> ->
+      throw RuntimeException(
+        "DEVICE_NOT_SUPPORTED::On-device embeddings are iOS-only for now " +
+          "(Apple NLContextualEmbedding); Android support via MediaPipe is planned"
+      )
+    }
+
+    // ==================================================================
     // Model discovery
     // ==================================================================
 
