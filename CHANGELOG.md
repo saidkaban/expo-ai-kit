@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.11.0
+
+> Headline: **Vercel AI SDK provider** — `import { expoAiKit } from 'expo-ai-kit/ai'`
+> and use the AI SDK's `generateText` / `streamText` / `generateObject` / `embed`
+> with on-device models. Additive — no breaking changes, and the core stays
+> zero-dependency.
+
+### Added
+
+- **`expo-ai-kit/ai` subpath export** — a Vercel AI SDK provider implementing the
+  **`LanguageModelV3`** spec (AI SDK 6; AI SDK 7 accepts V3 models too):
+  - **`expoAiKit(modelId?, settings?)`** — a `LanguageModelV3` over the on-device model.
+    Omit the id (or pass `'auto'`) to use whatever model is active; pass any `setModel()`
+    id (`'gemma-e2b'`, a `registerModel()` id, …) to have the provider activate it before
+    generating. `settings` is the same shape as `setModel()`'s options (backend, generation
+    config) and applies on activation.
+  - **`expoAiKit.embeddingModel()`** — an `EmbeddingModelV3` over `embed()`
+    (Apple `NLContextualEmbedding`; iOS-only, like `embed()` itself).
+  - **`createExpoAiKit()`** — provider factory, plus `AUTO_MODEL_ID` / `EMBEDDING_MODEL_ID`
+    constants and the `ExpoAiKitProvider` / `ExpoAiKitModelSettings` types.
+- **Tool calling & JSON output via the AI SDK** ride the exact same prompt protocol as the
+  core `generateText`/`generateObject` (same instruction, same `{"tool", "arguments"}`
+  envelope, same tolerant JSON extraction), so a model behaves identically through either
+  API. Streamed runs buffer when tools/JSON are requested; plain text streams token-by-token.
+
+### Notes
+
+- **Zero runtime dependencies, still.** Only *types* are imported from `@ai-sdk/provider`
+  (erased at build time); it's declared as an **optional** peer dependency and is only
+  needed — brought in by the `ai` package itself — when you use `expo-ai-kit/ai`.
+- **On-device impedance, reported honestly through the spec:** per-call sampling
+  (`temperature`, `topK`, …) can't be honored — sampling is fixed at model activation —
+  and is surfaced as `unsupported` call warnings; concurrent calls reject with
+  `INFERENCE_BUSY` (single-flight guard applies unchanged); no token usage numbers;
+  no image/file prompt parts (throws `DEVICE_NOT_SUPPORTED`); `toolChoice: 'required'` /
+  `{ type: 'tool' }` is a best-effort prompt nudge flagged as a `compatibility` warning.
+- React Native needs the AI SDK's usual polyfills for streaming (`web-streams-polyfill`,
+  `structuredClone`, `TextEncoder`).
+- The provider is orchestrated over the same `sendMessage`/`streamMessage`/`embed` calls
+  as everything else — native constrained decoding can later slot in behind it with no
+  API change.
+
 ## 0.10.0
 
 > Headline: **embeddings & on-device RAG** — `embed()` turns text into vectors

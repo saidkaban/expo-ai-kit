@@ -3,7 +3,8 @@
 On-device AI for Expo & React Native: run LLMs locally (no API keys, no cloud, no cost) across
 **Apple Foundation Models** (iOS 26+), **ML Kit** (Android), and downloadable open models
 (**Gemma 4**, **Qwen3**, **Phi-4 Mini**; iOS + Android via LiteRT-LM). Streaming, structured output,
-tool calling, embeddings & on-device RAG, cancellation, runtime model switching — all on-device.
+tool calling, embeddings & on-device RAG, cancellation, runtime model switching, and a **Vercel AI
+SDK provider** (`expo-ai-kit/ai`) — all on-device.
 
 ## Build / test / publish
 
@@ -45,6 +46,10 @@ tool calling, embeddings & on-device RAG, cancellation, runtime model switching 
 - `src/rag.ts` — pure, dep-free RAG toolkit: `chunkText`, `cosineSimilarity`, and an in-memory
   `createVectorStore` (add / top-k `search` / `toJSON` snapshot). No native import → unit-tested.
   `embed()` itself lives in `index.ts` (it's the one native call).
+- `src/ai/` — Vercel AI SDK provider (subpath export `expo-ai-kit/ai`, root shims `ai.js`/`ai.d.ts`).
+  `convert.ts` is the pure, unit-tested mapping layer (LanguageModelV3 call options ↔ our protocol);
+  `index.ts` is the thin provider over `sendMessage`/`streamMessage`/`embed`. Only **type** imports
+  from `@ai-sdk/provider` (erased at build) — the zero-dep invariant holds.
 - `src/models.ts` — downloadable model registry (curated Gemma 4 / Qwen3 / Phi-4: SHA256, RAM
   requirements, download URLs, license) plus runtime "bring your own model" (`registerModel` +
   in-memory custom store, `fetchModelMetadata` to pull SHA/size from HF). Adding a model is
@@ -97,6 +102,30 @@ sentence-aware splitting), `cosineSimilarity` (magnitude-invariant), and `create
 (fine at on-device scale) and owns no I/O — persistence is the caller's (`toJSON()` → AsyncStorage/disk →
 `createVectorStore(snapshot)`).
 
+## Vercel AI SDK provider (0.11.0)
+
+`expo-ai-kit/ai` exports `expoAiKit` / `createExpoAiKit()`, implementing **`LanguageModelV3`**
+(AI SDK 6's spec; AI SDK 7 accepts V3 models too, so one implementation covers both) plus an
+`EmbeddingModelV3` over `embed()`. Resolution is via **root shims** `ai.js`/`ai.d.ts` → `build/ai`
+— deliberately *not* a package.json `exports` map, which would change how existing deep imports
+resolve. Zero-dep is preserved by construction: `src/ai/` may only use **type** imports from
+`@ai-sdk/provider` (it's an optional peer + devDependency; consumers get it via the `ai` package).
+
+Design notes that matter when touching it:
+
+- `doGenerate`/`doStream` are **orchestrated over `sendMessage`/`streamMessage`** — the single-flight
+  guard, stateless-history semantics, and `ModelError` contract apply unchanged. Concurrent AI SDK
+  calls reject with `INFERENCE_BUSY`; that's correct, not a bug.
+- Tools and `responseFormat: json` reuse the **same pure helpers** as the core (`buildToolInstruction`,
+  `parseToolCall`, `formatToolResult`, `buildSchemaInstruction`, `extractJson`), so the model sees one
+  protocol regardless of API. The provider is **single-shot** — repair loops belong to the SDK/core.
+- `expoAiKit(modelId)` lazily activates the model via `setModel` when it isn't active; `'auto'`
+  (default) never switches. Settings apply **on activation only** — never reload an active model.
+- Streaming **buffers** when tools/JSON are requested (an envelope half-streamed as text deltas would
+  be garbage); plain text streams token-by-token. Per-call sampling → spec `unsupported` warnings.
+- `src/ai/convert.ts` is pure and unit-tested (`ai-convert.test.ts`); `src/ai/index.ts` imports the
+  native module transitively, so it stays thin and untested under jest.
+
 ## Downloadable models & bring-your-own (0.8.0 / 0.9.0)
 
 `src/models.ts` is the single source of truth for downloadable models — adding one needs **no native
@@ -120,7 +149,8 @@ zero-download OS path that ExecuTorch-based libraries structurally cannot offer.
 - **Done:** structured output — `generateObject` (0.6.0); tool / function calling — `generateText`
   (0.7.0); expanded model registry — Qwen3 + Phi-4 Mini, `license` field (0.8.0); bring-your-own-model
   — `registerModel` / `fetchModelMetadata` (0.9.0); embeddings & on-device RAG — `embed` (iOS) +
-  `chunkText`/`cosineSimilarity`/`createVectorStore` toolkit (0.10.0).
+  `chunkText`/`cosineSimilarity`/`createVectorStore` toolkit (0.10.0); Vercel AI SDK provider —
+  `expo-ai-kit/ai` (0.11.0).
 - **Next (Tier 1) — open follow-up, do when there's time:** Android `embed()` via MediaPipe Text
   Embedder. `embed()` shipped iOS-only in 0.10.0, so this is the known cross-platform gap to close.
   Why MediaPipe: EmbeddingGemma can't ride the vendored LiteRT-LM bindings (they expose only
@@ -130,7 +160,7 @@ zero-download OS path that ExecuTorch-based libraries structurally cannot offer.
   MediaPipe Text Embedder dep, wire an `embed` `AsyncFunction` in the Kotlin module (replacing the
   current `DEVICE_NOT_SUPPORTED` stub), and drop the iOS-only platform guard in `src/index.ts#embed`.
 - **Tier 2:** stateful session with KV-cache reuse (perf/battery win); vision input; voice (ASR/TTS).
-- **Tier 3:** Vercel AI SDK provider; download hardening (resumable / background / wifi-only).
+- **Tier 3:** download hardening (resumable / background / wifi-only).
 
 **Substrate facts that make the roadmap feasible** (verify before relying — checked June 2026):
 
@@ -141,12 +171,10 @@ zero-download OS path that ExecuTorch-based libraries structurally cannot offer.
 - Apple Foundation Models support guided generation (`DynamicGenerationSchema`) and a `Tool` protocol
   natively.
 
-**Vercel AI SDK compatibility (decision pending).** Adding an AI-SDK provider is **additive** — a new
-export that wraps the same native module; existing functions stay untouched. Ship it as a subpath
-export (`expo-ai-kit/ai`) with `@ai-sdk/provider` + `@ai-sdk/provider-utils` as *optional* peer
-dependencies (keeps the core zero-dep), or as a separate package. → **minor bump, not a forced 1.0.0**;
-reserve 1.0.0 as a deliberate API-stability signal. Caveats: the provider spec is a moving target —
-AI SDK 6 uses `LanguageModelV3` (`@ai-sdk/provider` ^3); V2 providers log deprecation warnings.
-On-device impedance to document if implemented: per-call sampling (the SDK passes temperature per call,
-we fix it at `setModel`), the single-flight `INFERENCE_BUSY` guard, and Apple-executes-tools (so
-`maxSteps`/`onStepFinish` won't work, as Callstack's Apple provider documents).
+**Vercel AI SDK compatibility — shipped in 0.11.0** (see the provider section above). The decision
+went as planned: subpath export `expo-ai-kit/ai`, `@ai-sdk/provider` as an *optional* peer (types
+only — provider-utils turned out unnecessary), minor bump, 1.0.0 still reserved as a deliberate
+API-stability signal. **Spec landscape (checked July 2026):** AI SDK 7 is `latest` on npm and its
+native spec is `LanguageModelV4` (`@ai-sdk/provider` ^4), but `ai@7`'s `LanguageModel` union still
+accepts `V3 | V2` models — so targeting V3 covers ai@6 natively *and* ai@7. Revisit only if a future
+major drops V3 from the union; the pure `convert.ts` layer localizes any migration.

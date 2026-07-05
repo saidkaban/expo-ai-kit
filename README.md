@@ -10,6 +10,10 @@ Runs **Apple Foundation Models** (iOS 26+), **ML Kit** (Android), and downloadab
 — with streaming, structured output, tool calling, **embeddings & on-device RAG**,
 cancellation, and runtime model switching, all on-device.
 
+**New in 0.11:** a [**Vercel AI SDK provider**](#vercel-ai-sdk) — use `generateText`,
+`streamText`, and `embed` from the [AI SDK](https://ai-sdk.dev) with on-device models
+via `expo-ai-kit/ai`. Same `useChat`-style code you'd write for OpenAI, no API key.
+
 ## Install
 
 ```bash
@@ -129,6 +133,63 @@ throws `DEVICE_NOT_SUPPORTED` (MediaPipe support is planned). The toolkit —
 `chunkText`, `cosineSimilarity`, and the `createVectorStore` (add / search top-k / `toJSON`
 for persistence) — is pure JS and works on **both platforms with any vector source**.
 
+## Vercel AI SDK
+
+expo-ai-kit ships a first-class [AI SDK](https://ai-sdk.dev) provider: point `model:` at
+`expoAiKit()` and the AI SDK's `generateText` / `streamText` / `generateObject` / `embed`
+run **on-device** — reuse code, examples, and patterns written for cloud providers, with
+no API key and no data leaving the phone.
+
+```bash
+npm i ai   # AI SDK 6+ (the provider implements LanguageModelV3; AI SDK 7 accepts it too)
+```
+
+```tsx
+import { generateText, streamText, embed } from 'ai';
+import { expoAiKit } from 'expo-ai-kit/ai';
+
+// Text — the active on-device model (OS built-in by default)
+const { text } = await generateText({
+  model: expoAiKit(),
+  prompt: 'Capital of France?',
+});
+
+// Streaming — pass a specific model id to activate it first
+const result = streamText({
+  model: expoAiKit('gemma-e2b'),  // must be downloaded; settings ride along:
+  // model: expoAiKit('gemma-e2b', { generation: { temperature: 0.7 } }),
+  prompt: 'Write a short story',
+});
+for await (const chunk of result.textStream) setText((t) => t + chunk);
+
+// Embeddings (iOS) — the same NLContextualEmbedding behind embed()
+const { embedding } = await embed({
+  model: expoAiKit.embeddingModel(),
+  value: 'sunny day at the beach',
+});
+```
+
+Tool calling and `generateObject` work too — they ride the exact same prompt protocol as
+the core `generateText`/`generateObject`, so behavior is identical either way.
+
+**On-device caveats** (the honest fine print):
+
+- **One generation at a time.** Concurrent calls reject with `INFERENCE_BUSY` — on-device
+  models share a single KV-cache. Await one call before starting the next.
+- **Sampling is fixed at model activation**, not per call. A per-call `temperature`/`topK`
+  is reported as an AI SDK warning and ignored; set it via `expoAiKit(id, { generation })`
+  or `setModel()`.
+- **Streaming buffers when tools or JSON output are requested** — the tool-call envelope
+  has to be parsed whole, not leaked as text deltas. Plain-text streaming is token-by-token.
+- **No token usage numbers** (on-device runtimes don't report them) and no image/file inputs
+  (vision is on the roadmap). `embeddingModel()` is iOS-only, like `embed()`.
+- React Native needs the AI SDK's usual polyfills (e.g. `web-streams-polyfill`,
+  `structuredClone`, `TextEncoder`) — see the docs for a copy-paste setup.
+
+The provider is a thin wrapper over the same core functions below — mix and match freely.
+The core stays **zero-dependency**; `@ai-sdk/provider` is an optional peer used only for
+types when you import `expo-ai-kit/ai`.
+
 ## Downloadable models
 
 Beyond the OS built-ins, you can download open models (via LiteRT-LM) and switch to them at
@@ -198,6 +259,7 @@ file persists on disk, so its `'downloaded'` status survives restarts once re-re
 
 Inference: `isAvailable`, `sendMessage`, `streamMessage`, `generateObject`, `generateText`.
 Embeddings & RAG: `embed`, `chunkText`, `cosineSimilarity`, `createVectorStore`.
+AI SDK provider (`expo-ai-kit/ai`): `expoAiKit`, `createExpoAiKit`.
 Models: `getBuiltInModels`, `getDownloadableModels`, `getRecommendedModel`,
 `downloadModel`, `cancelDownload`, `deleteModel`, `setModel`, `unloadModel`, `getActiveModel`.
 Custom models: `registerModel`, `unregisterModel`, `getRegisteredModels`, `fetchModelMetadata`.

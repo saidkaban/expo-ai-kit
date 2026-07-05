@@ -1,11 +1,13 @@
 {
   "name": "expo-ai-kit",
   "version": "0.10.0",
-  "description": "On-device AI for Expo — run Gemma 4, Apple Foundation Models & ML Kit locally: streaming, structured output, tool calling, embeddings & RAG, zero API keys",
+  "description": "On-device AI for Expo — run Gemma 4, Apple Foundation Models & ML Kit locally: streaming, structured output, tool calling, embeddings & RAG, Vercel AI SDK provider, zero API keys",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "files": [
     "build",
+    "ai.js",
+    "ai.d.ts",
     "ios/*.swift",
     "ios/ExpoAiKit.podspec",
     "ios/Vendor/LiteRTLM",
@@ -55,6 +57,9 @@
     "rag",
     "semantic-search",
     "vector-search",
+    "ai-sdk",
+    "vercel-ai-sdk",
+    "ai-sdk-provider",
     "expo-ai-kit",
     "ExpoAiKit"
   ],
@@ -67,14 +72,21 @@
   "homepage": "https://expo-ai-kit.dev",
   "dependencies": {},
   "devDependencies": {
+    "@ai-sdk/provider": "^3.0.13",
     "@types/react": "~19.1.0",
-    "expo-module-scripts": "^5.0.8",
     "expo": "^54.0.27",
+    "expo-module-scripts": "^5.0.8",
     "react-native": "0.81.5"
   },
   "peerDependencies": {
+    "@ai-sdk/provider": "^3.0.0",
     "expo": "*",
     "react": "*",
     "react-native": "*"
+  },
+  "peerDependenciesMeta": {
+    "@ai-sdk/provider": {
+      "optional": true
+    }
   }
 }
