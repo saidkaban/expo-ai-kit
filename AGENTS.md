@@ -15,6 +15,11 @@ SDK provider** (`expo-ai-kit/ai`) — all on-device.
   `eslint.config.js`. Pre-existing, not caused by recent changes. Don't be alarmed by the failure.
 - Publish: `npm run publish:patch|minor|major` → `npm version X && build && publish`. `npm version`
   needs a clean tree, so commit first. CHANGELOG headings are written for the next version.
+- CI (`.github/workflows/ci.yml`) runs on every PR: **node** (ubuntu: build + test), **android**
+  (ubuntu: `expo prebuild` + `:app:compileDebugKotlin`), **ios** (`macos-26`: `expo prebuild` + pods +
+  `xcodebuild -sdk iphonesimulator`, no signing). The native tiers rebuild the example app from its
+  tracked source — the iOS tier is the only thing that compiles the Swift, so a bad native change fails
+  there, not in review. Fork-PR safe (`pull_request` event, no secrets). `lint` is omitted (broken).
 
 ## Hard invariants — don't break these
 
@@ -56,7 +61,10 @@ SDK provider** (`expo-ai-kit/ai`) — all on-device.
   registry-only — native loads any non-built-in id generically through LiteRT-LM.
 - `ios/` — Swift. Apple FM + Gemma via vendored LiteRT-LM (`ios/Vendor/LiteRTLM/`; the C xcframework
   is fetched on `pod install`). `android/` — Kotlin. ML Kit + Gemma via the LiteRT-LM gradle dep.
-- `example/` — local dev-harness app. Git-ignored and not published; edits there are for manual testing.
+- `example/` — local dev-harness app; not published. Its **source** (App.tsx, app.json, assets,
+  package[-lock].json, tsconfig, metro/index) is tracked so CI can regenerate native projects via
+  `expo prebuild`; the generated `ios/`/`android/`, `node_modules/`, and `.expo/` stay git-ignored.
+  Edits to the tracked source are the CI fixture; edits to the generated native dirs are throwaway.
 
 ## Structured output (shipped in 0.6.0)
 
@@ -90,7 +98,8 @@ signature later (see substrate facts below).
 (NaturalLanguage, iOS 17+), a zero-download OS-maintained model that mean-pools per-token vectors into
 a sentence vector (`ios/ExpoAiKitModule.swift`). This fits the wedge — zero app-size cost, OS-maintained,
 and works even where Apple Intelligence isn't enabled. Android `embed()` throws `DEVICE_NOT_SUPPORTED`
-(JS guards the platform; the Kotlin stub mirrors the error contract). **EmbeddingGemma was the original
+from the JS layer (`src/index.ts` guards the platform before reaching native — there is **no** native
+`embed` on Android; the Kotlin module deliberately doesn't register one). **EmbeddingGemma was the original
 plan but isn't wireable** — the vendored LiteRT-LM C bindings expose only generation, no embedding entry
 point — so Android's real path is MediaPipe Text Embedder (a follow-up). `embed()` is deliberately
 **outside the single-flight `INFERENCE_BUSY` guard** (embeddings don't use the generation KV-cache).
@@ -157,8 +166,8 @@ zero-download OS path that ExecuTorch-based libraries structurally cannot offer.
   generation — see the embeddings section), and Android has no zero-download OS embedder like Apple's
   `NLContextualEmbedding`. The JS toolkit (`chunkText`/`cosineSimilarity`/`createVectorStore`) and the
   `embed()` signature already work on both platforms, so this is purely the Android native side: add the
-  MediaPipe Text Embedder dep, wire an `embed` `AsyncFunction` in the Kotlin module (replacing the
-  current `DEVICE_NOT_SUPPORTED` stub), and drop the iOS-only platform guard in `src/index.ts#embed`.
+  MediaPipe Text Embedder dep, add an `embed` `AsyncFunction` to the Kotlin module (it currently has
+  none — the JS layer guards the platform), and drop the iOS-only platform guard in `src/index.ts#embed`.
 - **Tier 2:** stateful session with KV-cache reuse (perf/battery win); vision input; voice (ASR/TTS).
 - **Tier 3:** download hardening (resumable / background / wifi-only).
 

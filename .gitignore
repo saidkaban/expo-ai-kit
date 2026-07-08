@@ -57,8 +57,18 @@ yarn-error.log
 # Expo
 .expo/*
 
-# Example
-example/
+# Example (dev harness). Track only the source needed to rebuild the native
+# projects in CI via `expo prebuild`; keep deps and generated/native output out.
+# (A parent dir can't be un-ignored per-file, so ignore contents + re-include.)
+example/*
+!example/App.tsx
+!example/index.ts
+!example/app.json
+!example/assets/
+!example/metro.config.js
+!example/package.json
+!example/package-lock.json
+!example/tsconfig.json
 
 # LiteRT-LM C xcframework — downloaded on pod install by scripts/install-litertlm.sh
 ios/Vendor/CLiteRTLM.xcframework/
