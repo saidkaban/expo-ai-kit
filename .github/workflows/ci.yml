@@ -1,0 +1,96 @@
+name: CI
+
+# Fork-PR safe: uses the plain `pull_request` event (not `pull_request_target`)
+# and no secrets, so a fork PR can never exfiltrate anything. GitHub also gates
+# the first run of a new contributor's PR behind manual approval.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Newer pushes to the same PR/branch cancel older in-flight runs.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Tier 1 — cheap, every PR. Catches TS/JS regressions. `lint` is intentionally
+  # omitted: the repo's .eslintrc predates ESLint 9 and is broken (see AGENTS.md).
+  node:
+    name: build + test (node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+  # Tier 2 — Android native. Kotlin/Gradle build on Linux (no macOS needed).
+  # Guards the Kotlin surface the node tier can't see, by regenerating the
+  # example's android/ via `expo prebuild` and compiling it.
+  android:
+    name: compile android (kotlin)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      # Build the library first so the example's `file:..` dep resolves.
+      - run: npm ci
+      - run: npm run build
+      - name: Install example deps
+        working-directory: example
+        run: npm ci
+      - name: Prebuild android
+        working-directory: example
+        run: npx expo prebuild --platform android --no-install
+      - name: Compile Kotlin (app + autolinked expo-ai-kit module)
+        working-directory: example/android
+        run: ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace
+
+  # Tier 3 — iOS native. THE tier that catches Swift errors like PR #8's.
+  # Free on public repos as long as it's the standard `macos-*` runner (not
+  # `-large`/`-xlarge`). Builds against the SIMULATOR SDK so no code signing.
+  ios:
+    name: build ios (swift, simulator)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install example deps
+        working-directory: example
+        run: npm ci
+      # Runs `pod install`, which triggers the podspec's prepare_command
+      # (scripts/install-litertlm.sh) to fetch the LiteRT-LM C xcframework.
+      - name: Prebuild ios
+        working-directory: example
+        run: npx expo prebuild --platform ios --no-install
+      - name: Install pods
+        working-directory: example/ios
+        run: pod install
+      - name: Build (simulator, no signing)
+        working-directory: example/ios
+        run: |
+          xcodebuild \
+            -workspace example.xcworkspace \
+            -scheme example \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
