@@ -245,7 +245,7 @@ public class ExpoAiKitModule: Module {
         if !model.hasAvailableAssets {
           try await withCheckedThrowingContinuation {
             (cont: CheckedContinuation<Void, Error>) in
-            model.requestEmbeddingAssets { _, error in
+            model.requestAssets{ _, error in
               if let error = error {
                 cont.resume(throwing: error)
               } else {
@@ -254,10 +254,8 @@ public class ExpoAiKitModule: Module {
             }
           }
         }
-
-        if !model.isLoaded {
-          try model.load()
-        }
+        
+        try model.load()
 
         let dimension = model.dimension
         var embeddings: [[Double]] = []
