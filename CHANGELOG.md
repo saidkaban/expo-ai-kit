@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.11.1
+
+> Headline: **Native build fixes** — the iOS *and* Android modules each failed to
+> compile; both are fixed. No API changes; a patch for anyone building either platform.
+
+### Fixed
+
+- **iOS `embed()` didn't compile** — `NLContextualEmbedding` was called with two members
+  that don't exist (`requestEmbeddingAssets`, `isLoaded`), breaking the iOS build for every
+  consumer. Use the real API: `requestAssets(completionHandler:)` and an unconditional
+  `load()`. Thanks [@JoeToeniskoetter](https://github.com/JoeToeniskoetter) (#8).
+- **Android module didn't compile** — the `embed` stub's bare `throw` made the lambda return
+  `Nothing`, which Expo's reified `AsyncFunction` rejects, failing `:expo-ai-kit:compileDebugKotlin`
+  since 0.10.0. Removed the stub — `embed()` is already guarded to iOS-only in JS, so Android
+  never reached it. (Android embeddings via MediaPipe remain the planned follow-up.)
+
+### Internal
+
+- Added CI (`.github/workflows/ci.yml`): builds **node + iOS + Android** on every PR, so native
+  compile errors like the two above are caught before merge. Not shipped in the npm package.
+
 ## 0.11.0
 
 > Headline: **Vercel AI SDK provider** — `import { expoAiKit } from 'expo-ai-kit/ai'`
