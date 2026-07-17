@@ -859,6 +859,19 @@ export async function getDownloadableModels(): Promise<DownloadableModel[]> {
 }
 
 /**
+ * Get all downloaded models available on the current device.
+ *
+ * @returns Array of downloadable models whose status is `downloaded` or `ready`.
+ */
+export async function getDownloadedModels(): Promise<DownloadableModel[]> {
+  const models = await getDownloadableModels();
+
+  return models.filter(
+    (entry) => entry.status === 'downloaded' || entry.status === 'ready'
+  );
+}
+
+/**
  * Pick the best downloadable model the current device can run.
  *
  * Returns the most capable model (largest, by RAM requirement) whose
