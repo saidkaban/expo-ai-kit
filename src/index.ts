@@ -38,7 +38,7 @@ import {
   buildToolArgsRepair,
   formatToolResult,
 } from './tools';
-import { getAllModels, getRegistryEntry } from './models';
+import { filterDownloadedModels, getAllModels, getRegistryEntry } from './models';
 
 export * from './types';
 export * from './models';
@@ -866,9 +866,7 @@ export async function getDownloadableModels(): Promise<DownloadableModel[]> {
 export async function getDownloadedModels(): Promise<DownloadableModel[]> {
   const models = await getDownloadableModels();
 
-  return models.filter(
-    (entry) => entry.status === 'downloaded' || entry.status === 'ready'
-  );
+  return filterDownloadedModels(models);
 }
 
 /**

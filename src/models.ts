@@ -6,6 +6,8 @@
  * each entry with on-device status from the native layer.
  */
 
+import type { DownloadableModel } from './types';
+
 export type ModelRegistryEntry = {
   /** Unique model identifier used in setModel/downloadModel */
   id: string;
@@ -320,4 +322,26 @@ export async function fetchModelMetadata(
     );
   }
   return { sha256, sizeBytes };
+}
+
+/**
+ * Filter a list of downloadable models to only include models that are
+ * available for use on-device.
+ *
+ * A model is considered available if it has been fully downloaded, is
+ * currently being loaded, or is already initialized and ready for inference.
+ * This excludes models that have not been downloaded or are unavailable.
+ *
+ * @param models - List of downloadable models with their current download status.
+ * @returns A new array containing only downloaded, loading, or ready models.
+ */
+export function filterDownloadedModels(
+  models: DownloadableModel[],
+): DownloadableModel[] {
+  return models.filter(
+    (entry) =>
+      entry.status === 'downloaded' ||
+      entry.status === 'loading' ||
+      entry.status === 'ready'
+  );
 }
