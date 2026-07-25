@@ -861,7 +861,7 @@ export async function getDownloadableModels(): Promise<DownloadableModel[]> {
 /**
  * Get all downloaded models available on the current device.
  *
- * @returns Array of downloadable models whose status is `downloaded` or `ready`.
+ * @returns Array of downloadable models whose status is `downloaded`, `loading`, or `ready`.
  */
 export async function getDownloadedModels(): Promise<DownloadableModel[]> {
   const models = await getDownloadableModels();
