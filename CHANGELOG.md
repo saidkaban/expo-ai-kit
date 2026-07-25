@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.12.0
+
+> Headline: **`getDownloadedModels()`** — one call to list the models already on
+> the device, instead of filtering `getDownloadableModels()` yourself. Additive,
+> no breaking changes.
+
+### Added
+
+- **`getDownloadedModels()`** — returns the downloadable models present on device
+  (status `downloaded`, `loading`, or `ready`; `loading` counts because the file is
+  already on disk mid-`setModel`). The pure filter behind it,
+  `filterDownloadedModels(models)`, is exported and unit-tested too.
+  Thanks [@asi-isa](https://github.com/asi-isa) (#11).
+
 ## 0.11.1
 
 > Headline: **Native build fixes** — the iOS *and* Android modules each failed to
