@@ -260,7 +260,7 @@ file persists on disk, so its `'downloaded'` status survives restarts once re-re
 Inference: `isAvailable`, `sendMessage`, `streamMessage`, `generateObject`, `generateText`.
 Embeddings & RAG: `embed`, `chunkText`, `cosineSimilarity`, `createVectorStore`.
 AI SDK provider (`expo-ai-kit/ai`): `expoAiKit`, `createExpoAiKit`.
-Models: `getBuiltInModels`, `getDownloadableModels`, `getRecommendedModel`,
+Models: `getBuiltInModels`, `getDownloadableModels`, `getDownloadedModels`, `getRecommendedModel`,
 `downloadModel`, `cancelDownload`, `deleteModel`, `setModel`, `unloadModel`, `getActiveModel`.
 Custom models: `registerModel`, `unregisterModel`, `getRegisteredModels`, `fetchModelMetadata`.
 

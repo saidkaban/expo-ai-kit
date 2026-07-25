@@ -6,9 +6,12 @@ import {
   getRegisteredModels,
   getAllModels,
   getRegistryEntry,
+  filterDownloadedModels,
   MODEL_REGISTRY,
   type ModelRegistryEntry,
 } from '../models';
+
+import type { DownloadableModel } from '../types';
 
 function validEntry(overrides: Partial<ModelRegistryEntry> = {}): ModelRegistryEntry {
   return {
@@ -152,5 +155,46 @@ describe('registerModel / getRegistryEntry', () => {
   it('does not let getRegisteredModels expose built-in models', () => {
     expect(getRegisteredModels()).toEqual([]);
     expect(getRegistryEntry('gemma-e2b')).toBeDefined(); // built-in still resolvable
+  });
+});
+
+describe('filterDownloadedModels', () => {
+  it('returns only models that are downloaded, loading, or ready', () => {
+    const models = [
+      { id: 'downloaded-model', status: 'downloaded' },
+      { id: 'loading-model', status: 'loading' },
+      { id: 'ready-model', status: 'ready' },
+      { id: 'not-downloaded-model', status: 'not-downloaded' },
+      { id: 'downloading-model', status: 'downloading' },
+    ] as DownloadableModel[];
+
+    const result = filterDownloadedModels(models);
+
+    expect(result.map((model) => model.id)).toEqual([
+      'downloaded-model',
+      'loading-model',
+      'ready-model',
+    ]);
+  });
+
+  it('returns an empty array when no models are available', () => {
+    const models = [
+      { id: 'missing-model', status: 'not-downloaded' },
+      { id: 'downloading-model', status: 'downloading' },
+    ] as DownloadableModel[];
+
+    expect(filterDownloadedModels(models)).toEqual([]);
+  });
+
+  it('does not mutate the original array', () => {
+    const models = [
+      { id: 'model-1', status: 'downloaded' },
+      { id: 'model-2', status: 'not-downloaded' },
+    ] as DownloadableModel[];
+
+    const result = filterDownloadedModels(models);
+
+    expect(result).not.toBe(models);
+    expect(models).toHaveLength(2);
   });
 });
