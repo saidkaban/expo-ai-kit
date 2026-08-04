@@ -7,6 +7,14 @@ actor GemmaInferenceClient {
   private var conversation: Conversation?
   private var loadedModelId: String?
 
+  // Sampling config for the session, fixed at load. Kept so each inference call
+  // can build a FRESH conversation: the JS layer passes the full history every
+  // call (stateless-model contract), so reusing one native conversation would
+  // feed the model its own history twice — and a second turn on the same
+  // conversation trips LiteRT-LM's chat-template engine on some models
+  // (qwen3: "string has no method named strip").
+  private var conversationConfig: ConversationConfig?
+
   private var isDownloading = false
   private var currentDownloader: ModelDownloader?
 
@@ -86,17 +94,37 @@ actor GemmaInferenceClient {
       } else {
         samplerConfig = nil
       }
-      let newConversation = try await newEngine.createConversation(
-        with: ConversationConfig(samplerConfig: samplerConfig)
-      )
+      let config = ConversationConfig(samplerConfig: samplerConfig)
+      let newConversation = try await newEngine.createConversation(with: config)
       engine = newEngine
       conversation = newConversation
+      conversationConfig = config
       loadedModelId = modelId
     } catch {
       conversation = nil
       engine = nil
+      conversationConfig = nil
       loadedModelId = nil
       throw GemmaError.modelLoadFailed(modelId, reason: "\(error)")
+    }
+  }
+
+  /// Replace the current conversation with a fresh one for a single call — see
+  /// `conversationConfig` for why inference never reuses one across calls.
+  /// (Reassigning releases the previous conversation's native handle.)
+  private func freshConversation() async throws -> Conversation {
+    guard let eng = engine else {
+      throw GemmaError.modelNotDownloaded(loadedModelId ?? "unknown")
+    }
+    conversation = nil
+    do {
+      let conv = try await eng.createConversation(with: conversationConfig)
+      conversation = conv
+      return conv
+    } catch {
+      throw GemmaError.inferenceFailed(
+        loadedModelId ?? "unknown", reason: "Failed to create conversation: \(error)"
+      )
     }
   }
 
@@ -130,9 +158,7 @@ actor GemmaInferenceClient {
 
   /// Generate a complete response. Blocks until done.
   func generateText(prompt: String, systemPrompt: String) async throws -> String {
-    guard let conv = conversation else {
-      throw GemmaError.modelNotDownloaded(loadedModelId ?? "unknown")
-    }
+    let conv = try await freshConversation()
     let fullPrompt = buildFullPrompt(prompt: prompt, systemPrompt: systemPrompt)
     do {
       let response = try await conv.sendMessage(Message(fullPrompt))
@@ -153,9 +179,7 @@ actor GemmaInferenceClient {
     systemPrompt: String,
     onChunk: @Sendable (_ token: String, _ accumulatedText: String, _ isDone: Bool) -> Void
   ) async throws {
-    guard let conv = conversation else {
-      throw GemmaError.modelNotDownloaded(loadedModelId ?? "unknown")
-    }
+    let conv = try await freshConversation()
     let fullPrompt = buildFullPrompt(prompt: prompt, systemPrompt: systemPrompt)
 
     var accumulated = ""

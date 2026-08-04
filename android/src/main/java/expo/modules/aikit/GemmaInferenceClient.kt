@@ -18,12 +18,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
-import java.security.MessageDigest
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -43,6 +37,14 @@ class GemmaInferenceClient(private val context: Context) {
   private var engine: Engine? = null
   private var conversation: Conversation? = null
   private var loadedModelId: String? = null
+
+  // Sampling config for the session, fixed at load. Kept so each inference call
+  // can build a FRESH conversation: the JS layer passes the full history every
+  // call (stateless-model contract), so reusing one native conversation would
+  // feed the model its own history twice — and a second turn on the same
+  // conversation trips LiteRT-LM 0.10.0's chat-template engine on some models
+  // (qwen3: "string has no method named strip").
+  private var convConfig: ConversationConfig = ConversationConfig()
 
   @Volatile
   private var isDownloading = false
@@ -158,7 +160,9 @@ class GemmaInferenceClient(private val context: Context) {
         // Sampling knobs are fixed at conversation creation by LiteRT-LM. If any
         // is provided, build a SamplerConfig (filling unspecified values with
         // Gemma-typical defaults); otherwise use the engine/model defaults.
-        val convConfig = if (temperature != null || topK != null || topP != null) {
+        // Stored so every inference call can create a fresh conversation with
+        // the same sampling (see convConfig).
+        convConfig = if (temperature != null || topK != null || topP != null) {
           ConversationConfig(
             samplerConfig = SamplerConfig(
               topK = topK ?: 64,
@@ -212,12 +216,30 @@ class GemmaInferenceClient(private val context: Context) {
   // -------------------------------------------------------------------------
 
   /**
+   * Replace the current conversation with a fresh one for a single call.
+   * Must be called with the mutex held. See [convConfig] for why inference
+   * never reuses a conversation across calls.
+   */
+  private fun freshConversation(): Conversation {
+    val eng = engine
+      ?: throw RuntimeException("MODEL_NOT_DOWNLOADED:${loadedModelId ?: "unknown"}:No model loaded")
+    conversation?.close()
+    conversation = null
+    val conv = try {
+      eng.createConversation(convConfig)
+    } catch (e: Exception) {
+      throw RuntimeException("INFERENCE_FAILED:${loadedModelId ?: "unknown"}:Failed to create conversation: ${e.message}")
+    }
+    conversation = conv
+    return conv
+  }
+
+  /**
    * Generate a complete response. Blocks until done.
    * The mutex ensures this cannot run concurrently with load/unload.
    */
   suspend fun generateText(prompt: String, systemPrompt: String): String = mutex.withLock {
-    val conv = conversation
-      ?: throw RuntimeException("MODEL_NOT_DOWNLOADED:${loadedModelId ?: "unknown"}:No model loaded")
+    val conv = freshConversation()
 
     val fullPrompt = buildFullPrompt(prompt, systemPrompt)
 
@@ -225,12 +247,22 @@ class GemmaInferenceClient(private val context: Context) {
       withContext(Dispatchers.IO) {
         suspendCancellableCoroutine<String> { continuation ->
           val result = StringBuilder()
+          var previousText = ""
           conv.sendMessageAsync(
             Contents.of(fullPrompt),
             object : MessageCallback {
               override fun onMessage(message: Message) {
-                result.clear()
-                result.append(message.toString())
+                // LiteRT-LM may deliver accumulated text or delta tokens
+                // (observed: deltas on-device) — detect which, exactly like
+                // generateTextStream, so the final text isn't just the last chunk.
+                val messageText = message.toString()
+                if (messageText.startsWith(previousText) && messageText.length >= previousText.length) {
+                  result.clear()
+                  result.append(messageText)
+                } else {
+                  result.append(messageText)
+                }
+                previousText = result.toString()
               }
               override fun onDone() {
                 continuation.resume(result.toString())
@@ -266,8 +298,7 @@ class GemmaInferenceClient(private val context: Context) {
     systemPrompt: String,
     onChunk: (token: String, accumulatedText: String, isDone: Boolean) -> Unit
   ) = mutex.withLock {
-    val conv = conversation
-      ?: throw RuntimeException("MODEL_NOT_DOWNLOADED:${loadedModelId ?: "unknown"}:No model loaded")
+    val conv = freshConversation()
 
     val fullPrompt = buildFullPrompt(prompt, systemPrompt)
 
@@ -334,7 +365,8 @@ class GemmaInferenceClient(private val context: Context) {
    * Prevents concurrent downloads. On failure, deletes partial files.
    *
    * Strategy: restart from scratch on failure (no HTTP Range resumption).
-   * Downloads to a .tmp file, atomically renames on success.
+   * Downloads to a .tmp file, verifies SHA-256, atomically renames on success
+   * (the mechanics live in [DownloadUtil], shared with the embedding asset).
    */
   suspend fun downloadModelFile(
     modelId: String,
@@ -353,58 +385,16 @@ class GemmaInferenceClient(private val context: Context) {
         val modelsDir = File(context.filesDir, "models")
         modelsDir.mkdirs()
 
-        val targetFile = File(modelsDir, "$modelId.litertlm")
-        val tempFile = File(modelsDir, "$modelId.litertlm.tmp")
-
-        try {
-          val connection = openConnectionFollowingRedirects(url)
-
-          val totalBytes = connection.contentLengthLong
-          var bytesRead = 0L
-
-          connection.inputStream.use { input ->
-            FileOutputStream(tempFile).use { output ->
-              val buffer = ByteArray(8192)
-              var read: Int
-              while (input.read(buffer).also { read = it } != -1) {
-                if (cancelDownloadRequested) {
-                  throw RuntimeException("DOWNLOAD_CANCELLED:$modelId:Download cancelled")
-                }
-                output.write(buffer, 0, read)
-                bytesRead += read
-                if (totalBytes > 0) {
-                  onProgress(bytesRead, totalBytes)
-                }
-              }
-            }
-          }
-
-          // Verify SHA256 if provided
-          if (sha256.isNotEmpty()) {
-            val actualHash = computeSha256(tempFile)
-            if (!actualHash.equals(sha256, ignoreCase = true)) {
-              tempFile.delete()
-              throw RuntimeException("DOWNLOAD_CORRUPT:$modelId:SHA256 mismatch: expected $sha256, got $actualHash")
-            }
-          }
-
-          // Atomic rename
-          if (!tempFile.renameTo(targetFile)) {
-            tempFile.delete()
-            throw IOException("Failed to rename temp file to target")
-          }
-        } catch (e: Exception) {
-          // Always clean up partial file
-          tempFile.delete()
-          when {
-            e is RuntimeException && e.message?.startsWith("DOWNLOAD_CORRUPT") == true -> throw e
-            e is RuntimeException && e.message?.startsWith("DOWNLOAD_CANCELLED") == true -> throw e
-            context.filesDir.freeSpace < 100_000_000 ->
-              throw RuntimeException("DOWNLOAD_STORAGE_FULL:$modelId:Insufficient disk space")
-            else ->
-              throw RuntimeException("DOWNLOAD_FAILED:$modelId:${e.message}")
-          }
-        }
+        DownloadUtil.downloadVerified(
+          context = context,
+          modelId = modelId,
+          url = url,
+          targetFile = File(modelsDir, "$modelId.litertlm"),
+          tempFile = File(modelsDir, "$modelId.litertlm.tmp"),
+          sha256 = sha256,
+          isCancelled = { cancelDownloadRequested },
+          onProgress = onProgress
+        )
       }
     } finally {
       isDownloading = false
@@ -467,60 +457,5 @@ class GemmaInferenceClient(private val context: Context) {
     } else {
       prompt
     }
-  }
-
-  /**
-   * Open an HTTP connection, manually following up to 5 redirects across hosts.
-   *
-   * HttpURLConnection follows redirects by default but only within the same host.
-   * HuggingFace LFS redirects from huggingface.co to cdn-lfs-us-1.huggingface.co,
-   * which is a cross-host redirect that HttpURLConnection silently does NOT follow —
-   * it returns the 302 response as-is (or on some Android versions, returns a small
-   * HTML/error body instead of the actual file). This caused downloaded model files
-   * to contain garbage instead of the real model weights.
-   */
-  private fun openConnectionFollowingRedirects(url: String): HttpURLConnection {
-    var currentUrl = url
-    var redirects = 0
-    while (true) {
-      val connection = URL(currentUrl).openConnection() as HttpURLConnection
-      connection.connectTimeout = 30_000
-      connection.readTimeout = 30_000
-      connection.instanceFollowRedirects = false
-      connection.connect()
-
-      val code = connection.responseCode
-      if (code in listOf(
-          HttpURLConnection.HTTP_MOVED_PERM,
-          HttpURLConnection.HTTP_MOVED_TEMP,
-          HttpURLConnection.HTTP_SEE_OTHER,
-          307, 308
-        )) {
-        val location = connection.getHeaderField("Location")
-          ?: throw IOException("Redirect with no Location header")
-        connection.disconnect()
-        redirects++
-        if (redirects > 5) throw IOException("Too many redirects")
-        currentUrl = location
-        continue
-      }
-
-      if (code != HttpURLConnection.HTTP_OK) {
-        throw IOException("HTTP $code: ${connection.responseMessage}")
-      }
-      return connection
-    }
-  }
-
-  private fun computeSha256(file: File): String {
-    val digest = MessageDigest.getInstance("SHA-256")
-    FileInputStream(file).use { fis ->
-      val buffer = ByteArray(8192)
-      var read: Int
-      while (fis.read(buffer).also { read = it } != -1) {
-        digest.update(buffer, 0, read)
-      }
-    }
-    return digest.digest().joinToString("") { "%02x".format(it) }
   }
 }
