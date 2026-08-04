@@ -219,6 +219,11 @@ if (best) {
 
 Each entry carries a `license` — check it before shipping a model to your users.
 
+> **Android emulators on Intel/AMD hosts (x86_64):** downloadable models aren't supported —
+> LiteRT-LM's x86 backend crashes natively, so `setModel()` throws a catchable
+> `DEVICE_NOT_SUPPORTED` error instead of taking the app down. Test on a physical device or an
+> arm64 emulator image (Apple Silicon hosts). iOS Simulator and built-in models are unaffected.
+
 ### Bring your own model
 
 Not just the built-in list — register any LiteRT-LM model at runtime with `registerModel()`.

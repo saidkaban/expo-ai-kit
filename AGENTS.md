@@ -61,6 +61,10 @@ SDK provider** (`expo-ai-kit/ai`) — all on-device.
   registry-only — native loads any non-built-in id generically through LiteRT-LM.
 - `ios/` — Swift. Apple FM + Gemma via vendored LiteRT-LM (`ios/Vendor/LiteRTLM/`; the C xcframework
   is fetched on `pod install`). `android/` — Kotlin. ML Kit + Gemma via the LiteRT-LM gradle dep.
+  x86/x86_64 Android (Intel/AMD-host emulators) is fail-fast guarded in
+  `GemmaInferenceClient.loadModel` → `DEVICE_NOT_SUPPORTED`: LiteRT-LM ships an x86_64 jni lib but
+  its x86 backend SIGSEGVs (upstream #2799/#2159, still open at 0.15.0 — bumping the dep doesn't
+  help). Drop the guard only when a LiteRT-LM release validates x86_64.
 - `example/` — local dev-harness app; not published. Its **source** (App.tsx, app.json, assets,
   package[-lock].json, tsconfig, metro/index) is tracked so CI can regenerate native projects via
   `expo prebuild`; the generated `ios/`/`android/`, `node_modules/`, and `.expo/` stay git-ignored.
