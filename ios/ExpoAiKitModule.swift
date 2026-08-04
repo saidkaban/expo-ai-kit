@@ -18,12 +18,89 @@ public class ExpoAiKitModule: Module {
   // Gemma/LiteRT-LM client. Constructor is cheap — no engine load until setModel.
   private let gemmaClient = GemmaInferenceClient()
 
+  // Embedding model identifiers with an OS asset request currently in flight
+  // (lets getEmbeddingModelStatus report "downloading").
+  private var embeddingAssetRequests: Set<String> = []
+
   // Build Apple Foundation Models generation options from the stored config.
   @available(iOS 26.0, *)
   private func appleGenerationOptions() -> GenerationOptions {
     let temperature = generationConfig["temperature"]
     let maxTokens = generationConfig["maxTokens"].map { Int($0) }
     return GenerationOptions(temperature: temperature, maximumResponseTokens: maxTokens)
+  }
+
+  // ==================================================================
+  // Embedding helpers (Apple NLContextualEmbedding, iOS 17+)
+  // ==================================================================
+
+  // Fallback candidates for getSupportedEmbeddingLanguages, probed only if the
+  // NLContextualEmbedding catalog API unexpectedly returns nothing.
+  private static let probeEmbeddingLanguages: [String] = [
+    "en", "fr", "de", "es", "it", "pt", "nl", "sv", "da", "nb", "fi", "pl", "cs",
+    "sk", "hu", "ro", "hr", "ca", "tr", "vi", "id", "ms", "tl",
+    "ru", "uk", "bg", "sr", "kk",
+    "zh-Hans", "zh-Hant", "ja", "ko",
+  ]
+
+  /// Resolve the contextual-embedding model for a normalized BCP-47 tag.
+  /// Tries the full tag, then language-script, then the bare language subtag
+  /// (so "en-US" resolves via "en" while "zh-Hans" resolves directly), and
+  /// throws a typed LANGUAGE_NOT_SUPPORTED error naming the rejected language.
+  /// Deliberately no cross-language fallback: an unsupported language must
+  /// never silently produce Latin-model vectors.
+  @available(iOS 17.0, *)
+  private func resolveEmbeddingModel(language: String) throws -> (model: NLContextualEmbedding, language: NLLanguage) {
+    var candidates: [String] = [language]
+    let parts = language.split(separator: "-").map(String.init)
+    if parts.count >= 2 {
+      if parts[1].count == 4 {
+        candidates.append("\(parts[0])-\(parts[1])")
+      }
+      candidates.append(parts[0])
+    }
+    var seen = Set<String>()
+    for candidate in candidates where seen.insert(candidate).inserted {
+      let nlLanguage = NLLanguage(rawValue: candidate)
+      if let model = NLContextualEmbedding(language: nlLanguage) {
+        return (model, nlLanguage)
+      }
+    }
+    throw NSError(
+      domain: "ExpoAiKit", code: 0,
+      userInfo: [NSLocalizedDescriptionKey:
+        "LANGUAGE_NOT_SUPPORTED::No on-device embedding model supports language \"\(language)\". " +
+        "iOS ships script-based models (Latin / Cyrillic / CJK) — call getSupportedEmbeddingLanguages() for the list."]
+    )
+  }
+
+  /// Ensure the model's assets are on-device, asking the OS to fetch them if
+  /// needed — the same on-demand flow embed() has always used, now per model.
+  @available(iOS 17.0, *)
+  private func ensureEmbeddingAssets(_ model: NLContextualEmbedding) async throws {
+    if model.hasAvailableAssets { return }
+    self.embeddingAssetRequests.insert(model.modelIdentifier)
+    defer { self.embeddingAssetRequests.remove(model.modelIdentifier) }
+    try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+      model.requestAssets { result, error in
+        if let error = error {
+          cont.resume(throwing: error)
+        } else if result == .available {
+          cont.resume(returning: ())
+        } else {
+          cont.resume(throwing: NSError(
+            domain: "ExpoAiKit", code: 0,
+            userInfo: [NSLocalizedDescriptionKey:
+              "DOWNLOAD_FAILED::The OS reports the embedding assets for \(model.modelIdentifier) as unavailable on this device"]
+          ))
+        }
+      }
+    }
+  }
+
+  @available(iOS 17.0, *)
+  private func embeddingModelIdentity(_ model: NLContextualEmbedding) -> [String: Any] {
+    return ["id": model.modelIdentifier, "revision": String(model.revision)]
   }
 
   public func definition() -> ModuleDefinition {
@@ -227,34 +304,24 @@ public class ExpoAiKitModule: Module {
     // Apple's NLContextualEmbedding is a zero-download, OS-maintained model
     // (NaturalLanguage framework, iOS 17+). It yields one contextual vector per
     // token; we mean-pool over a text's tokens to get a single sentence vector.
-    // The model's asset is downloaded on demand by the OS the first time, not
-    // bundled into the app. Independent of the FoundationModels generation path,
-    // so this is not gated by the single-flight inference guard.
+    // Models are script-based (Latin / Cyrillic / CJK) and selected by the
+    // caller's `language` (BCP-47, normalized by the JS layer); their assets
+    // are downloaded on demand by the OS, not bundled into the app.
+    // Independent of the FoundationModels generation path, so none of this is
+    // gated by the single-flight inference guard.
 
-    AsyncFunction("embed") { (texts: [String]) async throws -> [String: Any] in
+    AsyncFunction("embed") { (texts: [String], task: String, language: String) async throws -> [String: Any] in
       if #available(iOS 17.0, *) {
-        guard let model = NLContextualEmbedding(language: .english) else {
-          throw NSError(
-            domain: "ExpoAiKit", code: 0,
-            userInfo: [NSLocalizedDescriptionKey:
-              "DEVICE_NOT_SUPPORTED::No contextual embedding model is available on this device"]
-          )
-        }
+        // `task` is accepted as semantic intent only on iOS: NLContextualEmbedding
+        // has no task conditioning. (Android maps it onto EmbeddingGemma's
+        // prompt protocol.) `language` picks the script model — and is passed
+        // to the tokenizer below, so the same language drives both.
+        _ = task
+        let (model, nlLanguage) = try self.resolveEmbeddingModel(language: language)
 
         // First use may need the OS to fetch the model asset.
-        if !model.hasAvailableAssets {
-          try await withCheckedThrowingContinuation {
-            (cont: CheckedContinuation<Void, Error>) in
-            model.requestAssets{ _, error in
-              if let error = error {
-                cont.resume(throwing: error)
-              } else {
-                cont.resume(returning: ())
-              }
-            }
-          }
-        }
-        
+        try await self.ensureEmbeddingAssets(model)
+
         try model.load()
 
         let dimension = model.dimension
@@ -269,7 +336,7 @@ public class ExpoAiKitModule: Module {
             continue
           }
 
-          let result = try model.embeddingResult(for: text, language: .english)
+          let result = try model.embeddingResult(for: text, language: nlLanguage)
           var sum = [Double](repeating: 0.0, count: dimension)
           var count = 0
           result.enumerateTokenVectors(in: text.startIndex..<text.endIndex) {
@@ -285,7 +352,11 @@ public class ExpoAiKitModule: Module {
           embeddings.append(sum)
         }
 
-        return ["embeddings": embeddings, "dimensions": dimension]
+        return [
+          "embeddings": embeddings,
+          "dimensions": dimension,
+          "model": self.embeddingModelIdentity(model),
+        ]
       } else {
         throw NSError(
           domain: "ExpoAiKit", code: 0,
@@ -293,6 +364,76 @@ public class ExpoAiKitModule: Module {
             "DEVICE_NOT_SUPPORTED::On-device embeddings require iOS 17 or later"]
         )
       }
+    }
+
+    AsyncFunction("getEmbeddingModelStatus") { (language: String) async throws -> [String: Any] in
+      guard #available(iOS 17.0, *) else {
+        throw NSError(
+          domain: "ExpoAiKit", code: 0,
+          userInfo: [NSLocalizedDescriptionKey:
+            "DEVICE_NOT_SUPPORTED::On-device embeddings require iOS 17 or later"]
+        )
+      }
+      let (model, _) = try self.resolveEmbeddingModel(language: language)
+      let status: String
+      if self.embeddingAssetRequests.contains(model.modelIdentifier) {
+        status = "downloading"
+      } else {
+        status = model.hasAvailableAssets ? "downloaded" : "not-downloaded"
+      }
+      return [
+        "status": status,
+        // OS-managed asset — its size is not exposed by the API.
+        "sizeBytes": 0,
+        "model": self.embeddingModelIdentity(model),
+      ]
+    }
+
+    AsyncFunction("prepareEmbeddingModel") { (url: String, sha256: String, language: String) async throws in
+      // url/sha256 pin Android's Google-hosted bundle; iOS assets are
+      // OS-managed and fetched per script model, so both are ignored here.
+      _ = url
+      _ = sha256
+      guard #available(iOS 17.0, *) else {
+        throw NSError(
+          domain: "ExpoAiKit", code: 0,
+          userInfo: [NSLocalizedDescriptionKey:
+            "DEVICE_NOT_SUPPORTED::On-device embeddings require iOS 17 or later"]
+        )
+      }
+      let (model, _) = try self.resolveEmbeddingModel(language: language)
+      try await self.ensureEmbeddingAssets(model)
+    }
+
+    AsyncFunction("cancelEmbeddingModelDownload") { () async in
+      // No-op: iOS embedding assets are OS-managed, so there is no app-owned
+      // download to cancel (Android cancels its EmbeddingGemma download here).
+    }
+
+    AsyncFunction("deleteEmbeddingModel") { () async in
+      // No-op: the app cannot delete OS-managed NLContextualEmbedding assets
+      // (Android deletes its per-app EmbeddingGemma file here).
+    }
+
+    AsyncFunction("getSupportedEmbeddingLanguages") { () async -> [String] in
+      guard #available(iOS 17.0, *) else { return [] }
+      var languages = Set<String>()
+      // The catalog API enumerates every available contextual-embedding model.
+      let catalog = NLContextualEmbedding.contextualEmbeddings(forValues: [:])
+      for model in catalog {
+        for language in model.languages {
+          languages.insert(language.rawValue)
+        }
+      }
+      if languages.isEmpty {
+        // Defensive fallback: probe known candidates one by one.
+        for tag in Self.probeEmbeddingLanguages {
+          if NLContextualEmbedding(language: NLLanguage(rawValue: tag)) != nil {
+            languages.insert(tag)
+          }
+        }
+      }
+      return languages.sorted()
     }
 
     // ==================================================================
