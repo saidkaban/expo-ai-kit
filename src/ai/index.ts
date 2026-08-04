@@ -7,8 +7,10 @@ import type {
   LanguageModelV3StreamPart,
   LanguageModelV3StreamResult,
 } from '@ai-sdk/provider';
+import { Platform } from 'react-native';
 import { embed, getActiveModel, sendMessage, setModel, streamMessage } from '../index';
-import { ModelError, type SetModelOptions } from '../types';
+import { ANDROID_EMBEDDING_MODEL } from '../models';
+import { ModelError, type EmbeddingTask, type SetModelOptions } from '../types';
 import { convertCallOptions, extractOutput, EMPTY_USAGE, newPartId } from './convert';
 
 // ---------------------------------------------------------------------------
@@ -33,8 +35,33 @@ const PROVIDER = 'expo-ai-kit';
  */
 export const AUTO_MODEL_ID = 'auto';
 
-/** Model id for the built-in embedding model (Apple NLContextualEmbedding, iOS 17+). */
-export const EMBEDDING_MODEL_ID = 'apple-nl-contextual';
+/** Model id for the iOS embedding backend (Apple NLContextualEmbedding, iOS 17+). */
+export const APPLE_EMBEDDING_MODEL_ID = 'apple-nl-contextual';
+
+/**
+ * Model id for the Android embedding backend (EmbeddingGemma 300M via MediaPipe
+ * TextEmbedder — opt-in via the `androidEmbeddings` config-plugin flag).
+ */
+export const ANDROID_EMBEDDING_MODEL_ID = ANDROID_EMBEDDING_MODEL.id;
+
+/**
+ * @deprecated The embedding model is now platform-specific — this constant only
+ * names the iOS one. Use {@link APPLE_EMBEDDING_MODEL_ID} /
+ * {@link ANDROID_EMBEDDING_MODEL_ID}, or omit the id to get the platform default.
+ */
+export const EMBEDDING_MODEL_ID = APPLE_EMBEDDING_MODEL_ID;
+
+/**
+ * Per-instance embedding settings. `task` says what the vectors are for
+ * (mapped onto EmbeddingGemma's prompt protocol on Android; semantic intent
+ * only on iOS) and `language` selects the iOS script model (BCP-47; ignored on
+ * Android — EmbeddingGemma is natively multilingual). Both can be overridden
+ * per call via `providerOptions['expo-ai-kit']`.
+ */
+export type ExpoAiKitEmbeddingSettings = {
+  task?: EmbeddingTask;
+  language?: string;
+};
 
 /**
  * Per-instance model settings, applied when this instance activates its model
@@ -54,10 +81,15 @@ export interface ExpoAiKitProvider {
    * use whatever model is already active.
    */
   languageModel(modelId?: string, settings?: ExpoAiKitModelSettings): LanguageModelV3;
-  /** An EmbeddingModelV3 over embed() — iOS-only (Apple NLContextualEmbedding). */
-  embeddingModel(modelId?: string): EmbeddingModelV3;
+  /**
+   * An EmbeddingModelV3 over embed(). Omit `modelId` for the platform default —
+   * Apple NLContextualEmbedding on iOS, EmbeddingGemma 300M on Android (opt-in
+   * via the `androidEmbeddings` config-plugin flag). The instance's `modelId`
+   * reports the resolved platform-specific model truthfully.
+   */
+  embeddingModel(modelId?: string, settings?: ExpoAiKitEmbeddingSettings): EmbeddingModelV3;
   /** @deprecated Spec alias for {@link ExpoAiKitProvider.embeddingModel}. */
-  textEmbeddingModel(modelId?: string): EmbeddingModelV3;
+  textEmbeddingModel(modelId?: string, settings?: ExpoAiKitEmbeddingSettings): EmbeddingModelV3;
   /** expo-ai-kit has no image models; always throws MODEL_NOT_FOUND. */
   imageModel(modelId: string): never;
 }
@@ -88,7 +120,10 @@ export interface ExpoAiKitProvider {
  *   generateText()/generateObject() — single-shot here, since the AI SDK owns
  *   the loop. Streaming buffers when tools/JSON are requested (the envelope
  *   must be parsed whole, not surfaced as text deltas).
- * - embeddingModel() is iOS-only for now; Android throws DEVICE_NOT_SUPPORTED.
+ * - embeddingModel() resolves per platform: Apple NLContextualEmbedding on iOS,
+ *   EmbeddingGemma 300M on Android (opt-in — the `androidEmbeddings` config-
+ *   plugin flag plus a prepareEmbeddingModel() download; otherwise it throws a
+ *   typed error). Pass { task } for retrieval-quality Android vectors.
  */
 export function createExpoAiKit(): ExpoAiKitProvider {
   const languageModel = (
@@ -96,15 +131,25 @@ export function createExpoAiKit(): ExpoAiKitProvider {
     settings?: ExpoAiKitModelSettings
   ): LanguageModelV3 => createLanguageModel(modelId, settings);
 
-  const embeddingModel = (modelId: string = EMBEDDING_MODEL_ID): EmbeddingModelV3 => {
-    if (modelId !== EMBEDDING_MODEL_ID) {
+  const embeddingModel = (
+    modelId?: string,
+    settings?: ExpoAiKitEmbeddingSettings
+  ): EmbeddingModelV3 => {
+    // Resolve the platform default honestly: one embedding backend per
+    // platform, and the instance reports that platform-specific id.
+    const platformDefault =
+      Platform.OS === 'android' ? ANDROID_EMBEDDING_MODEL_ID : APPLE_EMBEDDING_MODEL_ID;
+    const resolved = modelId ?? platformDefault;
+    if (resolved !== platformDefault) {
       throw new ModelError(
         'MODEL_NOT_FOUND',
-        modelId,
-        `expo-ai-kit has one embedding model: "${EMBEDDING_MODEL_ID}" (Apple NLContextualEmbedding).`
+        resolved,
+        `expo-ai-kit has one embedding model per platform — "${APPLE_EMBEDDING_MODEL_ID}" on iOS ` +
+          `(Apple NLContextualEmbedding), "${ANDROID_EMBEDDING_MODEL_ID}" on Android (EmbeddingGemma). ` +
+          'Omit the id to use the current platform\'s model.'
       );
     }
-    return createEmbeddingModel();
+    return createEmbeddingModel(resolved, settings);
   };
 
   const provider = languageModel as ExpoAiKitProvider;
@@ -166,17 +211,22 @@ function createLanguageModel(
       const { text } = await sendMessage(call.messages, { signal: options.abortSignal });
       const output = extractOutput(text, call.toolNames, call.jsonMode);
 
-      const content: LanguageModelV3Content[] =
-        output.kind === 'tool-call'
-          ? [
-              {
-                type: 'tool-call',
-                toolCallId: newPartId('call'),
-                toolName: output.toolName,
-                input: output.input,
-              },
-            ]
-          : [{ type: 'text', text: output.text }];
+      const content: LanguageModelV3Content[] = [];
+      if (output.reasoning !== '') {
+        // Thinking models (Qwen3): surface <think> content as a spec reasoning
+        // part instead of polluting the text/tool output.
+        content.push({ type: 'reasoning', text: output.reasoning });
+      }
+      if (output.kind === 'tool-call') {
+        content.push({
+          type: 'tool-call',
+          toolCallId: newPartId('call'),
+          toolName: output.toolName,
+          input: output.input,
+        });
+      } else {
+        content.push({ type: 'text', text: output.text });
+      }
 
       return {
         content,
@@ -217,6 +267,12 @@ function createLanguageModel(
             try {
               const { text } = await sendMessage(call.messages, { signal: abortSignal });
               const output = extractOutput(text, call.toolNames, call.jsonMode);
+              if (output.reasoning !== '') {
+                const rid = newPartId('reasoning');
+                controller.enqueue({ type: 'reasoning-start', id: rid });
+                controller.enqueue({ type: 'reasoning-delta', id: rid, delta: output.reasoning });
+                controller.enqueue({ type: 'reasoning-end', id: rid });
+              }
               if (output.kind === 'tool-call') {
                 const id = newPartId('call');
                 controller.enqueue({ type: 'tool-input-start', id, toolName: output.toolName });
@@ -319,19 +375,44 @@ function createLanguageModel(
 // Embedding model
 // ---------------------------------------------------------------------------
 
-function createEmbeddingModel(): EmbeddingModelV3 {
+function createEmbeddingModel(
+  modelId: string,
+  settings?: ExpoAiKitEmbeddingSettings
+): EmbeddingModelV3 {
+  // Warn (once per instance, dev builds only) when embedding without an
+  // explicit task: EmbeddingGemma vectors are task-conditioned, so an implicit
+  // 'semantic-similarity' default silently degrades Android retrieval quality.
+  let warnedNoTask = false;
+
   return {
     specificationVersion: 'v3',
     provider: PROVIDER,
-    modelId: EMBEDDING_MODEL_ID,
+    modelId,
     maxEmbeddingsPerCall: Infinity, // embed() batches internally; no API limit
-    supportsParallelCalls: true, // embeddings bypass the single-flight inference guard
+    // Concurrent doEmbed calls are safe: embeddings bypass the single-flight
+    // inference guard on both platforms. iOS runs them independently; Android
+    // serializes them behind a native mutex (queued, never rejected).
+    supportsParallelCalls: true,
 
-    async doEmbed({ values, abortSignal }) {
+    async doEmbed({ values, abortSignal, providerOptions }) {
       if (abortSignal?.aborted) {
         throw new ModelError('INFERENCE_CANCELLED', '', 'Aborted before start');
       }
-      const { embeddings } = await embed(values);
+      const perCall = providerOptions?.[PROVIDER] as ExpoAiKitEmbeddingSettings | undefined;
+      const task = perCall?.task ?? settings?.task;
+      const language = perCall?.language ?? settings?.language;
+
+      if (task == null && !warnedNoTask && typeof __DEV__ !== 'undefined' && __DEV__) {
+        warnedNoTask = true;
+        console.warn(
+          'expo-ai-kit/ai: embedding without an explicit task — defaulting to ' +
+            "'semantic-similarity'. For RAG on Android (EmbeddingGemma), pass " +
+            "{ task: 'retrieval-document' } when indexing and { task: 'retrieval-query' } " +
+            'for queries (embeddingModel settings or providerOptions["expo-ai-kit"]).'
+        );
+      }
+
+      const { embeddings } = await embed(values, { task, language });
       return { embeddings, warnings: [] };
     },
   };

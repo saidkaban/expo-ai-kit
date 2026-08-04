@@ -301,7 +301,27 @@ describe('extractOutput', () => {
       kind: 'tool-call',
       toolName: 'getWeather',
       input: '{"city":"Paris"}',
+      reasoning: '',
     });
+  });
+
+  it('splits <think> reasoning off and parses the tool envelope from the answer', () => {
+    const out = extractOutput(
+      '<think>The user wants weather. I should call {"tool": "wrong"} … no, getWeather.</think>\n' +
+        '{"tool": "getWeather", "arguments": {"city": "Paris"}}',
+      ['getWeather'],
+      false
+    );
+    expect(out.kind).toBe('tool-call');
+    expect(out.reasoning).toContain('The user wants weather');
+    if (out.kind === 'tool-call') {
+      expect(out.toolName).toBe('getWeather');
+    }
+  });
+
+  it('splits <think> reasoning off plain text answers', () => {
+    const out = extractOutput('<think>hmm</think>The answer is 4.', [], false);
+    expect(out).toEqual({ kind: 'text', text: 'The answer is 4.', reasoning: 'hmm' });
   });
 
   it('tolerates fences and prose around the envelope (extractJson semantics)', () => {
@@ -315,25 +335,27 @@ describe('extractOutput', () => {
 
   it('falls back to text for unknown tool names (single-shot, no repair loop)', () => {
     const raw = '{"tool": "nope", "arguments": {}}';
-    expect(extractOutput(raw, ['getWeather'], false)).toEqual({ kind: 'text', text: raw });
+    expect(extractOutput(raw, ['getWeather'], false)).toEqual({ kind: 'text', text: raw, reasoning: '' });
   });
 
   it('returns plain answers as text when tools were offered', () => {
     expect(extractOutput('It is sunny.', ['getWeather'], false)).toEqual({
       kind: 'text',
       text: 'It is sunny.',
+      reasoning: '',
     });
   });
 
   it('extracts and re-serializes JSON in json mode', () => {
     const out = extractOutput('Here you go:\n```json\n{"title": "Pasta"}\n```', [], true);
-    expect(out).toEqual({ kind: 'text', text: '{"title":"Pasta"}' });
+    expect(out).toEqual({ kind: 'text', text: '{"title":"Pasta"}', reasoning: '' });
   });
 
   it('passes raw text through when json mode extraction fails', () => {
     expect(extractOutput('not json at all', [], true)).toEqual({
       kind: 'text',
       text: 'not json at all',
+      reasoning: '',
     });
   });
 });

@@ -7,6 +7,7 @@ import type {
 } from '@ai-sdk/provider';
 import { ModelError, type JSONSchema, type LLMMessage, type ToolSet } from '../types';
 import { buildSchemaInstruction, extractJson } from '../structured';
+import { stripThinking } from '../thinking';
 import { buildToolInstruction, formatToolResult, parseToolCall } from '../tools';
 
 // ---------------------------------------------------------------------------
@@ -224,20 +225,24 @@ export function convertCallOptions(options: LanguageModelV3CallOptions): Convert
 
 /** What the model's raw text turned out to be, per the offered capabilities. */
 export type ExtractedOutput =
-  | { kind: 'text'; text: string }
-  | { kind: 'tool-call'; toolName: string; input: string };
+  | { kind: 'text'; text: string; reasoning: string }
+  | { kind: 'tool-call'; toolName: string; input: string; reasoning: string };
 
 /**
- * Interpret raw model output for the AI SDK: detect a tool-call envelope when
- * tools were offered (reusing parseToolCall), or extract/clean the JSON value
- * in json mode (reusing extractJson). Single-shot — the repair loops live in
- * the core generateText/generateObject, not in the provider.
+ * Interpret raw model output for the AI SDK: split off `<think>` reasoning
+ * (thinking models — surfaced as a spec reasoning part, and excluded from
+ * parsing so it can't derail the envelope/JSON), then detect a tool-call
+ * envelope when tools were offered (reusing parseToolCall) or extract/clean the
+ * JSON value in json mode (reusing extractJson). Single-shot — the repair
+ * loops live in the core generateText/generateObject, not in the provider.
  */
 export function extractOutput(
-  text: string,
+  rawText: string,
   toolNames: string[],
   jsonMode: boolean
 ): ExtractedOutput {
+  const { text, reasoning } = stripThinking(rawText);
+
   if (toolNames.length > 0) {
     const parsed = parseToolCall(text, toolNames);
     if (parsed.kind === 'tool') {
@@ -245,20 +250,21 @@ export function extractOutput(
         kind: 'tool-call',
         toolName: parsed.toolName,
         input: safeStringify(parsed.args ?? {}),
+        reasoning,
       };
     }
     // 'unknown-tool' deliberately falls through to text: the provider is
-    // single-shot, so surfacing the raw output beats silently retrying.
-    return { kind: 'text', text };
+    // single-shot, so surfacing the output beats silently retrying.
+    return { kind: 'text', text, reasoning };
   }
 
   if (jsonMode) {
     const parsed = extractJson(text);
-    if (parsed.ok) return { kind: 'text', text: safeStringify(parsed.value) };
-    return { kind: 'text', text }; // let the SDK report the parse failure honestly
+    if (parsed.ok) return { kind: 'text', text: safeStringify(parsed.value), reasoning };
+    return { kind: 'text', text, reasoning }; // let the SDK report the parse failure honestly
   }
 
-  return { kind: 'text', text };
+  return { kind: 'text', text, reasoning };
 }
 
 /** Unwrap the spec's tool-result output union into a plain value for formatToolResult. */
