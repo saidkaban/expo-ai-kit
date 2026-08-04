@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.12.1
+
+> Headline: **Android emulator crash fixed** — activating a downloadable model on an
+> x86_64 emulator no longer hard-crashes the app; it now throws a catchable
+> `DEVICE_NOT_SUPPORTED` `ModelError`. No API changes.
+
+### Fixed
+
+- **Android x86/x86_64 (emulator) crash on `setModel()`** — LiteRT-LM ships an x86_64
+  `liblitertlm_jni.so`, but its x86 backend is unvalidated upstream and SIGSEGVs at engine
+  init / during inference (google-ai-edge/LiteRT-LM
+  [#2799](https://github.com/google-ai-edge/LiteRT-LM/issues/2799),
+  [#2159](https://github.com/google-ai-edge/LiteRT-LM/issues/2159) — still open as of
+  LiteRT-LM 0.15.0, so bumping the dependency wouldn't help). A native SIGSEGV kills the
+  whole app process and can't be caught in Kotlin, so `loadModel` now fails fast with
+  `DEVICE_NOT_SUPPORTED` before any LiteRT-LM call when the primary ABI is x86/x86_64.
+  Physical devices and arm64 emulator images (Apple Silicon hosts) are unaffected; built-in
+  models (ML Kit / Apple FM) are unaffected. Thanks
+  [@emircanerkul](https://github.com/emircanerkul) (#12).
+
 ## 0.12.0
 
 > Headline: **`getDownloadedModels()`** — one call to list the models already on

@@ -1017,6 +1017,10 @@ export async function deleteModel(modelId: string): Promise<void> {
  * @throws {ModelError} MODEL_NOT_DOWNLOADED if the downloadable model file is not on disk
  * @throws {ModelError} MODEL_LOAD_FAILED if loading into memory fails
  * @throws {ModelError} INFERENCE_OOM if device can't fit model in memory
+ * @throws {ModelError} DEVICE_NOT_SUPPORTED for downloadable models on x86/x86_64
+ *   Android (emulators on Intel/AMD hosts) — LiteRT-LM's native x86 backend
+ *   crashes the app process, so activation fails fast instead. Use a physical
+ *   device or an arm64 emulator image; built-in models are unaffected.
  */
 export async function setModel(modelId: string, options?: SetModelOptions): Promise<void> {
   const entry = getRegistryEntry(modelId);

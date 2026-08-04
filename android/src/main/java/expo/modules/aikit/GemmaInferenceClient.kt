@@ -2,6 +2,7 @@ package expo.modules.aikit
 
 import android.app.ActivityManager
 import android.content.Context
+import android.os.Build
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Conversation
@@ -54,6 +55,29 @@ class GemmaInferenceClient(private val context: Context) {
   // -------------------------------------------------------------------------
 
   /**
+   * Fail fast on ABIs where LiteRT-LM's native backend is known to crash.
+   *
+   * litertlm-android ships an x86_64 liblitertlm_jni.so, but the x86_64 backend
+   * is unvalidated upstream and SIGSEGVs on emulators — at engine init and
+   * during inference (google-ai-edge/LiteRT-LM #2799, #2159; still open as of
+   * 0.15.0). A SIGSEGV kills the whole app process and no Kotlin try/catch can
+   * contain it, so the only safe behavior is a typed error before any Engine
+   * call. Physical devices and arm64 emulator images (Apple Silicon hosts) run
+   * the arm64-v8a library and are unaffected. Remove this guard only once a
+   * LiteRT-LM release validates x86_64.
+   */
+  private fun requireSupportedAbi(modelId: String) {
+    val primaryAbi = Build.SUPPORTED_ABIS.firstOrNull() ?: return
+    if (primaryAbi == "x86_64" || primaryAbi == "x86") {
+      throw RuntimeException(
+        "DEVICE_NOT_SUPPORTED:$modelId:Downloadable models are not supported on $primaryAbi Android " +
+        "(typically an emulator on an Intel/AMD host) — LiteRT-LM's native x86 backend crashes the app. " +
+        "Use a physical device or an arm64 emulator image."
+      )
+    }
+  }
+
+  /**
    * Load a model into memory using LiteRT-LM Engine.
    * Unloads any previously loaded model first.
    * Caller is responsible for emitting onModelStateChange events.
@@ -67,6 +91,8 @@ class GemmaInferenceClient(private val context: Context) {
     topK: Int? = null,
     topP: Double? = null
   ) = mutex.withLock {
+    requireSupportedAbi(modelId)
+
     // Unload previous model if different
     if (loadedModelId != null && loadedModelId != modelId) {
       conversation?.close()
