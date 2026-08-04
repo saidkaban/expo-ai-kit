@@ -30,10 +30,10 @@
     "open:android": "open -a \"Android Studio\" example/android",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "publish:patch": "npm version patch && npm run build && npm publish",
-    "publish:minor": "npm version minor && npm run build && npm publish",
-    "publish:major": "npm version major && npm run build && npm publish",
-    "publish:only": "npm run build && npm publish"
+    "publish:patch": "npm version patch && npm publish",
+    "publish:minor": "npm version minor && npm publish",
+    "publish:major": "npm version major && npm publish",
+    "publish:only": "npm publish"
   },
   "keywords": [
     "react-native",

@@ -13,8 +13,12 @@ SDK provider** (`expo-ai-kit/ai`) — all on-device.
   Only **pure** logic is testable here — anything importing the native module won't load under jest.
 - `npm run lint` — **currently broken**: the repo's `.eslintrc.js` predates ESLint 9, which now wants
   `eslint.config.js`. Pre-existing, not caused by recent changes. Don't be alarmed by the failure.
-- Publish: `npm run publish:patch|minor|major` → `npm version X && build && publish`. `npm version`
-  needs a clean tree, so commit first. CHANGELOG headings are written for the next version.
+- Publish: `npm run publish:patch|minor|major` → `npm version X && npm publish`. The one-shot
+  compile happens in the `prepublishOnly` hook — do **not** chain `npm run build` into publish
+  scripts: `expo-module build` runs tsc in `--watch` mode on interactive terminals (non-watch only
+  when `CI`/`EXPO_NONINTERACTIVE` is set), so the chain stalls and never reaches `npm publish`.
+  `npm version` needs a clean tree, so commit first; it doesn't push — `git push --follow-tags`
+  after. CHANGELOG headings are written for the next version.
 - CI (`.github/workflows/ci.yml`) runs on every PR: **node** (ubuntu: build + test), **android**
   (ubuntu: `expo prebuild` + `:app:compileDebugKotlin`), **ios** (`macos-26`: `expo prebuild` + pods +
   `xcodebuild -sdk iphonesimulator`, no signing). The native tiers rebuild the example app from its
