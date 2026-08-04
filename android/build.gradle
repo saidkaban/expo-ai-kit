@@ -31,14 +31,31 @@ if (useManagedAndroidSdkVersions) {
   }
 }
 
+// Opt-in Android embeddings (EmbeddingGemma via MediaPipe TextEmbedder).
+// The expo-ai-kit config plugin (app.plugin.js) writes this gradle property at
+// prebuild when the app enables ["expo-ai-kit", { "androidEmbeddings": true }].
+// Off (default): the MediaPipe dependency is not added and src/embeddings is
+// not compiled — zero bytes added to the APK. On: ~+25 MB APK (arm64).
+def androidEmbeddingsEnabled = (findProperty("expoAiKit.androidEmbeddings") ?: "false").toString().toBoolean()
+
 android {
   namespace "expo.modules.aikit"
   defaultConfig {
     versionCode 1
     versionName "0.1.0"
+    // Keeps the reflection-instantiated embedding backend (and MediaPipe's
+    // JNI-called classes) alive under R8 in release builds.
+    consumerProguardFiles "consumer-rules.pro"
   }
   lintOptions {
     abortOnError false
+  }
+  sourceSets {
+    main {
+      if (androidEmbeddingsEnabled) {
+        java.srcDirs += 'src/embeddings/java'
+      }
+    }
   }
 }
 
@@ -54,4 +71,9 @@ tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
 dependencies {
   implementation "com.google.mlkit:genai-prompt:1.0.0-beta2"
   implementation "com.google.ai.edge.litertlm:litertlm-android:0.10.0"
+  if (androidEmbeddingsEnabled) {
+    // Keep in sync with tasksTextVersion in src/models.ts — it is part of the
+    // embedding model identity, so bumping this must bump the JS pin too.
+    implementation "com.google.mediapipe:tasks-text:1.0.0"
+  }
 }

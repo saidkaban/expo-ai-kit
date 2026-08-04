@@ -21,6 +21,38 @@ class ExpoAiKitModule : Module() {
     GemmaInferenceClient(appContext.reactContext ?: throw RuntimeException("React context not available"))
   }
 
+  // Embedding asset lifecycle (download/status/delete). Always available — it
+  // has no MediaPipe dependency; only the inference backend below is optional.
+  private val embeddingAssets by lazy {
+    EmbeddingAssetManager(appContext.reactContext ?: throw RuntimeException("React context not available"))
+  }
+
+  // Optional EmbeddingGemma inference backend. Present only when the app was
+  // prebuilt with ["expo-ai-kit", { "androidEmbeddings": true }], which
+  // compiles android/src/embeddings and adds the MediaPipe tasks-text
+  // dependency. Resolved by reflection so this module compiles without
+  // MediaPipe on the classpath (kept by consumer-rules.pro under R8).
+  private val embeddingBackend: EmbeddingBackend? by lazy {
+    try {
+      Class.forName("expo.modules.aikit.embeddings.EmbeddingGemmaBackend")
+        .getDeclaredConstructor(Context::class.java)
+        .newInstance(appContext.reactContext ?: throw RuntimeException("React context not available"))
+        as EmbeddingBackend
+    } catch (e: ReflectiveOperationException) {
+      null
+    } catch (e: LinkageError) {
+      null
+    }
+  }
+
+  private fun requireEmbeddingBackend(): EmbeddingBackend =
+    embeddingBackend ?: throw RuntimeException(
+      "EMBEDDINGS_NOT_ENABLED:${EmbeddingAssetManager.EMBEDDING_MODEL_ID}:" +
+        "Android embeddings are opt-in. Add [\"expo-ai-kit\", { \"androidEmbeddings\": true }] to your " +
+        "app config plugins and make a new native build (dev client / EAS — not OTA). " +
+        "Enabling adds ~25 MB to the APK; the ~184 MB EmbeddingGemma model then downloads via prepareEmbeddingModel()."
+    )
+
   private val activeStreamJobs = mutableMapOf<String, Job>()
   private val streamScope = CoroutineScope(Dispatchers.IO)
 
@@ -129,12 +161,89 @@ class ExpoAiKitModule : Module() {
     }
 
     // ==================================================================
-    // Embeddings
+    // Embeddings (EmbeddingGemma via MediaPipe TextEmbedder — opt-in)
     // ==================================================================
-    // No native embed() on Android: embeddings are iOS-only for now (Apple
-    // NLContextualEmbedding). src/index.ts#embed guards the platform in JS and
-    // throws DEVICE_NOT_SUPPORTED before reaching native, so there is nothing to
-    // register here. Android support via MediaPipe Text Embedder is planned.
+    // The inference backend is compiled in only when the app enables the
+    // config-plugin flag ["expo-ai-kit", { "androidEmbeddings": true }];
+    // otherwise the functions below throw EMBEDDINGS_NOT_ENABLED (except
+    // cancel/delete, which stay lenient so an app that later disables the flag
+    // can still reclaim the ~184 MB asset). embed() NEVER triggers a download —
+    // the asset is managed exclusively by prepare/cancel/delete. Deliberately
+    // outside the generation path: not routed through setModel(), not guarded
+    // by INFERENCE_BUSY (the backend serializes internally instead).
+
+    AsyncFunction("embed") Coroutine { texts: List<String>, task: String, language: String ->
+      // `language` is accepted and ignored: EmbeddingGemma is natively
+      // multilingual with a single vector space — there is nothing to select.
+      val backend = requireEmbeddingBackend()
+      if (!embeddingAssets.isDownloaded()) {
+        throw RuntimeException(
+          "MODEL_NOT_DOWNLOADED:${EmbeddingAssetManager.EMBEDDING_MODEL_ID}:" +
+            "The EmbeddingGemma model (~184 MB) is not on this device. " +
+            "Call prepareEmbeddingModel() first — embed() never downloads."
+        )
+      }
+      val embeddings = backend.embed(embeddingAssets.modelFile().absolutePath, texts, task)
+      // Identity (id/revision) is attached by the JS layer from its pinned
+      // artifacts; native reports the raw vectors and dimensionality.
+      mapOf(
+        "embeddings" to embeddings,
+        "dimensions" to EmbeddingAssetManager.EMBEDDING_DIMENSIONS
+      )
+    }
+
+    Function("getEmbeddingModelStatus") { language: String ->
+      requireEmbeddingBackend()
+      embeddingAssets.status()
+    }
+
+    AsyncFunction("prepareEmbeddingModel") Coroutine { url: String, sha256: String, language: String ->
+      requireEmbeddingBackend()
+      if (embeddingAssets.isDownloaded()) return@Coroutine
+      sendEvent("onModelStateChange", mapOf(
+        "modelId" to EmbeddingAssetManager.EMBEDDING_MODEL_ID,
+        "status" to "downloading"
+      ))
+      try {
+        embeddingAssets.download(url, sha256) { bytesRead, totalBytes ->
+          sendEvent("onDownloadProgress", mapOf(
+            "modelId" to EmbeddingAssetManager.EMBEDDING_MODEL_ID,
+            "progress" to if (totalBytes > 0) bytesRead.toDouble() / totalBytes else 0.0
+          ))
+        }
+        sendEvent("onModelStateChange", mapOf(
+          "modelId" to EmbeddingAssetManager.EMBEDDING_MODEL_ID,
+          "status" to "downloaded"
+        ))
+      } catch (e: Exception) {
+        // Failed or cancelled downloads clean their partial file; report what's
+        // actually on disk (a prior verified copy may remain).
+        sendEvent("onModelStateChange", mapOf(
+          "modelId" to EmbeddingAssetManager.EMBEDDING_MODEL_ID,
+          "status" to embeddingAssets.status()
+        ))
+        throw e
+      }
+    }
+
+    AsyncFunction("cancelEmbeddingModelDownload") {
+      embeddingAssets.cancelDownload()
+    }
+
+    AsyncFunction("deleteEmbeddingModel") Coroutine { ->
+      embeddingBackend?.close()
+      embeddingAssets.delete()
+      sendEvent("onModelStateChange", mapOf(
+        "modelId" to EmbeddingAssetManager.EMBEDDING_MODEL_ID,
+        "status" to "not-downloaded"
+      ))
+    }
+
+    // Only meaningful on iOS (NLContextualEmbedding catalog); the JS layer
+    // answers [] on Android without calling native. Registered for parity.
+    Function("getSupportedEmbeddingLanguages") {
+      listOf<String>()
+    }
 
     // ==================================================================
     // Model discovery
