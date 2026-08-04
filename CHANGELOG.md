@@ -1,5 +1,81 @@
 # Changelog
 
+## 0.13.0
+
+> Headline: **Android embeddings + iOS embedding languages** — `embed()` now runs on
+> Android (EmbeddingGemma 300M via MediaPipe TextEmbedder, opt-in via a config-plugin
+> flag) and speaks more than English on iOS (a `language` option selects the OS script
+> models). Plus task-typed embeddings for real RAG quality, and a model identity on
+> every result. Existing iOS calls behave the same with default options.
+
+### Added
+
+- **Android `embed()`** — EmbeddingGemma 300M via MediaPipe TextEmbedder (768 dims,
+  max sequence 512, CPU, natively multilingual — Gemma Terms of Use apply). **Opt-in**
+  via the new config plugin: `["expo-ai-kit", { "androidEmbeddings": true }]` + a new
+  native build. Off by default (zero APK bytes; typed `EMBEDDINGS_NOT_ENABLED` error);
+  on ≈ +25 MB APK. The ~184 MB model (pinned Google URL + SHA-256) downloads at runtime
+  via the lifecycle below — `embed()` itself never downloads (`MODEL_NOT_DOWNLOADED`).
+- **Embedding asset lifecycle** — `getEmbeddingModelStatus()`, `prepareEmbeddingModel({
+  language, onProgress })`, `cancelEmbeddingModelDownload()`, `deleteEmbeddingModel()`.
+  Android: SHA-256-verified atomic install; partial/corrupt fails closed. iOS: same
+  calls drive the OS-managed asset flow (per-language prefetch; cancel/delete no-op).
+- **`embed(texts, { task })`** — `'semantic-similarity'` (default) | `'retrieval-query'`
+  | `'retrieval-document'`. Maps onto EmbeddingGemma's prompt protocol on Android (use
+  the retrieval pair for RAG); semantic intent only on iOS.
+- **`embed(texts, { task, language })`** — BCP-47 `language` (default `'en'`) selects the
+  iOS `NLContextualEmbedding` script model (Latin / Cyrillic / CJK) and the tokenizer
+  language, fixing the previous `.english` hardcode. Unsupported → typed
+  `LANGUAGE_NOT_SUPPORTED` naming the language; no silent Latin fallback, no
+  auto-detection (by design). Android accepts and ignores it (single multilingual
+  vector space). Discoverability: `getSupportedEmbeddingLanguages()`.
+- **`model` identity on `EmbedResult`** — `{ id, revision }` of the exact producing
+  model (Apple identifier/revision on iOS — varies with language; pinned EmbeddingGemma
+  identity on Android — revision changes when any pin changes). **Indexes are only
+  comparable under identical model identity** — never across platforms or iOS script
+  models.
+- **AI SDK provider** — `embeddingModel()` resolves per platform and reports the real
+  `modelId` (`apple-nl-contextual` / `embedding-gemma-300m`; `EMBEDDING_MODEL_ID` is
+  now a deprecated alias). Accepts `{ task, language }` via settings or
+  `providerOptions['expo-ai-kit']`; dev-mode warning when no task is given.
+- New `ModelError` codes: `EMBEDDINGS_NOT_ENABLED`, `LANGUAGE_NOT_SUPPORTED`.
+
+### Changed
+
+- `EmbedResult` gained a required `model` field (additive for readers).
+- `embedding-gemma-300m` is a reserved id: rejected by `registerModel()`, refused by
+  `setModel()` — it's an embedding asset, not a generation model.
+
+### Fixed
+
+- **Typed error codes degraded to `UNKNOWN` under Expo SDK 56** — expo-modules-core now
+  wraps native rejections, which broke the anchored `CODE:modelId:reason` parsing for
+  every `ModelError`. The parser (pure, unit-tested `src/errors.ts`) handles both forms;
+  found and verified on a physical device.
+- **Multi-turn generation double-fed history (and broke Qwen3 entirely)** — both native
+  layers reused one LiteRT-LM conversation across calls, so the natively-accumulated
+  turns duplicated the full history the JS layer already resends (the documented
+  stateless contract), and any second `sendMessage` on Qwen3 died on a LiteRT-LM 0.10.0
+  chat-template error (`string has no method named strip`). Inference now creates a
+  fresh conversation per call on both platforms — multi-turn Qwen3 verified working on a
+  physical iPhone. This is what `generateText` tool loops and `generateObject` repair
+  turns ride on.
+- **Qwen3 defaulted to a broken GPU path** — with `backend: 'auto'`, Qwen3 SIGSEGVs
+  natively on Android (Mali) and emits degenerate output on iOS (device-verified on
+  both); CPU generates correctly. Registry entries can now pin a `preferredBackend`,
+  used when the caller doesn't pass one (explicit `setModel(id, { backend })` still
+  wins) — the three Qwen3 entries pin `'cpu'`.
+- **Android non-streaming `sendMessage` could return only the final chunk** — it
+  assumed each LiteRT-LM callback carries accumulated text, but the runtime delivers
+  deltas (device-verified: multi-token answers came back as their last fragment, e.g.
+  "REE" for "THREE"). It now uses the same delta/accumulated detection as streaming.
+- **Thinking-model `<think>` blocks polluted results** — Qwen3's chain-of-thought
+  passed through into answers and could derail `generateObject`/`generateText` parsing
+  (think text can look like JSON or a tool call). The orchestrated paths now split it
+  off via the new exported pure helper `stripThinking(text)`; the AI SDK provider
+  surfaces it as proper spec `reasoning` parts. The raw `sendMessage`/`streamMessage`
+  primitives stay raw.
+
 ## 0.12.1
 
 > Headline: **Android emulator crash fixed** — activating a downloadable model on an

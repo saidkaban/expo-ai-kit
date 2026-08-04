@@ -10,9 +10,10 @@ Runs **Apple Foundation Models** (iOS 26+), **ML Kit** (Android), and downloadab
 — with streaming, structured output, tool calling, **embeddings & on-device RAG**,
 cancellation, and runtime model switching, all on-device.
 
-**New in 0.11:** a [**Vercel AI SDK provider**](#vercel-ai-sdk) — use `generateText`,
-`streamText`, and `embed` from the [AI SDK](https://ai-sdk.dev) with on-device models
-via `expo-ai-kit/ai`. Same `useChat`-style code you'd write for OpenAI, no API key.
+**New in 0.13:** [**embeddings on Android**](#embeddings--rag) — EmbeddingGemma 300M via
+MediaPipe TextEmbedder (opt-in) closes the platform gap — plus embedding `task` types for
+real RAG quality, an iOS `language` option (Latin / Cyrillic / CJK script models), and a
+model identity on every result.
 
 ## Install
 
@@ -113,12 +114,12 @@ import { embed, chunkText, createVectorStore, sendMessage } from 'expo-ai-kit';
 
 // 1. Index your document once: split → embed → store
 const chunks = chunkText(document);                 // overlapping, sentence-aware chunks
-const { embeddings } = await embed(chunks);          // one vector per chunk
+const { embeddings } = await embed(chunks, { task: 'retrieval-document' }); // one vector per chunk
 const store = createVectorStore<{ text: string }>();
 store.addMany(chunks.map((text, i) => ({ id: `c${i}`, vector: embeddings[i], metadata: { text } })));
 
 // 2. At query time: embed the question, retrieve the top matches, answer from them
-const { embeddings: [q] } = await embed([question]);
+const { embeddings: [q] } = await embed([question], { task: 'retrieval-query' });
 const context = store.search(q, { topK: 4 }).map((h) => h.metadata!.text).join('\n\n');
 
 const { text } = await sendMessage([
@@ -127,11 +128,59 @@ const { text } = await sendMessage([
 ]);
 ```
 
-`embed()` is backed by Apple's `NLContextualEmbedding` — a **zero-download, OS-maintained**
-model (iOS 17+, works even without Apple Intelligence). **iOS-only for now**; on Android it
-throws `DEVICE_NOT_SUPPORTED` (MediaPipe support is planned). The toolkit —
-`chunkText`, `cosineSimilarity`, and the `createVectorStore` (add / search top-k / `toJSON`
-for persistence) — is pure JS and works on **both platforms with any vector source**.
+`options.task` says what the vectors are for — `'semantic-similarity'` (default),
+`'retrieval-query'`, or `'retrieval-document'`. Use the retrieval pair for RAG as above:
+EmbeddingGemma (Android) is task-conditioned, so it measurably improves retrieval. iOS
+accepts it as semantic intent only.
+
+**Backends** (one per platform — see the model-identity rule below):
+
+- **iOS (17+):** Apple's `NLContextualEmbedding` — **zero-download, OS-maintained** script
+  models (works even without Apple Intelligence). `options.language` (BCP-47, default
+  `'en'`) selects the script model (Latin / Cyrillic / CJK). Languages supported on a
+  real iOS 27 device: bg, cs, da, de, en, es, fi, fr, hr, hu, id, it, ja, kk, ko, nb,
+  nl, pl, pt, ro, ru, sk, sv, tr, uk, vi, zh-Hans, zh-Hant — call
+  `getSupportedEmbeddingLanguages()` for the running device's authoritative list. An
+  unsupported language throws a typed `LANGUAGE_NOT_SUPPORTED` error — never a silent
+  fall-back to the Latin model.
+- **Android:** **EmbeddingGemma 300M** via MediaPipe TextEmbedder — 768 dimensions, max
+  sequence 512 tokens, CPU, natively **multilingual in a single vector space** (so
+  `language` is accepted and ignored — there's nothing to select). **Opt-in:**
+
+  ```json
+  // app.json
+  { "expo": { "plugins": [["expo-ai-kit", { "androidEmbeddings": true }]] } }
+  ```
+
+  Off by default (zero bytes added to your APK; `embed()` throws a typed
+  `EMBEDDINGS_NOT_ENABLED` error). Enabling adds **~25 MB to the APK** (arm64) and
+  requires a **new native build** (dev client / EAS — not OTA). The model itself is a
+  **~184 MB** Google-hosted download stored per-app — unlike the iOS assets, it's *not*
+  OS-managed:
+
+  ```tsx
+  import { getEmbeddingModelStatus, prepareEmbeddingModel } from 'expo-ai-kit';
+
+  const { status, sizeBytes } = await getEmbeddingModelStatus();
+  if (status !== 'downloaded') {
+    await prepareEmbeddingModel({ onProgress: (p) => console.log(p) }); // SHA-256 verified
+  }
+  // embed() itself NEVER downloads — it throws MODEL_NOT_DOWNLOADED until prepared.
+  // cancelEmbeddingModelDownload() / deleteEmbeddingModel() round out the lifecycle.
+  ```
+
+  EmbeddingGemma ships under the **Gemma Terms of Use** — review them before shipping.
+
+**Model identity — the index-compatibility rule.** Every result carries
+`model: { id, revision }` for the exact model that produced it. **Vectors and persisted
+indexes are only comparable under identical model identity** — never across platforms,
+never across iOS script models. Store it next to any persisted index and rebuild when it
+changes.
+
+The toolkit — `chunkText`, `cosineSimilarity`, and the `createVectorStore` (add / search
+top-k / `toJSON` for persistence) — is pure JS and works on **both platforms with any
+vector source**. `embed()` runs outside the `INFERENCE_BUSY` generation guard, so it can
+run alongside generation.
 
 ## Vercel AI SDK
 
@@ -162,9 +211,9 @@ const result = streamText({
 });
 for await (const chunk of result.textStream) setText((t) => t + chunk);
 
-// Embeddings (iOS) — the same NLContextualEmbedding behind embed()
+// Embeddings — Apple NLContextualEmbedding on iOS, EmbeddingGemma on Android
 const { embedding } = await embed({
-  model: expoAiKit.embeddingModel(),
+  model: expoAiKit.embeddingModel(undefined, { task: 'retrieval-query' }),
   value: 'sunny day at the beach',
 });
 ```
@@ -182,7 +231,10 @@ the core `generateText`/`generateObject`, so behavior is identical either way.
 - **Streaming buffers when tools or JSON output are requested** — the tool-call envelope
   has to be parsed whole, not leaked as text deltas. Plain-text streaming is token-by-token.
 - **No token usage numbers** (on-device runtimes don't report them) and no image/file inputs
-  (vision is on the roadmap). `embeddingModel()` is iOS-only, like `embed()`.
+  (vision is on the roadmap). `embeddingModel()` reports the platform's real model id
+  (`apple-nl-contextual` / `embedding-gemma-300m`); on Android it needs the
+  `androidEmbeddings` config-plugin flag plus a `prepareEmbeddingModel()` download, like
+  `embed()`.
 - React Native needs the AI SDK's usual polyfills (e.g. `web-streams-polyfill`,
   `structuredClone`, `TextEncoder`) — see the docs for a copy-paste setup.
 
@@ -263,7 +315,9 @@ file persists on disk, so its `'downloaded'` status survives restarts once re-re
 ## API
 
 Inference: `isAvailable`, `sendMessage`, `streamMessage`, `generateObject`, `generateText`.
-Embeddings & RAG: `embed`, `chunkText`, `cosineSimilarity`, `createVectorStore`.
+Embeddings & RAG: `embed`, `getEmbeddingModelStatus`, `prepareEmbeddingModel`,
+`cancelEmbeddingModelDownload`, `deleteEmbeddingModel`, `getSupportedEmbeddingLanguages`,
+`chunkText`, `cosineSimilarity`, `createVectorStore`.
 AI SDK provider (`expo-ai-kit/ai`): `expoAiKit`, `createExpoAiKit`.
 Models: `getBuiltInModels`, `getDownloadableModels`, `getDownloadedModels`, `getRecommendedModel`,
 `downloadModel`, `cancelDownload`, `deleteModel`, `setModel`, `unloadModel`, `getActiveModel`.

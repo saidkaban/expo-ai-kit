@@ -38,9 +38,15 @@ SDK provider** (`expo-ai-kit/ai`) — all on-device.
   `generateText`) must go through this path; don't add a parallel route around it.
 - **Stateless models.** Full conversation history is passed every call. Sampling (temperature/topK/…)
   is fixed at `setModel()` time, not per-call — LiteRT-LM builds the sampler at conversation creation.
+  Since 0.13.0 both native layers create a **fresh LiteRT-LM conversation per inference call** (config
+  stored at load): reusing one would double-feed history against this contract and trips a LiteRT-LM
+  0.10.0 template bug on Qwen3 ("strip") at turn 2. Don't "optimize" it back to a shared conversation.
 - **Native error contract.** Native formats failures as `"CODE:modelId:reason"`; the JS layer
-  (`toModelError`) parses that into a typed `ModelError` with `.code`/`.modelId`. Keep both sides in
-  sync with the `ModelErrorCode` union in `src/types.ts`.
+  (`toModelError` → pure `src/errors.ts#parseNativeErrorMessage`, unit-tested) parses that into a
+  typed `ModelError` with `.code`/`.modelId`. The parser also tolerates expo-modules-core's SDK-56+
+  exception wrapper ("Call to function … has been rejected. → Caused by: …CODE:modelId:reason") —
+  don't regress to an anchored-only match. Keep both sides in sync with the `ModelErrorCode` union
+  in `src/types.ts`.
 - **Dual routing.** Built-in models (Apple FM / ML Kit — zero download) vs downloadable (Gemma via
   LiteRT-LM) are routed in the native layer at call time. `setModel` is the sole gatekeeper of model
   validity; `sendMessage` never re-checks.
@@ -55,6 +61,17 @@ SDK provider** (`expo-ai-kit/ai`) — all on-device.
 - `src/rag.ts` — pure, dep-free RAG toolkit: `chunkText`, `cosineSimilarity`, and an in-memory
   `createVectorStore` (add / top-k `search` / `toJSON` snapshot). No native import → unit-tested.
   `embed()` itself lives in `index.ts` (it's the one native call).
+- `src/embedding.ts` — pure helpers for `embed()` options: BCP-47 `normalizeLanguageTag` and
+  `EMBEDDING_TASKS` validation. No native import → unit-tested (`embedding.test.ts`).
+- `src/errors.ts` — pure `parseNativeErrorMessage` for the native error contract (tolerates the
+  expo-modules-core SDK-56+ exception wrapper). Unit-tested (`errors.test.ts`).
+- `src/thinking.ts` — pure `stripThinking` splitting `<think>…</think>` reasoning from answers
+  (Qwen3-style models). Applied in the generateObject/generateText loops and the AI SDK provider
+  (spec `reasoning` parts); the raw sendMessage/streamMessage primitives stay raw. Unit-tested.
+- `app.plugin.js` — expo config plugin (plain CJS, resolved from the package root). One option:
+  `androidEmbeddings` (default false) → writes the `expoAiKit.androidEmbeddings` gradle property
+  at prebuild, which android/build.gradle reads to add the MediaPipe dep + compile
+  `android/src/embeddings`. Uses `expo/config-plugins` from the consuming app — no runtime dep.
 - `src/ai/` — Vercel AI SDK provider (subpath export `expo-ai-kit/ai`, root shims `ai.js`/`ai.d.ts`).
   `convert.ts` is the pure, unit-tested mapping layer (LanguageModelV3 call options ↔ our protocol);
   `index.ts` is the thin provider over `sendMessage`/`streamMessage`/`embed`. Only **type** imports
@@ -64,7 +81,11 @@ SDK provider** (`expo-ai-kit/ai`) — all on-device.
   in-memory custom store, `fetchModelMetadata` to pull SHA/size from HF). Adding a model is
   registry-only — native loads any non-built-in id generically through LiteRT-LM.
 - `ios/` — Swift. Apple FM + Gemma via vendored LiteRT-LM (`ios/Vendor/LiteRTLM/`; the C xcframework
-  is fetched on `pod install`). `android/` — Kotlin. ML Kit + Gemma via the LiteRT-LM gradle dep.
+  is fetched on `pod install`). `android/` — Kotlin. ML Kit + Gemma via the LiteRT-LM gradle dep;
+  embeddings split across `src/main` (module wiring, `EmbeddingAssetManager`, `EmbeddingBackend`
+  interface, shared `DownloadUtil` — no MediaPipe imports, always compiled) and the **optional**
+  `src/embeddings` source set (`EmbeddingGemmaBackend`, MediaPipe TextEmbedder — compiled only when
+  the config-plugin flag sets the `expoAiKit.androidEmbeddings` gradle property).
   x86/x86_64 Android (Intel/AMD-host emulators) is fail-fast guarded in
   `GemmaInferenceClient.loadModel` → `DEVICE_NOT_SUPPORTED`: LiteRT-LM ships an x86_64 jni lib but
   its x86 backend SIGSEGVs (upstream #2799/#2159, still open at 0.15.0 — bumping the dep doesn't
@@ -99,18 +120,41 @@ or schema-invalid args are re-prompted up to `maxRepairAttempts` (default 2), th
 the proposed call (human-in-the-loop gate). Native constrained decoding can slot in behind the same
 signature later (see substrate facts below).
 
-## Embeddings & RAG (0.10.0)
+## Embeddings & RAG (0.10.0, cross-platform + task/language in 0.13.0)
 
-`embed(texts)` (`src/index.ts`) returns `{ embeddings, dimensions }` — one vector per input. It's the
-**one native call** of this feature, and it's **iOS-only**: backed by Apple's `NLContextualEmbedding`
-(NaturalLanguage, iOS 17+), a zero-download OS-maintained model that mean-pools per-token vectors into
-a sentence vector (`ios/ExpoAiKitModule.swift`). This fits the wedge — zero app-size cost, OS-maintained,
-and works even where Apple Intelligence isn't enabled. Android `embed()` throws `DEVICE_NOT_SUPPORTED`
-from the JS layer (`src/index.ts` guards the platform before reaching native — there is **no** native
-`embed` on Android; the Kotlin module deliberately doesn't register one). **EmbeddingGemma was the original
-plan but isn't wireable** — the vendored LiteRT-LM C bindings expose only generation, no embedding entry
-point — so Android's real path is MediaPipe Text Embedder (a follow-up). `embed()` is deliberately
-**outside the single-flight `INFERENCE_BUSY` guard** (embeddings don't use the generation KV-cache).
+`embed(texts, { task, language })` (`src/index.ts`) returns `{ embeddings, dimensions, model }` —
+one vector per input plus the **model identity** `{ id, revision }` (vectors/persisted indexes are
+only comparable under identical identity — never across platforms or iOS script models). `task`
+(`'semantic-similarity'` default | `'retrieval-query'` | `'retrieval-document'`) and `language`
+(BCP-47, default `'en'`, normalized by pure `src/embedding.ts`) ride one native call:
+
+- **iOS**: Apple `NLContextualEmbedding` (iOS 17+, OS-managed script models — Latin/Cyrillic/CJK).
+  `language` resolves the model (full tag → lang-script → bare lang; unsupported →
+  `LANGUAGE_NOT_SUPPORTED` naming the language, **never** a silent Latin fallback; auto-detection
+  deliberately rejected — mixed batches would mix vector spaces) and feeds the tokenizer. `task`
+  is semantic intent only. Identity = Apple modelIdentifier/revision (varies with language).
+  `getSupportedEmbeddingLanguages()` enumerates the catalog.
+- **Android (0.13.0)**: EmbeddingGemma 300M via MediaPipe TextEmbedder
+  (`com.google.mediapipe:tasks-text:1.0.0`, Google Maven) — 768 dims as-is, max seq 512, CPU,
+  natively multilingual (single vector space ⇒ `language` accepted and **ignored**). `task` maps to
+  `TextFormatContext` (taskType + role: SEMANTIC_SIMILARITY/QUERY, RETRIEVAL_QUERY/QUERY,
+  RETRIEVAL_DOCUMENT/DOCUMENT, no title) — the `'tfc1'` protocol pin. **Opt-in**: config plugin
+  `{ androidEmbeddings: true }` → gradle property → build.gradle adds the dep + compiles
+  `android/src/embeddings` (the `EmbeddingGemmaBackend`, reached by reflection behind the
+  `EmbeddingBackend` interface; kept by consumer-rules.pro). Off = zero APK bytes and
+  `EMBEDDINGS_NOT_ENABLED`. On ≈ +25 MB APK. The **~184 MB** model asset (pinned URL + SHA-256 in
+  `src/models.ts` `ANDROID_EMBEDDING_MODEL`) lives in `files/embeddings/`, managed ONLY by
+  `prepareEmbeddingModel` / `getEmbeddingModelStatus` / `cancelEmbeddingModelDownload` /
+  `deleteEmbeddingModel` (`EmbeddingAssetManager` + shared `DownloadUtil`; atomic
+  temp→verify→rename, fails closed). **`embed()` never downloads** (`MODEL_NOT_DOWNLOADED`).
+  Identity revision = `composeAndroidEmbeddingRevision` over the pins — `tasksTextVersion` there
+  MUST match android/build.gradle, and `'tfc1'` must be bumped if the task mapping changes.
+  It is an embedding asset, **not** a generation model: id reserved in `registerModel`, refused by
+  `setModel`, absent from `getDownloadableModels`.
+
+`embed()` stays deliberately **outside the single-flight `INFERENCE_BUSY` guard** (no generation
+KV-cache); Android serializes embeds behind a backend-internal mutex (TextEmbedder thread-safety is
+undocumented), so concurrent calls queue rather than reject.
 
 The retrieval **toolkit lives in `src/rag.ts`** — pure, dep-free, unit-tested, both platforms, and works
 with **any** vector source (built-in `embed`, a cloud embedder, your own module): `chunkText` (overlapping,
@@ -167,15 +211,9 @@ zero-download OS path that ExecuTorch-based libraries structurally cannot offer.
   (0.7.0); expanded model registry — Qwen3 + Phi-4 Mini, `license` field (0.8.0); bring-your-own-model
   — `registerModel` / `fetchModelMetadata` (0.9.0); embeddings & on-device RAG — `embed` (iOS) +
   `chunkText`/`cosineSimilarity`/`createVectorStore` toolkit (0.10.0); Vercel AI SDK provider —
-  `expo-ai-kit/ai` (0.11.0).
-- **Next (Tier 1) — open follow-up, do when there's time:** Android `embed()` via MediaPipe Text
-  Embedder. `embed()` shipped iOS-only in 0.10.0, so this is the known cross-platform gap to close.
-  Why MediaPipe: EmbeddingGemma can't ride the vendored LiteRT-LM bindings (they expose only
-  generation — see the embeddings section), and Android has no zero-download OS embedder like Apple's
-  `NLContextualEmbedding`. The JS toolkit (`chunkText`/`cosineSimilarity`/`createVectorStore`) and the
-  `embed()` signature already work on both platforms, so this is purely the Android native side: add the
-  MediaPipe Text Embedder dep, add an `embed` `AsyncFunction` to the Kotlin module (it currently has
-  none — the JS layer guards the platform), and drop the iOS-only platform guard in `src/index.ts#embed`.
+  `expo-ai-kit/ai` (0.11.0); **Android `embed()`** — EmbeddingGemma 300M via MediaPipe TextEmbedder
+  (opt-in config-plugin flag) + `task`/`language` options + model identity (0.13.0 — see the
+  embeddings section; device-level gates like golden-vector parity still need a physical arm64 run).
 - **Tier 2:** stateful session with KV-cache reuse (perf/battery win); vision input; voice (ASR/TTS).
 - **Tier 3:** download hardening (resumable / background / wifi-only).
 
