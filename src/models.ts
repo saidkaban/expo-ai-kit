@@ -6,7 +6,7 @@
  * each entry with on-device status from the native layer.
  */
 
-import type { DownloadableModel } from './types';
+import type { DownloadableModel, InferenceBackend } from './types';
 
 export type ModelRegistryEntry = {
   /** Unique model identifier used in setModel/downloadModel */
@@ -42,6 +42,14 @@ export type ModelRegistryEntry = {
    * check their obligations before shipping a model to users.
    */
   license: string;
+  /**
+   * Backend setModel() uses when the caller doesn't pass one. Set to 'cpu' for
+   * models whose GPU path is broken in the current runtime (device-verified:
+   * Qwen3 on LiteRT-LM 0.10.0 SIGSEGVs on Android GPU and emits degenerate
+   * output on iOS GPU; CPU is correct on both). An explicit
+   * `setModel(id, { backend })` always wins over this hint.
+   */
+  preferredBackend?: InferenceBackend;
 };
 
 export const MODEL_REGISTRY: ModelRegistryEntry[] = [
@@ -76,7 +84,10 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     license: 'Gemma',
   },
   // --- Qwen3 (Apache-2.0) — official litert-community builds. A size ladder
-  // from a sub-GB model that runs anywhere up to a 4B that rivals Gemma E4B. ---
+  // from a sub-GB model that runs anywhere up to a 4B that rivals Gemma E4B.
+  // preferredBackend 'cpu': Qwen3's GPU path is broken in LiteRT-LM 0.10.0 —
+  // device-verified as a native SIGSEGV on Android (Mali) and degenerate "!!!"
+  // output on iOS (A19) with GPU/auto, while CPU generates correctly on both. ---
   {
     id: 'qwen3-0.6b',
     name: 'Qwen3 0.6B',
@@ -91,6 +102,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     minRamBytes: 1_000_000_000, // 1GB — tiny; runs on virtually any modern device
     supportedPlatforms: ['ios', 'android'],
     license: 'Apache-2.0',
+    preferredBackend: 'cpu',
   },
   {
     id: 'qwen3-1.7b',
@@ -106,6 +118,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     minRamBytes: 2_000_000_000, // 2GB
     supportedPlatforms: ['ios', 'android'],
     license: 'Apache-2.0',
+    preferredBackend: 'cpu',
   },
   {
     id: 'qwen3-4b',
@@ -121,6 +134,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     minRamBytes: 3_000_000_000, // 3GB — 4B params need more headroom than the similarly-sized E2B
     supportedPlatforms: ['ios', 'android'],
     license: 'Apache-2.0',
+    preferredBackend: 'cpu',
   },
   // --- Phi-4 Mini (MIT) — strong reasoning; q8 build, the heaviest downloadable. ---
   {
@@ -140,6 +154,80 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Android embedding model asset (EmbeddingGemma via MediaPipe TextEmbedder).
+//
+// This is deliberately NOT a MODEL_REGISTRY entry: it is an embedding asset,
+// not a generation model — setModel() cannot activate it and it never appears
+// in getDownloadableModels(). Its lifecycle is prepareEmbeddingModel() /
+// getEmbeddingModelStatus() / cancelEmbeddingModelDownload() /
+// deleteEmbeddingModel(); embed() itself NEVER triggers a download.
+//
+// Every value here is a pin. The URL and SHA-256 point at the official
+// Google-hosted MediaPipe bundle (int4/int8 quantized, 768-dim output, max
+// sequence 512, CPU). `tasksTextVersion` MUST match the
+// com.google.mediapipe:tasks-text dependency in android/build.gradle, and
+// `formatContextProtocol` names the prompt-template contract TextEmbedder
+// applies for EmbeddingTask values. The composed `revision` therefore changes
+// whenever ANY pinned artifact changes — which is exactly the signal to rebuild
+// persisted vector indexes (see EmbeddingModelIdentity).
+// ---------------------------------------------------------------------------
+
+/** Pinned facts about the Android embedding model asset. */
+export type AndroidEmbeddingModelAsset = {
+  /** Asset id (reserved — rejected by registerModel, refused by setModel). */
+  id: string;
+  /** Human-readable name. */
+  name: string;
+  /** Official Google-hosted download URL for the MediaPipe .task bundle. */
+  downloadUrl: string;
+  /** SHA-256 of the bundle, verified after download (fails closed on mismatch). */
+  sha256: string;
+  /** Exact bundle size in bytes (~184 MB). */
+  sizeBytes: number;
+  /** Output dimensionality — vectors always have exactly this many values. */
+  dimensions: number;
+  /** Maximum input sequence length in tokens; longer inputs are truncated. */
+  maxSequenceLength: number;
+  /** Pinned com.google.mediapipe:tasks-text version (must match android/build.gradle). */
+  tasksTextVersion: string;
+  /** Version tag of the task → TextFormatContext prompt-template mapping. */
+  formatContextProtocol: string;
+  /**
+   * License the weights are distributed under. EmbeddingGemma ships under the
+   * Gemma Terms of Use — Google-hosted anonymous download does not void the
+   * terms for end users; review them before shipping.
+   */
+  license: string;
+};
+
+export const ANDROID_EMBEDDING_MODEL: AndroidEmbeddingModelAsset = {
+  id: 'embedding-gemma-300m',
+  name: 'EmbeddingGemma 300M',
+  downloadUrl:
+    'https://storage.googleapis.com/mediapipe-models/text_embedder/embedding_gemma/int4int8/1/embedding_gemma.task',
+  sha256: '913b7a1edc7c7c3d1da3979ec1d0648ed9e0a370f181bb59ab177ca4b97707ad',
+  sizeBytes: 183_816_181, // exact (GCS content-length)
+  dimensions: 768,
+  maxSequenceLength: 512,
+  tasksTextVersion: '1.0.0', // keep in sync with android/build.gradle
+  formatContextProtocol: 'tfc1',
+  license: 'Gemma',
+};
+
+/**
+ * Compose the Android embedding revision string from its pinned artifacts.
+ * Pure — unit-tested to change when any input pin changes.
+ */
+export function composeAndroidEmbeddingRevision(
+  asset: Pick<
+    AndroidEmbeddingModelAsset,
+    'tasksTextVersion' | 'sha256' | 'dimensions' | 'formatContextProtocol'
+  >
+): string {
+  return `${asset.tasksTextVersion}-${asset.sha256.slice(0, 12)}-d${asset.dimensions}-${asset.formatContextProtocol}`;
+}
+
+// ---------------------------------------------------------------------------
 // Custom (developer-registered) models — "bring your own model".
 //
 // The built-in MODEL_REGISTRY above is curated: each entry's SHA256 is pinned by
@@ -153,8 +241,11 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
 
 const customModels = new Map<string, ModelRegistryEntry>();
 
-/** Ids owned by the native built-in backends; not valid for custom models. */
-const RESERVED_MODEL_IDS = new Set(['apple-fm', 'mlkit']);
+/**
+ * Ids owned by the native built-in backends, plus the embedding model asset;
+ * not valid for custom models.
+ */
+const RESERVED_MODEL_IDS = new Set(['apple-fm', 'mlkit', ANDROID_EMBEDDING_MODEL.id]);
 
 const SHA256_RE = /^[a-f0-9]{64}$/i;
 
@@ -192,6 +283,12 @@ export function validateModelEntry(entry: ModelRegistryEntry): string[] {
   if (!entry.license || typeof entry.license !== 'string') {
     errors.push('license is required (e.g. "Apache-2.0", "MIT")');
   }
+  if (
+    entry.preferredBackend !== undefined &&
+    !['auto', 'gpu', 'cpu'].includes(entry.preferredBackend)
+  ) {
+    errors.push('preferredBackend must be "auto", "gpu", or "cpu" when provided');
+  }
   return errors;
 }
 
@@ -221,7 +318,7 @@ export function registerModel(entry: ModelRegistryEntry): void {
     throw new Error(`registerModel: invalid model entry — ${errors.join('; ')}`);
   }
   if (RESERVED_MODEL_IDS.has(entry.id) || MODEL_REGISTRY.some((m) => m.id === entry.id)) {
-    throw new Error(`registerModel: "${entry.id}" is a built-in model id; choose a different id`);
+    throw new Error(`registerModel: "${entry.id}" is a reserved model id; choose a different id`);
   }
   // Clone so later external mutation of the caller's object can't corrupt the registry.
   customModels.set(entry.id, { ...entry, supportedPlatforms: [...entry.supportedPlatforms] });

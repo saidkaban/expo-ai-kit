@@ -7,6 +7,7 @@ import {
   getAllModels,
   getRegistryEntry,
   filterDownloadedModels,
+  ANDROID_EMBEDDING_MODEL,
   MODEL_REGISTRY,
   type ModelRegistryEntry,
 } from '../models';
@@ -124,11 +125,31 @@ describe('registerModel / getRegistryEntry', () => {
   });
 
   it('throws when colliding with a built-in curated id', () => {
-    expect(() => registerModel(validEntry({ id: 'gemma-e2b' }))).toThrow(/built-in model id/);
+    expect(() => registerModel(validEntry({ id: 'gemma-e2b' }))).toThrow(/reserved model id/);
   });
 
   it('throws when colliding with a reserved native id', () => {
-    expect(() => registerModel(validEntry({ id: 'apple-fm' }))).toThrow(/built-in model id/);
+    expect(() => registerModel(validEntry({ id: 'apple-fm' }))).toThrow(/reserved model id/);
+  });
+
+  it('throws when colliding with the embedding model asset id', () => {
+    expect(() => registerModel(validEntry({ id: ANDROID_EMBEDDING_MODEL.id }))).toThrow(
+      /reserved model id/
+    );
+  });
+
+  it('accepts a valid preferredBackend and rejects an invalid one', () => {
+    expect(validateModelEntry(validEntry({ preferredBackend: 'cpu' }))).toEqual([]);
+    expect(validateModelEntry(validEntry())).toEqual([]);
+    expect(
+      validateModelEntry(validEntry({ preferredBackend: 'npu' as never }))
+    ).toContain('preferredBackend must be "auto", "gpu", or "cpu" when provided');
+  });
+
+  it('pins qwen3 models to the CPU backend (GPU path broken in LiteRT-LM 0.10.0)', () => {
+    for (const id of ['qwen3-0.6b', 'qwen3-1.7b', 'qwen3-4b']) {
+      expect(getRegistryEntry(id)?.preferredBackend).toBe('cpu');
+    }
   });
 
   it('re-registering the same id overwrites it', () => {

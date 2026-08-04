@@ -348,6 +348,70 @@ export type GenerateTextResult = {
 // ============================================================================
 
 /**
+ * What the embedding will be used for. EmbeddingGemma (Android) is trained with
+ * task-specific prompt prefixes, so query and document vectors live in matched
+ * sub-spaces — telling it the task measurably improves retrieval quality.
+ *
+ * - `'semantic-similarity'` (default): symmetric text-to-text comparison.
+ * - `'retrieval-query'`: the *question* side of a RAG lookup.
+ * - `'retrieval-document'`: the *corpus* side — use when indexing chunks.
+ *
+ * On Android this maps onto MediaPipe's `TextFormatContext`
+ * (SEMANTIC_SIMILARITY / RETRIEVAL_QUERY / RETRIEVAL_DOCUMENT). On iOS,
+ * `NLContextualEmbedding` has no task conditioning, so the value is accepted as
+ * semantic intent only (no effect on the vectors). Embed queries and documents
+ * with their matching task types for best Android retrieval quality.
+ */
+export type EmbeddingTask = 'semantic-similarity' | 'retrieval-query' | 'retrieval-document';
+
+/**
+ * Options for {@link embed}.
+ */
+export type EmbedOptions = {
+  /** What the vectors are for. Defaults to `'semantic-similarity'`. See {@link EmbeddingTask}. */
+  task?: EmbeddingTask;
+  /**
+   * BCP-47 language tag of the input texts. Defaults to `'en'`.
+   *
+   * - **iOS**: selects which `NLContextualEmbedding` script model to load
+   *   (Latin / Cyrillic / CJK) and is passed through to the tokenizer. If no
+   *   on-device model supports the language, embed() throws a typed
+   *   LANGUAGE_NOT_SUPPORTED {@link ModelError} naming the rejected language —
+   *   it never silently falls back to the Latin model. See
+   *   `getSupportedEmbeddingLanguages()`.
+   * - **Android**: accepted and ignored — EmbeddingGemma is natively
+   *   multilingual with a single vector space, so there is nothing to select.
+   *
+   * There is deliberately no auto-detection: a mixed batch would silently mix
+   * vector spaces and break the one-model-identity-per-result contract.
+   */
+  language?: string;
+};
+
+/**
+ * Identity of the exact embedding model that produced a result.
+ *
+ * **Vectors and persisted indexes are only comparable under identical model
+ * identity** — never across platforms, and never across iOS script models.
+ * Store `id` + `revision` alongside any persisted index and rebuild the index
+ * when they change.
+ */
+export type EmbeddingModelIdentity = {
+  /**
+   * Model id — the Apple NL model identifier on iOS (varies with `language`),
+   * or `'embedding-gemma-300m'` on Android.
+   */
+  id: string;
+  /**
+   * Revision string. On iOS this is the OS asset revision. On Android it
+   * encodes every pinned artifact — tasks-text version, model SHA-256 prefix,
+   * dimensions, and the format-context protocol — so it changes whenever any
+   * of them changes.
+   */
+  revision: string;
+};
+
+/**
  * Result of {@link embed}.
  */
 export type EmbedResult = {
@@ -359,6 +423,32 @@ export type EmbedResult = {
   embeddings: number[][];
   /** Dimensionality of every vector (all vectors in one result share this). */
   dimensions: number;
+  /** Which exact model produced these vectors. See {@link EmbeddingModelIdentity}. */
+  model: EmbeddingModelIdentity;
+};
+
+/**
+ * Lifecycle status of the embedding model asset.
+ *
+ * A deliberate subset of {@link DownloadableModelStatus}: embedding models are
+ * loaded lazily inside embed(), so there is no exposed 'loading'/'ready' state.
+ */
+export type EmbeddingModelAssetStatus = 'not-downloaded' | 'downloading' | 'downloaded';
+
+/**
+ * Readiness of the embedding model, from `getEmbeddingModelStatus()`.
+ */
+export type EmbeddingModelState = {
+  /** Whether the model asset is on-device. */
+  status: EmbeddingModelAssetStatus;
+  /**
+   * Download size in bytes. On Android this is the pinned EmbeddingGemma bundle
+   * size (~184 MB, stored per-app). On iOS the asset is OS-managed and its size
+   * is not exposed — reported as 0.
+   */
+  sizeBytes: number;
+  /** Identity of the model this status refers to. */
+  model: EmbeddingModelIdentity;
 };
 
 // ============================================================================
@@ -441,6 +531,18 @@ export type ModelErrorCode =
   | 'INFERENCE_CANCELLED'
   | 'MODEL_LOAD_FAILED'
   | 'DEVICE_NOT_SUPPORTED'
+  /**
+   * Android: the app was built without the embedding backend. Enable it with
+   * the config plugin — `["expo-ai-kit", { "androidEmbeddings": true }]` — and
+   * make a new native build (dev client / EAS; not OTA).
+   */
+  | 'EMBEDDINGS_NOT_ENABLED'
+  /**
+   * iOS: no on-device embedding model supports the requested language. The
+   * message names the rejected language; embed() never silently falls back to
+   * the Latin model.
+   */
+  | 'LANGUAGE_NOT_SUPPORTED'
   | 'UNKNOWN';
 
 /**

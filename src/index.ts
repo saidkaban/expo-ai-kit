@@ -12,7 +12,6 @@ import {
   DownloadableModel,
   GenerationConfig,
   ModelError,
-  ModelErrorCode,
   SetModelOptions,
   JSONSchema,
   GenerateObjectOptions,
@@ -22,7 +21,9 @@ import {
   ToolCall,
   ToolResult,
   StepResult,
+  EmbedOptions,
   EmbedResult,
+  EmbeddingModelState,
 } from './types';
 import {
   buildSchemaInstruction,
@@ -38,11 +39,23 @@ import {
   buildToolArgsRepair,
   formatToolResult,
 } from './tools';
-import { filterDownloadedModels, getAllModels, getRegistryEntry } from './models';
+import {
+  ANDROID_EMBEDDING_MODEL,
+  composeAndroidEmbeddingRevision,
+  filterDownloadedModels,
+  getAllModels,
+  getRegistryEntry,
+} from './models';
+import { isValidEmbeddingTask, EMBEDDING_TASKS, normalizeLanguageTag } from './embedding';
+import { parseNativeErrorMessage } from './errors';
+import { stripThinking } from './thinking';
 
 export * from './types';
 export * from './models';
 export * from './rag';
+export * from './embedding';
+export * from './errors';
+export * from './thinking';
 
 const DEFAULT_SYSTEM_PROMPT =
   'You are a helpful, friendly assistant. Answer the user directly and concisely.';
@@ -55,36 +68,22 @@ function generateSessionId(): string {
   return `gen_${Date.now()}_${++streamIdCounter}`;
 }
 
-// The set of codes the native layer encodes in error messages as "CODE:modelId:reason".
-const KNOWN_ERROR_CODES = new Set<ModelErrorCode>([
-  'MODEL_NOT_FOUND',
-  'MODEL_NOT_DOWNLOADED',
-  'DOWNLOAD_FAILED',
-  'DOWNLOAD_CORRUPT',
-  'DOWNLOAD_STORAGE_FULL',
-  'DOWNLOAD_CANCELLED',
-  'INFERENCE_OOM',
-  'INFERENCE_FAILED',
-  'INFERENCE_BUSY',
-  'INFERENCE_CANCELLED',
-  'MODEL_LOAD_FAILED',
-  'DEVICE_NOT_SUPPORTED',
-]);
-
 /**
  * Normalize an error from the native layer into a {@link ModelError}.
  *
  * The native modules format failures as "CODE:modelId:reason" (see the
- * GemmaError/GemmaInferenceClient contract). Expo surfaces that string as the
- * error's message, so we parse it here and rethrow a typed ModelError with a
- * reliable `.code` and `.modelId`. Anything unrecognized becomes UNKNOWN.
+ * GemmaError/GemmaInferenceClient contract). Depending on the Expo SDK that
+ * string is either the whole error message or wrapped by expo-modules-core's
+ * exception decorator ("Call to function 'X' has been rejected. → Caused by:
+ * java.lang.RuntimeException: CODE:modelId:reason"), so the pure parser in
+ * errors.ts handles both. Anything unrecognized becomes UNKNOWN.
  */
 function toModelError(e: unknown): never {
   if (e instanceof ModelError) throw e;
   const message = String((e as any)?.message ?? e ?? '');
-  const match = /^([A-Z_]+):([^:]*):([\s\S]*)$/.exec(message);
-  if (match && KNOWN_ERROR_CODES.has(match[1] as ModelErrorCode)) {
-    throw new ModelError(match[1] as ModelErrorCode, match[2], match[3]);
+  const parsed = parseNativeErrorMessage(message);
+  if (parsed) {
+    throw new ModelError(parsed.code, parsed.modelId, parsed.reason);
   }
   throw new ModelError('UNKNOWN', '', message);
 }
@@ -494,7 +493,12 @@ export async function generateObject<T = unknown>(
     const { text } = await sendMessage(working, { systemPrompt, signal: options?.signal });
     lastText = text;
 
-    const parsed = extractJson(text);
+    // Thinking models (Qwen3) reason in <think> blocks that can contain
+    // JSON-looking text — parse only the answer, and feed only the answer back
+    // on repair turns (reasoning is model-internal, not conversation history).
+    const { text: answer } = stripThinking(text);
+
+    const parsed = extractJson(answer);
     if (parsed.ok) {
       const errors = validateAgainstSchema(parsed.value, schema);
       if (errors.length === 0) {
@@ -503,14 +507,14 @@ export async function generateObject<T = unknown>(
       if (attempt < maxRepairAttempts) {
         working = [
           ...working,
-          { role: 'assistant', content: text },
+          { role: 'assistant', content: answer },
           { role: 'user', content: buildSchemaRepair(errors) },
         ];
       }
     } else if (attempt < maxRepairAttempts) {
       working = [
         ...working,
-        { role: 'assistant', content: text },
+        { role: 'assistant', content: answer },
         { role: 'user', content: REPAIR_INVALID_JSON },
       ];
     }
@@ -630,7 +634,9 @@ export async function generateText(
 
     for (let repair = 0; ; repair++) {
       const r = await sendMessage(working, { systemPrompt, signal: options?.signal });
-      text = r.text;
+      // Thinking models (Qwen3) reason in <think> blocks — the answer is what
+      // remains, and only the answer goes into results and repair history.
+      text = stripThinking(r.text).text;
 
       if (toolNames.length === 0) break; // no tools → this is the final answer
 
@@ -735,6 +741,21 @@ export async function generateText(
 // Embeddings API
 // ============================================================================
 
+/** The identity embed() reports for every Android result (all pins, one string). */
+const ANDROID_EMBEDDING_IDENTITY = {
+  id: ANDROID_EMBEDDING_MODEL.id,
+  revision: composeAndroidEmbeddingRevision(ANDROID_EMBEDDING_MODEL),
+};
+
+/** Validate and normalize EmbedOptions into the (task, language) native args. */
+function resolveEmbedOptions(options?: EmbedOptions): { task: string; language: string } {
+  const task = options?.task ?? 'semantic-similarity';
+  if (!isValidEmbeddingTask(task)) {
+    throw new Error(`options.task must be one of: ${EMBEDDING_TASKS.join(', ')}`);
+  }
+  return { task, language: normalizeLanguageTag(options?.language ?? 'en') };
+}
+
 /**
  * Turn text into embedding vectors for semantic search / on-device RAG.
  *
@@ -743,31 +764,51 @@ export async function generateText(
  * the most relevant chunks before a {@link sendMessage} / {@link generateText}
  * call. Pair with {@link chunkText} to split documents first.
  *
- * **iOS-only for now**, backed by Apple's `NLContextualEmbedding` — a zero-
- * download, OS-maintained model (no app-size cost, works even where Apple
- * Intelligence isn't enabled, iOS 17+). On Android/web it throws
- * `DEVICE_NOT_SUPPORTED`; the RAG toolkit (`chunkText`, `cosineSimilarity`,
- * `createVectorStore`) still works there with any vector source you bring.
+ * Backends:
+ * - **iOS** (17+): Apple's `NLContextualEmbedding` — zero-download, OS-managed
+ *   script models (Latin / Cyrillic / CJK), selected by `options.language`
+ *   (BCP-47, default `'en'`). An unsupported language throws a typed
+ *   LANGUAGE_NOT_SUPPORTED error naming it — never a silent Latin fallback.
+ * - **Android**: EmbeddingGemma 300M via MediaPipe TextEmbedder — natively
+ *   multilingual (single vector space; `language` is ignored), 768 dimensions,
+ *   max sequence 512 tokens, CPU. **Opt-in**: enable the config plugin flag
+ *   `["expo-ai-kit", { "androidEmbeddings": true }]` and rebuild, then download
+ *   the ~184 MB model with {@link prepareEmbeddingModel} — embed() itself NEVER
+ *   triggers a download (throws MODEL_NOT_DOWNLOADED instead).
+ *
+ * Pass `options.task` to say what the vectors are for (`'retrieval-query'` vs
+ * `'retrieval-document'` vs the default `'semantic-similarity'`) — it maps onto
+ * EmbeddingGemma's prompt protocol on Android and measurably improves retrieval.
+ *
+ * The result's `model` identity ({@link EmbeddingModelIdentity}) tells you which
+ * exact model produced the vectors. **Vectors are only comparable under
+ * identical model identity** — never across platforms or iOS script models.
  *
  * Embeddings don't use the generation KV-cache, so `embed()` is **not** subject
- * to the single-flight `INFERENCE_BUSY` guard — it can run alongside other work.
+ * to the single-flight `INFERENCE_BUSY` guard — it can run alongside generation.
+ * (On Android, concurrent embed() calls serialize behind a native mutex.)
  *
- * @param texts - Non-empty array of strings to embed.
- * @returns `{ embeddings, dimensions }` — `embeddings[i]` is the vector for `texts[i]`.
- * @throws {ModelError} DEVICE_NOT_SUPPORTED off iOS, or if no embedding model is
- *   available on the device.
+ * @param texts - Non-empty array of strings to embed. Empty strings produce a
+ *   zero vector (both platforms), keeping output aligned with input.
+ * @param options - Optional `{ task, language }`. See {@link EmbedOptions}.
+ * @returns `{ embeddings, dimensions, model }` — `embeddings[i]` is the vector
+ *   for `texts[i]`.
+ * @throws {ModelError} DEVICE_NOT_SUPPORTED on web / iOS < 17;
+ *   EMBEDDINGS_NOT_ENABLED on Android when built without the config-plugin flag;
+ *   MODEL_NOT_DOWNLOADED on Android before {@link prepareEmbeddingModel};
+ *   LANGUAGE_NOT_SUPPORTED on iOS for a language with no on-device model.
  *
  * @example
  * ```ts
  * import { embed, chunkText, createVectorStore } from 'expo-ai-kit';
  *
  * const chunks = chunkText(document);
- * const { embeddings } = await embed(chunks);
+ * const { embeddings, model } = await embed(chunks, { task: 'retrieval-document' });
  *
  * const store = createVectorStore<{ text: string }>();
  * store.addMany(chunks.map((text, i) => ({ id: `c${i}`, vector: embeddings[i], metadata: { text } })));
  *
- * const { embeddings: [q] } = await embed([question]);
+ * const { embeddings: [q] } = await embed([question], { task: 'retrieval-query' });
  * const context = store.search(q, { topK: 4 }).map((h) => h.metadata!.text).join('\n\n');
  * const { text } = await sendMessage([
  *   { role: 'system', content: `Answer using only this context:\n${context}` },
@@ -775,16 +816,9 @@ export async function generateText(
  * ]);
  * ```
  */
-export async function embed(texts: string[]): Promise<EmbedResult> {
-  if (Platform.OS !== 'ios') {
-    throw new ModelError(
-      'DEVICE_NOT_SUPPORTED',
-      '',
-      Platform.OS === 'android'
-        ? 'embed() is iOS-only for now (Apple NLContextualEmbedding); Android support via MediaPipe is planned. ' +
-          'The RAG toolkit (chunkText, cosineSimilarity, createVectorStore) works on Android with any vector source.'
-        : 'embed() is only available on iOS'
-    );
+export async function embed(texts: string[], options?: EmbedOptions): Promise<EmbedResult> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    throw new ModelError('DEVICE_NOT_SUPPORTED', '', 'embed() is only available on iOS and Android');
   }
   if (!Array.isArray(texts) || texts.length === 0) {
     throw new Error('texts array cannot be empty');
@@ -792,7 +826,146 @@ export async function embed(texts: string[]): Promise<EmbedResult> {
   if (!texts.every((t) => typeof t === 'string')) {
     throw new Error('texts must be an array of strings');
   }
-  return wrapNative(() => ExpoAiKitModule.embed(texts));
+  const { task, language } = resolveEmbedOptions(options);
+  const result = await wrapNative(() => ExpoAiKitModule.embed(texts, task, language));
+  // iOS reports the resolved Apple model identity natively (it varies with
+  // language); Android identity is composed in JS from the pinned artifacts.
+  if (result.model) {
+    return result as EmbedResult;
+  }
+  return { ...result, model: ANDROID_EMBEDDING_IDENTITY };
+}
+
+/**
+ * Check whether the embedding model is ready on this device.
+ *
+ * - **Android**: reports the EmbeddingGemma asset's download state plus its
+ *   pinned size (~184 MB) and identity. Requires the `androidEmbeddings`
+ *   config-plugin flag (throws EMBEDDINGS_NOT_ENABLED otherwise).
+ * - **iOS**: reports whether the OS has the `NLContextualEmbedding` assets for
+ *   `options.language` (default `'en'`) — the asset is OS-managed, so
+ *   `sizeBytes` is 0. Throws LANGUAGE_NOT_SUPPORTED for unsupported languages.
+ *
+ * @throws {ModelError} DEVICE_NOT_SUPPORTED on web.
+ */
+export async function getEmbeddingModelStatus(options?: {
+  language?: string;
+}): Promise<EmbeddingModelState> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    throw new ModelError(
+      'DEVICE_NOT_SUPPORTED',
+      '',
+      'getEmbeddingModelStatus() is only available on iOS and Android'
+    );
+  }
+  const language = normalizeLanguageTag(options?.language ?? 'en');
+  const state = await wrapNative(() => ExpoAiKitModule.getEmbeddingModelStatus(language));
+  if (typeof state === 'string') {
+    // Android natively reports only the status; size and identity are JS pins.
+    return {
+      status: state,
+      sizeBytes: ANDROID_EMBEDDING_MODEL.sizeBytes,
+      model: ANDROID_EMBEDDING_IDENTITY,
+    };
+  }
+  return state;
+}
+
+/**
+ * Make the embedding model ready for {@link embed} — the ONLY call that
+ * downloads embedding assets.
+ *
+ * - **Android**: downloads the pinned Google-hosted EmbeddingGemma bundle
+ *   (~184 MB, stored per-app), verifies its SHA-256, and installs it atomically
+ *   (temp file → verify → rename) — a partial or corrupt download fails closed
+ *   and leaves nothing usable behind. `onProgress` receives 0–1.
+ * - **iOS**: asks the OS to fetch the `NLContextualEmbedding` assets for
+ *   `options.language` (default `'en'`) — the same on-demand flow embed() uses,
+ *   just ahead of time. No progress granularity is available from the OS.
+ *
+ * Resolves when the model is ready. No-op if already prepared.
+ *
+ * @throws {ModelError} EMBEDDINGS_NOT_ENABLED (Android, plugin flag off),
+ *   DOWNLOAD_FAILED / DOWNLOAD_CORRUPT / DOWNLOAD_STORAGE_FULL /
+ *   DOWNLOAD_CANCELLED (Android), LANGUAGE_NOT_SUPPORTED (iOS),
+ *   DEVICE_NOT_SUPPORTED (web).
+ */
+export async function prepareEmbeddingModel(options?: {
+  language?: string;
+  onProgress?: (progress: number) => void;
+}): Promise<void> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    throw new ModelError(
+      'DEVICE_NOT_SUPPORTED',
+      '',
+      'prepareEmbeddingModel() is only available on iOS and Android'
+    );
+  }
+  const language = normalizeLanguageTag(options?.language ?? 'en');
+
+  let subscription: ReturnType<typeof ExpoAiKitModule.addListener> | undefined;
+  if (options?.onProgress) {
+    subscription = ExpoAiKitModule.addListener('onDownloadProgress', (event) => {
+      if (event.modelId === ANDROID_EMBEDDING_MODEL.id) {
+        options.onProgress!(event.progress);
+      }
+    });
+  }
+  try {
+    await wrapNative(() =>
+      ExpoAiKitModule.prepareEmbeddingModel(
+        ANDROID_EMBEDDING_MODEL.downloadUrl,
+        ANDROID_EMBEDDING_MODEL.sha256,
+        language
+      )
+    );
+  } finally {
+    subscription?.remove();
+  }
+}
+
+/**
+ * Cancel an in-flight {@link prepareEmbeddingModel} download.
+ *
+ * Android only — the pending prepare rejects with DOWNLOAD_CANCELLED and the
+ * partial file is removed. No-op on iOS (the OS owns its asset downloads) and
+ * when nothing is downloading.
+ */
+export async function cancelEmbeddingModelDownload(): Promise<void> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    return;
+  }
+  await wrapNative(() => ExpoAiKitModule.cancelEmbeddingModelDownload());
+}
+
+/**
+ * Delete the downloaded embedding model from the device.
+ *
+ * Android only — unloads the embedder if loaded and removes the ~184 MB asset
+ * (plus any partial download). No-op on iOS: the `NLContextualEmbedding` assets
+ * are OS-managed and cannot be deleted by the app.
+ */
+export async function deleteEmbeddingModel(): Promise<void> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    return;
+  }
+  await wrapNative(() => ExpoAiKitModule.deleteEmbeddingModel());
+}
+
+/**
+ * List the BCP-47 languages the on-device embedding backend supports.
+ *
+ * - **iOS**: enumerates the `NLContextualEmbedding` catalog (the Latin /
+ *   Cyrillic / CJK script models) and returns the union of their languages.
+ * - **Android**: returns `[]` — EmbeddingGemma is natively multilingual with a
+ *   single vector space, so `language` is ignored rather than selected.
+ * - Web: returns `[]`.
+ */
+export async function getSupportedEmbeddingLanguages(): Promise<string[]> {
+  if (Platform.OS !== 'ios') {
+    return [];
+  }
+  return wrapNative(() => ExpoAiKitModule.getSupportedEmbeddingLanguages());
 }
 
 // ============================================================================
@@ -1023,9 +1196,19 @@ export async function deleteModel(modelId: string): Promise<void> {
  *   device or an arm64 emulator image; built-in models are unaffected.
  */
 export async function setModel(modelId: string, options?: SetModelOptions): Promise<void> {
+  if (modelId === ANDROID_EMBEDDING_MODEL.id) {
+    throw new ModelError(
+      'MODEL_NOT_FOUND',
+      modelId,
+      `"${modelId}" is the embedding model asset, not a generation model — ` +
+        'it cannot be activated with setModel(). Use embed() / prepareEmbeddingModel().'
+    );
+  }
   const entry = getRegistryEntry(modelId);
   const minRamBytes = entry?.minRamBytes ?? 0;
-  const backend = options?.backend ?? 'auto';
+  // Explicit caller choice wins; otherwise honor the registry's per-model hint
+  // (e.g. Qwen3 pins 'cpu' — its GPU path is broken in LiteRT-LM 0.10.0).
+  const backend = options?.backend ?? entry?.preferredBackend ?? 'auto';
   const generation = toNativeGeneration(options?.generation);
   await wrapNative(() =>
     ExpoAiKitModule.setModel(modelId, minRamBytes, backend, generation)
