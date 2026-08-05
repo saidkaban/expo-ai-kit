@@ -31,6 +31,9 @@ export type NativeGenerationConfig = {
 export interface ExpoAiKitNativeModule {
   // Existing inference API
   isAvailable(): boolean;
+  // Makes the OS-provided generation model ready. Android may download its
+  // AICore-managed asset; iOS validates Apple Foundation Models availability.
+  prepareBuiltInModel(): Promise<void>;
   // sessionId lets stopStreaming() cancel an in-flight (non-streaming) generation too.
   sendMessage(
     messages: LLMMessage[],

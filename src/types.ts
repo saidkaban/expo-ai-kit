@@ -454,7 +454,7 @@ export type EmbeddingModelState = {
 
 /**
  * A built-in model provided by the OS (e.g. Apple Foundation Models, ML Kit).
- * These are always available on supported devices -- no download needed.
+ * The OS manages its assets; Android may require prepareBuiltInModel() first.
  */
 export type BuiltInModel = {
   /** Unique model identifier (e.g. 'apple-fm', 'mlkit') */

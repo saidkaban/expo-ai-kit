@@ -125,6 +125,22 @@ public class ExpoAiKitModule: Module {
       return false
     }
 
+    AsyncFunction("prepareBuiltInModel") { () async throws in
+      // Apple owns the Foundation Models asset lifecycle. There is nothing for
+      // the app to download; validate availability so both platforms expose the
+      // same preparation call and unsupported devices fail clearly.
+      if #available(iOS 26.0, *) {
+        if case .available = SystemLanguageModel.default.availability {
+          return
+        }
+      }
+      throw NSError(
+        domain: "ExpoAiKit", code: 0,
+        userInfo: [NSLocalizedDescriptionKey:
+          "DEVICE_NOT_SUPPORTED:apple-fm:Apple Foundation Models is not available on this device"]
+      )
+    }
+
     AsyncFunction("sendMessage") {
       (
         messages: [[String: Any]],

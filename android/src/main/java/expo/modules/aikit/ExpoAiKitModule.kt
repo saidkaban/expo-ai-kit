@@ -72,6 +72,10 @@ class ExpoAiKitModule : Module() {
       promptClient.isAvailableBlocking()
     }
 
+    AsyncFunction("prepareBuiltInModel") Coroutine { ->
+      promptClient.prepareModel()
+    }
+
     // sessionId is accepted for API parity with iOS. Non-streaming generation on
     // Android isn't separately cancellable (best-effort), so the id is unused here.
     AsyncFunction("sendMessage") Coroutine { messages: List<Map<String, Any>>, fallbackSystemPrompt: String, sessionId: String ->
@@ -108,7 +112,7 @@ class ExpoAiKitModule : Module() {
       mapOf("text" to text)
     }
 
-    AsyncFunction("startStreaming") { messages: List<Map<String, Any>>, fallbackSystemPrompt: String, sessionId: String ->
+    AsyncFunction("startStreaming") Coroutine { messages: List<Map<String, Any>>, fallbackSystemPrompt: String, sessionId: String ->
       // Extract system prompt from messages, or use fallback
       val systemPrompt = messages
         .firstOrNull { it["role"] == "system" }
@@ -116,6 +120,12 @@ class ExpoAiKitModule : Module() {
         ?: fallbackSystemPrompt.ifBlank { "You are a helpful, friendly assistant." }
 
       val nonSystemMessages = messages.filter { it["role"] != "system" }
+
+      // Fail the native promise before launching a detached stream so JS can
+      // reject cleanly instead of resolving with an unexplained empty string.
+      if (activeModelId == "mlkit") {
+        promptClient.requireAvailable()
+      }
 
       // Launch streaming in a coroutine that can be cancelled
       val job = streamScope.launch {

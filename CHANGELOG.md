@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Built-in model preparation** — `prepareBuiltInModel()` makes Android's OS-managed ML Kit
+  model ready before inference and is a no-op when it is already available. On iOS, the same call
+  validates Apple Foundation Models availability.
+
+### Fixed
+
+- **Android ML Kit could silently return an empty response when its model was not downloaded** —
+  generation now throws a typed `MODEL_NOT_DOWNLOADED` error with a clear preparation step.
+
 ## 0.13.0
 
 > Headline: **Android embeddings + iOS embedding languages** — `embed()` now runs on

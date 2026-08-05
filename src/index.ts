@@ -176,6 +176,24 @@ export async function isAvailable(): Promise<boolean> {
 }
 
 /**
+ * Make the platform's OS-provided generation model ready for inference.
+ *
+ * On Android this downloads the AICore-managed ML Kit model when needed. On
+ * iOS there is no app-managed download; the call validates that Apple
+ * Foundation Models is available. Resolves immediately when already ready.
+ */
+export async function prepareBuiltInModel(): Promise<void> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    throw new ModelError(
+      'DEVICE_NOT_SUPPORTED',
+      '',
+      'prepareBuiltInModel() is only available on iOS and Android'
+    );
+  }
+  await wrapNative(() => ExpoAiKitModule.prepareBuiltInModel());
+}
+
+/**
  * Send messages to the on-device LLM and get a response.
  *
  * @param messages - Array of messages representing the conversation
@@ -975,8 +993,9 @@ export async function getSupportedEmbeddingLanguages(): Promise<string[]> {
 /**
  * Get all built-in models available on the current platform.
  *
- * Built-in models are provided by the OS and require no download.
- * On iOS this returns Apple Foundation Models; on Android, ML Kit.
+ * Built-in models are provided and managed by the OS. On iOS this returns
+ * Apple Foundation Models; on Android, ML Kit, whose model may need to be made
+ * ready with {@link prepareBuiltInModel} before inference.
  *
  * @returns Array of built-in models with availability status
  */
