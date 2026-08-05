@@ -33,7 +33,7 @@ export function ThemeToggle() {
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2 hover:bg-sidebar-bg rounded-lg transition-colors"
+        className="cursor-pointer rounded-lg p-2 transition-colors hover:bg-sidebar-bg"
         aria-label="Choose color theme"
         aria-haspopup="menu"
         aria-expanded={isOpen}
@@ -54,7 +54,7 @@ export function ThemeToggle() {
                 setTheme(option.value);
                 setIsOpen(false);
               }}
-              className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-sm hover:bg-sidebar-bg transition-colors ${
+              className={`flex w-full cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm transition-colors hover:bg-sidebar-bg ${
                 theme === option.value ? "text-foreground" : "text-muted"
               }`}
               role="menuitemradio"

@@ -52,7 +52,7 @@ export function TableOfContents({ headings }: TableOfContentsProps) {
             <li key={id}>
               <a
                 href={`#${id}`}
-                className={`block text-sm transition-colors ${
+                className={`block w-full cursor-pointer text-sm transition-colors ${
                   level === 3 ? "pl-3" : ""
                 } ${
                   activeId === id

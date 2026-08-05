@@ -18,7 +18,7 @@ export function TopNav({ onMenuClick, isSidebarOpen }: TopNavProps) {
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           <button
             onClick={onMenuClick}
-            className="lg:hidden p-2 -ml-2 hover:bg-sidebar-bg rounded-lg transition-colors"
+            className="-ml-2 cursor-pointer rounded-lg p-2 transition-colors hover:bg-sidebar-bg lg:hidden"
             aria-label={isSidebarOpen ? "Close menu" : "Open menu"}
           >
             {isSidebarOpen ? (
@@ -49,7 +49,7 @@ export function TopNav({ onMenuClick, isSidebarOpen }: TopNavProps) {
             href="https://www.npmjs.com/package/expo-ai-kit"
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden p-2 hover:bg-sidebar-bg rounded-lg transition-colors sm:inline-flex"
+            className="hidden cursor-pointer rounded-lg p-2 transition-colors hover:bg-sidebar-bg sm:inline-flex"
             aria-label="npm package"
           >
             <NpmIcon className="text-foreground" />
@@ -59,7 +59,7 @@ export function TopNav({ onMenuClick, isSidebarOpen }: TopNavProps) {
             href="https://github.com/saidkaban/expo-ai-kit"
             target="_blank"
             rel="noopener noreferrer"
-            className="p-2 hover:bg-sidebar-bg rounded-lg transition-colors"
+            className="cursor-pointer rounded-lg p-2 transition-colors hover:bg-sidebar-bg"
             aria-label="GitHub repository"
           >
             <GitHubIcon className="text-foreground" />

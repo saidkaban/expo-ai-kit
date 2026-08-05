@@ -94,7 +94,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                       <Link
                         href={item.href}
                         onClick={() => handleLinkClick(item.href!)}
-                        className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
+                        className={`flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
                           isActive(item.href)
                             ? "bg-accent-muted text-accent font-medium"
                             : "text-foreground/80 hover:bg-border-muted hover:text-foreground"
@@ -116,7 +116,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                               <Link
                                 href={subItem.href}
                                 onClick={() => handleLinkClick(subItem.href!)}
-                                className={`flex items-center gap-1 py-1.5 text-sm transition-colors ${
+                                className={`flex w-full cursor-pointer items-center gap-1 py-1.5 text-sm transition-colors ${
                                   isActive(subItem.href)
                                     ? "text-accent font-medium"
                                     : "text-muted hover:text-foreground"

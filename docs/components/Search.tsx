@@ -122,7 +122,7 @@ export function Search() {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 p-2 text-sm text-muted border border-border rounded-lg hover:border-muted-foreground transition-colors bg-sidebar-bg sm:px-3 sm:py-1.5"
+        className="flex cursor-pointer items-center gap-2 p-2 text-sm text-muted border border-border rounded-lg hover:border-muted-foreground transition-colors bg-sidebar-bg sm:px-3 sm:py-1.5"
         aria-label="Search documentation"
         aria-haspopup="dialog"
         aria-expanded={isOpen}
