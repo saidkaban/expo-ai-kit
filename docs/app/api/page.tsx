@@ -1,0 +1,658 @@
+import { DocsLayout } from "@/components/DocsLayout";
+import { Callout } from "@/components/Callout";
+import { CodeBlock } from "@/components/CodeBlock";
+import { BadgeGroup } from "@/components/Badge";
+
+const headings = [
+  { id: "isavailable", text: "isAvailable()", level: 2 },
+  { id: "sendmessage", text: "sendMessage()", level: 2 },
+  { id: "streammessage", text: "streamMessage()", level: 2 },
+  { id: "generateobject", text: "generateObject()", level: 2 },
+  { id: "generatetext", text: "generateText()", level: 2 },
+  { id: "embed", text: "embed()", level: 2 },
+  { id: "embedding-lifecycle", text: "Embedding model lifecycle", level: 2 },
+  { id: "ai-sdk-provider", text: "AI SDK Provider", level: 2 },
+  { id: "rag-toolkit", text: "RAG Toolkit", level: 2 },
+  { id: "chunktext", text: "chunkText()", level: 3 },
+  { id: "cosinesimilarity", text: "cosineSimilarity()", level: 3 },
+  { id: "createvectorstore", text: "createVectorStore()", level: 3 },
+  { id: "model-management", text: "Model Management", level: 2 },
+  { id: "getbuiltinmodels", text: "getBuiltInModels()", level: 3 },
+  { id: "getdownloadablemodels", text: "getDownloadableModels()", level: 3 },
+  { id: "getrecommendedmodel", text: "getRecommendedModel()", level: 3 },
+  { id: "downloadmodel", text: "downloadModel()", level: 3 },
+  { id: "canceldownload", text: "cancelDownload()", level: 3 },
+  { id: "deletemodel", text: "deleteModel()", level: 3 },
+  { id: "setmodel", text: "setModel()", level: 3 },
+  { id: "unloadmodel", text: "unloadModel()", level: 3 },
+  { id: "getactivemodel", text: "getActiveModel()", level: 3 },
+  { id: "custom-models", text: "Custom Models", level: 2 },
+  { id: "registermodel", text: "registerModel()", level: 3 },
+  { id: "unregistermodel", text: "unregisterModel()", level: 3 },
+  { id: "getregisteredmodels", text: "getRegisteredModels()", level: 3 },
+  { id: "fetchmodelmetadata", text: "fetchModelMetadata()", level: 3 },
+  { id: "types", text: "Types", level: 2 },
+  { id: "errors", text: "Errors", level: 2 },
+];
+
+export default function APIReferencePage() {
+  return (
+    <DocsLayout headings={headings}>
+      <h1>API Reference</h1>
+      <p className="text-xl text-muted leading-relaxed">
+        The complete public API of expo-ai-kit. Everything runs on-device, on
+        both iOS and Android.
+      </p>
+
+      <BadgeGroup platforms={["ios", "android"]} />
+
+      <p>
+        Messages everywhere use the same shape:{" "}
+        <code>{`{ role: 'system' | 'user' | 'assistant'; content: string }`}</code>
+        . On-device models are stateless — pass the full conversation history on
+        every call.
+      </p>
+
+      {/* ------------------------------------------------------------------ */}
+      <h2 id="isavailable">isAvailable()</h2>
+      <p>
+        Check whether on-device AI is available. Returns <code>false</code> on
+        unsupported platforms (web) and when the OS model isn&apos;t ready (e.g.
+        Apple Intelligence disabled).
+      </p>
+      <CodeBlock language="typescript">
+        {`function isAvailable(): Promise<boolean>`}
+      </CodeBlock>
+      <CodeBlock language="typescript">
+        {`import { isAvailable } from 'expo-ai-kit';
+
+if (await isAvailable()) {
+  // safe to call sendMessage / streamMessage / generateObject / generateText
+}`}
+      </CodeBlock>
+
+      {/* ------------------------------------------------------------------ */}
+      <h2 id="sendmessage">sendMessage()</h2>
+      <p>Send a conversation and get a single response.</p>
+      <CodeBlock language="typescript">
+        {`function sendMessage(
+  messages: LLMMessage[],
+  options?: LLMSendOptions,
+): Promise<LLMResponse>`}
+      </CodeBlock>
+      <p>
+        <strong>Options:</strong> <code>systemPrompt?: string</code> (used only
+        if the array has no system message), <code>signal?: AbortSignal</code>.
+      </p>
+      <CodeBlock language="typescript">
+        {`import { sendMessage } from 'expo-ai-kit';
+
+const { text } = await sendMessage(
+  [{ role: 'user', content: 'Capital of France?' }],
+  { systemPrompt: 'Answer in one word.' },
+);`}
+      </CodeBlock>
+      <Callout type="info" title="Cancellation">
+        <p>
+          On-device, non-streaming generation can&apos;t always be interrupted
+          mid-decode — <code>signal</code> always unblocks the caller, but the
+          model may keep running in the background (a new call throws{" "}
+          <code>INFERENCE_BUSY</code> until it finishes). To truly interrupt, use{" "}
+          <code>streamMessage().stop()</code>.
+        </p>
+      </Callout>
+
+      {/* ------------------------------------------------------------------ */}
+      <h2 id="streammessage">streamMessage()</h2>
+      <p>
+        Stream a response token-by-token. Returns a handle with a{" "}
+        <code>promise</code> that resolves with the final text and a{" "}
+        <code>stop()</code> to cancel.
+      </p>
+      <CodeBlock language="typescript">
+        {`function streamMessage(
+  messages: LLMMessage[],
+  onToken: (event: LLMStreamEvent) => void,
+  options?: LLMStreamOptions,
+): LLMStreamHandle // { promise, stop }`}
+      </CodeBlock>
+      <CodeBlock language="typescript">
+        {`import { streamMessage } from 'expo-ai-kit';
+
+const { promise, stop } = streamMessage(
+  [{ role: 'user', content: 'Write a short story' }],
+  (event) => {
+    setText(event.accumulatedText); // event.token, event.isDone also available
+  },
+);
+
+await promise; // resolves with { text }; call stop() to cancel early`}
+      </CodeBlock>
+
+      {/* ------------------------------------------------------------------ */}
+      <h2 id="generateobject">generateObject()</h2>
+      <p>
+        Get a typed object validated against a JSON Schema. See the{" "}
+        <a href="/guides/structured-output" className="text-accent hover:underline">
+          Structured Output guide
+        </a>{" "}
+        for the full story.
+      </p>
+      <CodeBlock language="typescript">
+        {`function generateObject<T = unknown>(
+  messages: LLMMessage[],
+  schema: JSONSchema,
+  options?: GenerateObjectOptions,
+): Promise<GenerateObjectResult<T>> // { object, text }`}
+      </CodeBlock>
+      <p>
+        <strong>Options:</strong> <code>systemPrompt?</code>,{" "}
+        <code>signal?</code>, <code>maxRepairAttempts?</code> (default{" "}
+        <code>2</code>). Throws <code>INFERENCE_FAILED</code> if no schema-valid
+        JSON is produced after the repair attempts.
+      </p>
+      <CodeBlock language="typescript">
+        {`import { generateObject } from 'expo-ai-kit';
+
+const { object } = await generateObject<{ title: string; minutes: number }>(
+  [{ role: 'user', content: 'A quick weeknight pasta.' }],
+  {
+    type: 'object',
+    properties: { title: { type: 'string' }, minutes: { type: 'integer' } },
+    required: ['title', 'minutes'],
+  },
+);`}
+      </CodeBlock>
+
+      {/* ------------------------------------------------------------------ */}
+      <h2 id="generatetext">generateText()</h2>
+      <p>
+        Generate text, optionally letting the model call tools you provide. See
+        the{" "}
+        <a href="/guides/tool-calling" className="text-accent hover:underline">
+          Tool Calling guide
+        </a>
+        .
+      </p>
+      <CodeBlock language="typescript">
+        {`function generateText(
+  messages: LLMMessage[],
+  options?: GenerateTextOptions,
+): Promise<GenerateTextResult>
+// { text, steps, toolCalls, toolResults, finishReason }`}
+      </CodeBlock>
+      <p>
+        <strong>Options:</strong> <code>tools?: ToolSet</code>,{" "}
+        <code>maxSteps?</code> (default <code>5</code>),{" "}
+        <code>systemPrompt?</code>, <code>signal?</code>,{" "}
+        <code>maxRepairAttempts?</code> (default <code>2</code>).
+      </p>
+      <CodeBlock language="typescript">
+        {`import { generateText } from 'expo-ai-kit';
+
+const { text } = await generateText(
+  [{ role: 'user', content: 'Weather in Paris?' }],
+  {
+    tools: {
+      getWeather: {
+        description: 'Get current weather for a city.',
+        parameters: {
+          type: 'object',
+          properties: { city: { type: 'string' } },
+          required: ['city'],
+        },
+        execute: async ({ city }: { city: string }) => fetchWeather(city),
+      },
+    },
+  },
+);`}
+      </CodeBlock>
+
+      {/* ------------------------------------------------------------------ */}
+      <h2 id="embed">embed()</h2>
+      <BadgeGroup platforms={["ios", "android", "new"]} />
+      <p>
+        Turn text into embedding vectors for semantic search / RAG. See the{" "}
+        <a href="/guides/embeddings" className="text-accent hover:underline">
+          Embeddings &amp; RAG guide
+        </a>
+        . iOS (17+): Apple&apos;s zero-download <code>NLContextualEmbedding</code>{" "}
+        — <code>language</code> selects the script model. Android: EmbeddingGemma
+        300M via MediaPipe TextEmbedder — opt-in via the{" "}
+        <code>androidEmbeddings</code> config-plugin flag, model prepared with{" "}
+        <code>prepareEmbeddingModel()</code>; <code>embed()</code> itself never
+        downloads.
+      </p>
+      <CodeBlock language="typescript">
+        {`function embed(
+  texts: string[],
+  options?: {
+    task?: 'semantic-similarity' | 'retrieval-query' | 'retrieval-document';
+    language?: string; // BCP-47, default 'en' — selects the iOS script model; ignored on Android
+  },
+): Promise<EmbedResult>
+// { embeddings: number[][]; dimensions: number; model: { id: string; revision: string } }`}
+      </CodeBlock>
+      <CodeBlock language="typescript">
+        {`import { embed } from 'expo-ai-kit';
+
+const { embeddings, dimensions, model } = await embed(
+  ['hello world', 'goodbye'],
+  { task: 'retrieval-document' },
+);
+embeddings.length; // 2 — one vector per input, in order
+model;             // identity — indexes are only comparable under identical identity`}
+      </CodeBlock>
+
+      {/* ------------------------------------------------------------------ */}
+      <h2 id="embedding-lifecycle">Embedding model lifecycle</h2>
+      <BadgeGroup platforms={["ios", "android", "new"]} />
+      <p>
+        Readiness and asset management for the embedding model.{" "}
+        <code>prepareEmbeddingModel()</code> is the <em>only</em> call that
+        downloads — on Android it fetches the ~184 MB EmbeddingGemma bundle
+        (SHA-256-verified, atomic install, fails closed on partial/corrupt
+        downloads); on iOS it prefetches the OS-managed assets for a language.
+        Cancel/delete are Android-side (safe no-ops on iOS).
+      </p>
+      <CodeBlock language="typescript">
+        {`function getEmbeddingModelStatus(options?: { language?: string }): Promise<{
+  status: 'not-downloaded' | 'downloading' | 'downloaded';
+  sizeBytes: number; // ~184 MB pinned on Android; 0 on iOS (OS-managed)
+  model: { id: string; revision: string };
+}>
+function prepareEmbeddingModel(options?: {
+  language?: string;
+  onProgress?: (progress: number) => void; // 0–1 (Android)
+}): Promise<void>
+function cancelEmbeddingModelDownload(): Promise<void>
+function deleteEmbeddingModel(): Promise<void>
+function getSupportedEmbeddingLanguages(): Promise<string[]> // iOS catalog; [] on Android
+function stripThinking(text: string): { text: string; reasoning: string }
+// pure helper — splits <think>…</think> reasoning (Qwen3-style models) from an answer`}
+      </CodeBlock>
+
+      {/* ------------------------------------------------------------------ */}
+      <h2 id="ai-sdk-provider">AI SDK Provider</h2>
+      <BadgeGroup platforms={["ios", "android", "new"]} />
+      <p>
+        A Vercel AI SDK provider (<code>LanguageModelV3</code>, AI SDK 6+) over
+        the on-device engine, exported from the <code>expo-ai-kit/ai</code>{" "}
+        subpath. See the{" "}
+        <a href="/guides/vercel-ai-sdk" className="text-accent hover:underline">
+          Vercel AI SDK guide
+        </a>{" "}
+        for setup (polyfills), examples, and the on-device caveats.
+      </p>
+      <CodeBlock language="typescript">
+        {`import { expoAiKit, createExpoAiKit } from 'expo-ai-kit/ai';
+
+// LanguageModelV3 — pass to generateText / streamText / generateObject
+expoAiKit(modelId?: string, settings?: ExpoAiKitModelSettings): LanguageModelV3
+//   modelId: 'auto' (default — the active model) or any setModel() id
+//   settings: same shape as setModel() options; applied on activation
+
+// EmbeddingModelV3 over embed() — resolves the platform default
+// ('apple-nl-contextual' on iOS, 'embedding-gemma-300m' on Android)
+expoAiKit.embeddingModel(modelId?: string, settings?: { task?: EmbeddingTask; language?: string }): EmbeddingModelV3
+
+// Factory (a fresh provider instance)
+createExpoAiKit(): ExpoAiKitProvider`}
+      </CodeBlock>
+      <CodeBlock language="typescript">
+        {`import { generateText } from 'ai';
+import { expoAiKit } from 'expo-ai-kit/ai';
+
+const { text } = await generateText({
+  model: expoAiKit(),
+  prompt: 'Capital of France?',
+});`}
+      </CodeBlock>
+
+      {/* ------------------------------------------------------------------ */}
+      <h2 id="rag-toolkit">RAG Toolkit</h2>
+      <BadgeGroup platforms={["ios", "android"]} />
+      <p>
+        Pure-JS helpers for retrieval. They work on every platform with any source
+        of vectors, since they only deal in plain <code>number[]</code>.
+      </p>
+
+      <h3 id="chunktext">chunkText()</h3>
+      <p>
+        Split a document into overlapping, sentence-aware chunks sized for
+        embedding.
+      </p>
+      <CodeBlock language="typescript">
+        {`function chunkText(
+  text: string,
+  options?: { chunkSize?: number; overlap?: number }, // defaults: 1000, min(200, chunkSize / 5)
+): string[]`}
+      </CodeBlock>
+
+      <h3 id="cosinesimilarity">cosineSimilarity()</h3>
+      <p>
+        Magnitude-invariant relevance score in <code>[-1, 1]</code>. Throws on a
+        length mismatch.
+      </p>
+      <CodeBlock language="typescript">
+        {`function cosineSimilarity(a: number[], b: number[]): number`}
+      </CodeBlock>
+
+      <h3 id="createvectorstore">createVectorStore()</h3>
+      <p>
+        A lightweight in-memory vector store. Add records, then{" "}
+        <code>search()</code> by a query vector for the top-k most similar.
+        Snapshot with <code>toJSON()</code> and rehydrate by passing it back in.
+      </p>
+      <CodeBlock language="typescript">
+        {`function createVectorStore<M = unknown>(
+  initial?: VectorRecord<M>[],
+): VectorStore<M>
+
+// VectorStore<M>:
+//   add(id, vector, metadata?) · addMany(records) · get(id) · remove(id)
+//   clear() · size · toJSON()
+//   search(query, { topK = 10, minScore? }): VectorSearchResult<M>[]`}
+      </CodeBlock>
+      <CodeBlock language="typescript">
+        {`import { createVectorStore } from 'expo-ai-kit';
+
+const store = createVectorStore<{ text: string }>();
+store.addMany(chunks.map((text, i) => ({ id: \`c\${i}\`, vector: embeddings[i], metadata: { text } })));
+
+const hits = store.search(queryVector, { topK: 4 });
+// → [{ id, vector, metadata, score }, …] sorted by score, highest first`}
+      </CodeBlock>
+
+      {/* ------------------------------------------------------------------ */}
+      <h2 id="model-management">Model Management</h2>
+      <p>
+        Switch between the OS built-in models and downloadable ones. See the{" "}
+        <a href="/guides/models" className="text-accent hover:underline">
+          Models guide
+        </a>{" "}
+        for a walkthrough.
+      </p>
+
+      <h3 id="getbuiltinmodels">getBuiltInModels()</h3>
+      <p>List the OS built-in models (Apple FM on iOS, ML Kit on Android).</p>
+      <CodeBlock language="typescript">
+        {`function getBuiltInModels(): Promise<BuiltInModel[]>`}
+      </CodeBlock>
+
+      <h3 id="getdownloadablemodels">getDownloadableModels()</h3>
+      <p>
+        The full downloadable catalog (built-in registry + any{" "}
+        <code>registerModel()</code> entries), enriched with per-device status,
+        size, license, and <code>meetsRequirements</code>.
+      </p>
+      <CodeBlock language="typescript">
+        {`function getDownloadableModels(): Promise<DownloadableModel[]>`}
+      </CodeBlock>
+
+      <h3 id="getrecommendedmodel">getRecommendedModel()</h3>
+      <p>
+        The most capable model the current device can actually run, or{" "}
+        <code>null</code>.
+      </p>
+      <CodeBlock language="typescript">
+        {`function getRecommendedModel(): Promise<DownloadableModel | null>`}
+      </CodeBlock>
+
+      <h3 id="downloadmodel">downloadModel()</h3>
+      <p>
+        Download a model with integrity verification (SHA256). Reports progress{" "}
+        <code>0–1</code>.
+      </p>
+      <CodeBlock language="typescript">
+        {`function downloadModel(
+  modelId: string,
+  options?: { onProgress?: (progress: number) => void },
+): Promise<void>`}
+      </CodeBlock>
+
+      <h3 id="canceldownload">cancelDownload()</h3>
+      <p>
+        Cancel an in-flight download; the <code>downloadModel</code> promise
+        rejects with <code>DOWNLOAD_CANCELLED</code>.
+      </p>
+      <CodeBlock language="typescript">
+        {`function cancelDownload(modelId: string): Promise<void>`}
+      </CodeBlock>
+
+      <h3 id="deletemodel">deleteModel()</h3>
+      <p>Delete a downloaded model file from disk (unloads it first if active).</p>
+      <CodeBlock language="typescript">
+        {`function deleteModel(modelId: string): Promise<void>`}
+      </CodeBlock>
+
+      <h3 id="setmodel">setModel()</h3>
+      <p>
+        Activate a model for inference — the sole gatekeeper of model validity.
+        For downloadable models this loads weights into memory; only one is
+        loaded at a time.
+      </p>
+      <CodeBlock language="typescript">
+        {`function setModel(modelId: string, options?: SetModelOptions): Promise<void>
+// SetModelOptions: { backend?: 'auto' | 'gpu' | 'cpu'; generation?: GenerationConfig }`}
+      </CodeBlock>
+      <CodeBlock language="typescript">
+        {`await setModel('qwen3-1.7b', { generation: { temperature: 0.7, topK: 40 } });`}
+      </CodeBlock>
+
+      <h3 id="unloadmodel">unloadModel()</h3>
+      <p>Unload the current downloadable model and revert to the OS built-in.</p>
+      <CodeBlock language="typescript">
+        {`function unloadModel(): Promise<void>`}
+      </CodeBlock>
+
+      <h3 id="getactivemodel">getActiveModel()</h3>
+      <p>The id of the currently active model (e.g. <code>&apos;apple-fm&apos;</code>).</p>
+      <CodeBlock language="typescript">
+        {`function getActiveModel(): string`}
+      </CodeBlock>
+
+      {/* ------------------------------------------------------------------ */}
+      <h2 id="custom-models">Custom Models</h2>
+      <p>
+        Register any LiteRT-LM model at runtime. See{" "}
+        <a href="/guides/models#bring-your-own-model" className="text-accent hover:underline">
+          Bring Your Own Model
+        </a>
+        .
+      </p>
+
+      <h3 id="registermodel">registerModel()</h3>
+      <p>
+        Add a custom downloadable model. Validates the entry and rejects ids that
+        collide with a built-in (curated or native) model.
+      </p>
+      <CodeBlock language="typescript">
+        {`function registerModel(entry: ModelRegistryEntry): void`}
+      </CodeBlock>
+
+      <h3 id="unregistermodel">unregisterModel()</h3>
+      <p>
+        Remove a custom model (returns <code>true</code> if one was removed).
+        Does not delete any downloaded file.
+      </p>
+      <CodeBlock language="typescript">
+        {`function unregisterModel(modelId: string): boolean`}
+      </CodeBlock>
+
+      <h3 id="getregisteredmodels">getRegisteredModels()</h3>
+      <p>All custom models registered this session.</p>
+      <CodeBlock language="typescript">
+        {`function getRegisteredModels(): ModelRegistryEntry[]`}
+      </CodeBlock>
+
+      <h3 id="fetchmodelmetadata">fetchModelMetadata()</h3>
+      <p>
+        Look up a model file&apos;s <code>sha256</code> and{" "}
+        <code>sizeBytes</code> from a HuggingFace resolve URL, to fill in a{" "}
+        <code>registerModel()</code> entry.
+      </p>
+      <CodeBlock language="typescript">
+        {`function fetchModelMetadata(
+  downloadUrl: string,
+): Promise<{ sha256: string; sizeBytes: number }>`}
+      </CodeBlock>
+      <Callout type="info" title="Pin the hash">
+        <p>
+          Run this once at dev time and hardcode the returned <code>sha256</code>
+          . Fetching it at runtime only catches transit corruption, not a changed
+          upstream repo.
+        </p>
+      </Callout>
+
+      {/* ------------------------------------------------------------------ */}
+      <h2 id="types">Types</h2>
+      <CodeBlock language="typescript">
+        {`type LLMRole = 'system' | 'user' | 'assistant';
+type LLMMessage = { role: LLMRole; content: string };
+type LLMResponse = { text: string };
+
+type LLMSendOptions = { systemPrompt?: string; signal?: AbortSignal };
+type LLMStreamOptions = { systemPrompt?: string };
+type LLMStreamHandle = { promise: Promise<LLMResponse>; stop: () => void };
+type LLMStreamEvent = {
+  sessionId: string; token: string; accumulatedText: string; isDone: boolean;
+};
+
+// Sampling — applied at setModel(), best-effort per backend
+type InferenceBackend = 'auto' | 'gpu' | 'cpu';
+type GenerationConfig = {
+  temperature?: number; topK?: number; topP?: number; seed?: number; maxTokens?: number;
+};
+type SetModelOptions = { backend?: InferenceBackend; generation?: GenerationConfig };
+
+// Structured output
+type JSONSchema = {
+  type?: JSONSchemaType | JSONSchemaType[];
+  properties?: Record<string, JSONSchema>;
+  required?: string[];
+  items?: JSONSchema;
+  enum?: ReadonlyArray<string | number | boolean | null>;
+  [key: string]: unknown;
+};
+type GenerateObjectOptions = {
+  systemPrompt?: string; signal?: AbortSignal; maxRepairAttempts?: number;
+};
+type GenerateObjectResult<T> = { object: T; text: string };
+
+// Tool calling
+type Tool<TArgs = any, TResult = any> = {
+  description: string;
+  parameters: JSONSchema;
+  execute?: (args: TArgs) => TResult | Promise<TResult>;
+};
+type ToolSet = Record<string, Tool>;
+type ToolCall = { toolName: string; args: unknown };
+type ToolResult = { toolName: string; args: unknown; result: unknown };
+type StepResult = { text: string; toolCalls: ToolCall[]; toolResults: ToolResult[] };
+type GenerateTextFinishReason = 'stop' | 'tool-calls' | 'max-steps';
+type GenerateTextOptions = {
+  tools?: ToolSet; maxSteps?: number;
+  systemPrompt?: string; signal?: AbortSignal; maxRepairAttempts?: number;
+};
+type GenerateTextResult = {
+  text: string; steps: StepResult[];
+  toolCalls: ToolCall[]; toolResults: ToolResult[];
+  finishReason: GenerateTextFinishReason;
+};
+
+// Embeddings & RAG
+type EmbeddingTask = 'semantic-similarity' | 'retrieval-query' | 'retrieval-document';
+type EmbedOptions = { task?: EmbeddingTask; language?: string };
+type EmbeddingModelIdentity = { id: string; revision: string };
+type EmbedResult = {
+  embeddings: number[][]; dimensions: number; model: EmbeddingModelIdentity;
+};
+type EmbeddingModelState = {
+  status: 'not-downloaded' | 'downloading' | 'downloaded';
+  sizeBytes: number; model: EmbeddingModelIdentity;
+};
+type ChunkOptions = { chunkSize?: number; overlap?: number };
+type VectorRecord<M = unknown> = { id: string; vector: number[]; metadata?: M };
+type VectorSearchResult<M = unknown> = VectorRecord<M> & { score: number };
+type VectorSearchOptions = { topK?: number; minScore?: number };
+type VectorStore<M = unknown> = {
+  add(id: string, vector: number[], metadata?: M): void;
+  addMany(records: VectorRecord<M>[]): void;
+  get(id: string): VectorRecord<M> | undefined;
+  remove(id: string): boolean;
+  clear(): void;
+  readonly size: number;
+  search(query: number[], options?: VectorSearchOptions): VectorSearchResult<M>[];
+  toJSON(): VectorRecord<M>[];
+};
+
+// Models
+type BuiltInModel = {
+  id: string; name: string; available: boolean;
+  platform: 'ios' | 'android'; contextWindow: number;
+};
+type DownloadableModelStatus =
+  | 'not-downloaded' | 'downloading' | 'downloaded' | 'loading' | 'ready';
+type DownloadableModel = {
+  id: string; name: string; parameterCount: string; license: string;
+  sizeBytes: number; contextWindow: number; minRamBytes: number;
+  meetsRequirements: boolean; status: DownloadableModelStatus;
+};
+type ModelRegistryEntry = {
+  id: string; name: string; parameterCount: string; quantization: string;
+  downloadUrl: string; sha256: string; sizeBytes: number;
+  contextWindow: number; minRamBytes: number;
+  supportedPlatforms: ('ios' | 'android')[]; license: string;
+  preferredBackend?: 'auto' | 'gpu' | 'cpu'; // used when setModel gets no backend
+};`}
+      </CodeBlock>
+
+      {/* ------------------------------------------------------------------ */}
+      <h2 id="errors">Errors</h2>
+      <p>
+        Failures throw a <code>ModelError</code> with a typed <code>.code</code>{" "}
+        and <code>.modelId</code>, so you can branch on the cause:
+      </p>
+      <CodeBlock language="typescript">
+        {`import { ModelError } from 'expo-ai-kit';
+
+try {
+  await setModel('gemma-e4b');
+} catch (e) {
+  if (e instanceof ModelError && e.code === 'MODEL_NOT_DOWNLOADED') {
+    await downloadModel('gemma-e4b');
+  }
+}`}
+      </CodeBlock>
+      <p>
+        <strong><code>ModelErrorCode</code></strong> is one of:{" "}
+        <code>MODEL_NOT_FOUND</code>, <code>MODEL_NOT_DOWNLOADED</code>,{" "}
+        <code>DOWNLOAD_FAILED</code>, <code>DOWNLOAD_CORRUPT</code>,{" "}
+        <code>DOWNLOAD_STORAGE_FULL</code>, <code>DOWNLOAD_CANCELLED</code>,{" "}
+        <code>INFERENCE_OOM</code>, <code>INFERENCE_FAILED</code>,{" "}
+        <code>INFERENCE_BUSY</code>, <code>INFERENCE_CANCELLED</code>,{" "}
+        <code>MODEL_LOAD_FAILED</code>, <code>DEVICE_NOT_SUPPORTED</code>,{" "}
+        <code>EMBEDDINGS_NOT_ENABLED</code>, <code>LANGUAGE_NOT_SUPPORTED</code>,{" "}
+        <code>UNKNOWN</code>.
+      </p>
+      <p>
+        The two embedding-specific codes: <code>EMBEDDINGS_NOT_ENABLED</code> —
+        Android was built without the <code>androidEmbeddings</code>{" "}
+        config-plugin flag (enabling requires a new native build);{" "}
+        <code>LANGUAGE_NOT_SUPPORTED</code> — no iOS embedding model supports
+        the requested language (the message names it; there is never a silent
+        fall-back to the Latin model).
+      </p>
+      <Callout type="info" title="Single-flight inference">
+        <p>
+          Only one generation runs at a time. A concurrent{" "}
+          <code>sendMessage</code> / <code>streamMessage</code> /{" "}
+          <code>generateObject</code> / <code>generateText</code> rejects with{" "}
+          <code>INFERENCE_BUSY</code> — wait for the active one, or{" "}
+          <code>stop()</code> the active stream first.
+        </p>
+      </Callout>
+    </DocsLayout>
+  );
+}
