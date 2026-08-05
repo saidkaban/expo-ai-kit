@@ -8,15 +8,79 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 # Newer pushes to the same PR/branch cancel older in-flight runs.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # Tier 1 — cheap, every PR. Catches TS/JS regressions.
+  # Keep the workflow itself unfiltered so required checks are reported even
+  # when a job is skipped. Top-level path filters can leave required checks
+  # pending forever on docs-only PRs.
+  changes:
+    name: detect changed areas
+    runs-on: ubuntu-latest
+    outputs:
+      library: ${{ steps.scope.outputs.library }}
+      docs: ${{ steps.scope.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Classify changed files
+        id: scope
+        shell: bash
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            base_sha="$PR_BASE_SHA"
+          else
+            base_sha="$PUSH_BEFORE_SHA"
+          fi
+
+          # Run everything when GitHub does not provide a usable comparison
+          # commit, such as the first push of a new branch.
+          if [[ -z "$base_sha" || "$base_sha" =~ ^0+$ ]] || \
+            ! git cat-file -e "${base_sha}^{commit}"; then
+            echo "library=true" >> "$GITHUB_OUTPUT"
+            echo "docs=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          library=false
+          docs=false
+
+          while IFS= read -r -d '' file; do
+            case "$file" in
+              .github/workflows/ci.yml)
+                # Validate both paths when their orchestration changes.
+                library=true
+                docs=true
+                ;;
+              docs/*)
+                docs=true
+                ;;
+              *)
+                library=true
+                ;;
+            esac
+          done < <(git diff --name-only -z "$base_sha" "$GITHUB_SHA")
+
+          echo "library=$library" >> "$GITHUB_OUTPUT"
+          echo "docs=$docs" >> "$GITHUB_OUTPUT"
+
+  # Tier 1 — cheap. Catches TS/JS regressions when library files change.
   node:
     name: build + lint + test (node)
+    needs: changes
+    if: ${{ needs.changes.outputs.library == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +95,8 @@ jobs:
 
   docs:
     name: build + lint + links (docs)
+    needs: changes
+    if: ${{ needs.changes.outputs.docs == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -50,6 +116,8 @@ jobs:
   # example's android/ via `expo prebuild` and compiling it.
   android:
     name: compile android (kotlin)
+    needs: changes
+    if: ${{ needs.changes.outputs.library == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -79,6 +147,8 @@ jobs:
   # `-large`/`-xlarge`). Builds against the SIMULATOR SDK so no code signing.
   ios:
     name: build ios (swift, simulator)
+    needs: changes
+    if: ${{ needs.changes.outputs.library == 'true' }}
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4

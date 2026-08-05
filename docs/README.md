@@ -24,4 +24,5 @@ npm run check
 ## Deployment
 
 The production site is deployed from this repository with `docs` configured as the Vercel Root
-Directory. Next.js defaults handle the build and output settings.
+Directory. Next.js defaults handle the build and output settings. `vercel.json` skips deployments
+when a commit does not change anything inside `docs`.

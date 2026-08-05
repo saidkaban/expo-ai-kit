@@ -13,8 +13,9 @@ and downloadable or custom LiteRT-LM models on iOS and Android.
 - `npm test` — run Jest tests for pure TypeScript logic. Modules that import the native module cannot
   run under Jest.
 - `npm run lint` — run ESLint using the flat config in `eslint.config.js`.
-- CI runs build and tests on Node, compiles Android/Kotlin, and builds iOS/Swift. Native changes are not
-  verified by the Node job alone.
+- CI routes by changed path: `docs/`-only changes run the docs checks; other changes run Node tests and
+  the Android/Kotlin and iOS/Swift builds; mixed changes run both. Native changes are not verified by
+  the Node job alone.
 - The tracked source under `example/` is the native CI fixture. Its generated `ios/`, `android/`,
   `.expo/`, and `node_modules/` directories are disposable and must remain untracked.
 - Version, publish, tag, or push only when explicitly requested. The publish scripts require a clean
