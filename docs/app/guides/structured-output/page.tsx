@@ -3,6 +3,13 @@ import { Callout } from "@/components/Callout";
 import { CodeBlock } from "@/components/CodeBlock";
 import { BadgeGroup } from "@/components/Badge";
 import Link from "next/link";
+import { createPageMetadata } from "@/lib/site";
+
+export const metadata = createPageMetadata(
+  "Structured Output",
+  "Generate typed, schema-validated objects locally with expo-ai-kit JSON extraction and repair loops.",
+  "/guides/structured-output"
+);
 
 const headings = [
   { id: "overview", text: "Overview", level: 2 },

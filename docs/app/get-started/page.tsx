@@ -3,6 +3,13 @@ import { Callout } from "@/components/Callout";
 import { CodeBlock } from "@/components/CodeBlock";
 import { Badge } from "@/components/Badge";
 import Link from "next/link";
+import { createPageMetadata } from "@/lib/site";
+
+export const metadata = createPageMetadata(
+  "Get Started",
+  "Install expo-ai-kit, configure a native Expo build, prepare the device model, and run your first local AI request.",
+  "/get-started"
+);
 
 const headings = [
   { id: "prerequisites", text: "Prerequisites", level: 2 },
@@ -55,6 +62,14 @@ export default function GetStartedPage() {
         </p>
       </Callout>
 
+      <Callout type="warning" title="Development build required">
+        <p>
+          expo-ai-kit includes native Swift and Kotlin code, so it does not run
+          in Expo Go. Use a development build created with <code>npx expo
+          run:ios</code>, <code>npx expo run:android</code>, or EAS Build.
+        </p>
+      </Callout>
+
       <h2 id="installation">Installation</h2>
       <p>Install expo-ai-kit using your preferred package manager:</p>
 
@@ -72,8 +87,13 @@ export default function GetStartedPage() {
         <span className="inline-flex items-center gap-2">
           <Badge platform="android" /> For Android,
         </span>{" "}
-        ensure your <code>app.json</code> includes the minimum SDK version:
+        install <code>expo-build-properties</code> and set the minimum SDK
+        version:
       </p>
+
+      <CodeBlock language="bash" filename="Terminal">
+        {`npx expo install expo-build-properties`}
+      </CodeBlock>
 
       <CodeBlock language="json" filename="app.json">
         {`{
@@ -98,15 +118,23 @@ export default function GetStartedPage() {
       <p>The simplest way to use on-device AI:</p>
 
       <CodeBlock language="typescript" filename="App.tsx">
-        {`import { isAvailable, sendMessage } from 'expo-ai-kit';
+        {`import {
+  isAvailable,
+  prepareBuiltInModel,
+  sendMessage,
+} from 'expo-ai-kit';
 
 async function askAI(question: string) {
-  const available = await isAvailable();
+  const supported = await isAvailable();
 
-  if (!available) {
+  if (!supported) {
     console.log('On-device AI not available');
     return null;
   }
+
+  // Downloads Android's OS-managed ML Kit model when needed.
+  // On iOS, this validates Apple Foundation Models availability.
+  await prepareBuiltInModel();
 
   const response = await sendMessage([
     { role: 'user', content: question }
@@ -116,6 +144,15 @@ async function askAI(question: string) {
 
 const answer = await askAI('What is the capital of France?');`}
       </CodeBlock>
+
+      <Callout type="info" title="Support is not readiness">
+        <p>
+          On Android, <code>isAvailable()</code> can return <code>true</code>
+          while the supported ML Kit model still needs to download. Await
+          <code>prepareBuiltInModel()</code> once during setup before starting
+          inference.
+        </p>
+      </Callout>
 
       <h3 id="with-system-prompt">With Custom System Prompt</h3>
       <p>Customize the AI&apos;s behavior with a system prompt:</p>

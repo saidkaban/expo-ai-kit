@@ -2,6 +2,13 @@ import { DocsLayout } from "@/components/DocsLayout";
 import { Callout } from "@/components/Callout";
 import { CodeBlock } from "@/components/CodeBlock";
 import { BadgeGroup } from "@/components/Badge";
+import { createPageMetadata } from "@/lib/site";
+
+export const metadata = createPageMetadata(
+  "Vercel AI SDK",
+  "Use expo-ai-kit as an on-device language and embedding provider for the Vercel AI SDK.",
+  "/guides/vercel-ai-sdk"
+);
 
 const headings = [
   { id: "overview", text: "Overview", level: 2 },

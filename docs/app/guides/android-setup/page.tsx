@@ -3,6 +3,13 @@ import { Callout } from "@/components/Callout";
 import { CodeBlock } from "@/components/CodeBlock";
 import { Badge } from "@/components/Badge";
 import Link from "next/link";
+import { createPageMetadata } from "@/lib/site";
+
+export const metadata = createPageMetadata(
+  "Android Setup",
+  "Configure expo-ai-kit with Android ML Kit, prepare the built-in model, and enable optional on-device embeddings.",
+  "/guides/android-setup"
+);
 
 const headings = [
   { id: "requirements", text: "Requirements", level: 2 },
@@ -42,11 +49,18 @@ export default function AndroidSetupPage() {
       </ul>
 
       <h2 id="installation">Installation</h2>
-      <p>Install expo-ai-kit using your preferred package manager:</p>
+      <p>Install expo-ai-kit and the Android build-properties plugin:</p>
 
       <CodeBlock language="bash" filename="Terminal">
-{`npx expo install expo-ai-kit`}
+{`npx expo install expo-ai-kit expo-build-properties`}
       </CodeBlock>
+
+      <Callout type="warning" title="Expo Go is not supported">
+        <p>
+          This package uses native code. Test it in a development build or a
+          production build, not Expo Go.
+        </p>
+      </Callout>
 
       <h2 id="configuration">Configuration</h2>
       <p>
@@ -135,12 +149,17 @@ npx expo run:android`}
       </p>
 
       <CodeBlock language="typescript">
-{`import { isAvailable, sendMessage } from 'expo-ai-kit';
+{`import {
+  isAvailable,
+  prepareBuiltInModel,
+  sendMessage,
+} from 'expo-ai-kit';
 
-// Check if on-device AI is available
-const available = await isAvailable();
+// Check device support, then make the OS-managed model ready.
+const supported = await isAvailable();
 
-if (available) {
+if (supported) {
+  await prepareBuiltInModel();
   const response = await sendMessage([
     { role: 'user', content: 'Hello! What can you do?' }
   ]);
@@ -150,8 +169,10 @@ if (available) {
 
       <Callout type="info" title="First Use">
         <p>
-          On first use, the model may need to download. Use{" "}
-          <code>isAvailable()</code> to check status before making requests.
+          <code>isAvailable()</code> checks whether the device supports ML Kit;
+          it does not mean the model asset is ready. On first use,
+          <code>prepareBuiltInModel()</code> downloads the OS-managed model and
+          resolves when inference can begin. Later calls return immediately.
         </p>
       </Callout>
 
@@ -172,8 +193,9 @@ if (available) {
       <Callout type="warning" title="Unsupported Devices">
         <p>
           On unsupported Android devices, the built-in <code>isAvailable()</code>{" "}
-          returns <code>false</code> and <code>sendMessage()</code> returns an
-          empty string. Always check availability before using AI features.
+          returns <code>false</code>. If inference is attempted anyway, the
+          library throws a typed <code>DEVICE_NOT_SUPPORTED</code> error rather
+          than returning an empty response.
         </p>
       </Callout>
 
@@ -191,9 +213,9 @@ if (available) {
 
       <h2 id="troubleshooting">Troubleshooting</h2>
 
-      <h4>Empty responses</h4>
+      <h4>DEVICE_NOT_SUPPORTED</h4>
       <p>
-        The device may not support ML Kit. Check the{" "}
+        The device does not support ML Kit. Check the{" "}
         <a
           href="https://developers.google.com/ml-kit/genai#prompt-device"
           className="text-accent hover:underline"
@@ -205,10 +227,10 @@ if (available) {
         .
       </p>
 
-      <h4>Model downloading</h4>
+      <h4>MODEL_NOT_DOWNLOADED</h4>
       <p>
-        On first use, the model may need to download. Use{" "}
-        <code>isAvailable()</code> to check status.
+        The device supports ML Kit, but its model is not ready. Await
+        <code>prepareBuiltInModel()</code> before retrying inference.
       </p>
 
       <h4>Build errors</h4>

@@ -2,6 +2,13 @@ import { DocsLayout } from "@/components/DocsLayout";
 import { Callout } from "@/components/Callout";
 import { CodeBlock } from "@/components/CodeBlock";
 import { BadgeGroup } from "@/components/Badge";
+import { createPageMetadata } from "@/lib/site";
+
+export const metadata = createPageMetadata(
+  "Multi-turn Conversations",
+  "Build on-device chat experiences by owning and passing complete conversation history with expo-ai-kit.",
+  "/guides/multi-turn"
+);
 
 const headings = [
   { id: "overview", text: "Overview", level: 2 },

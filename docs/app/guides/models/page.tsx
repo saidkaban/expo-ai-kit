@@ -2,6 +2,13 @@ import { DocsLayout } from "@/components/DocsLayout";
 import { Callout } from "@/components/Callout";
 import { CodeBlock } from "@/components/CodeBlock";
 import { BadgeGroup } from "@/components/Badge";
+import { createPageMetadata } from "@/lib/site";
+
+export const metadata = createPageMetadata(
+  "Models",
+  "Choose OS-native, curated downloadable, or custom LiteRT-LM models and manage their complete lifecycle.",
+  "/guides/models"
+);
 
 const headings = [
   { id: "overview", text: "Overview", level: 2 },
@@ -19,7 +26,7 @@ export default function ModelsPage() {
     <DocsLayout headings={headings}>
       <h1>Models</h1>
       <p className="text-xl text-muted leading-relaxed">
-        Use the zero-download OS models, download open models at runtime, or
+        Use OS-managed models, download open models at runtime, or
         register your own — all behind one API.
       </p>
 
@@ -28,8 +35,9 @@ export default function ModelsPage() {
       <h2 id="overview">Overview</h2>
       <p>
         expo-ai-kit runs two kinds of model. <strong>Built-in</strong> models are
-        provided by the OS and need no download — Apple Foundation Models on iOS,
-        ML Kit on Android. <strong>Downloadable</strong> models (Gemma, Qwen,
+        provided and maintained by the OS — Apple Foundation Models on iOS and
+        ML Kit on Android. Android may prepare its model on first use, but it is
+        not bundled into your app. <strong>Downloadable</strong> models (Gemma, Qwen,
         Phi) are fetched at runtime via LiteRT-LM and run on both platforms. You
         switch between any of them with <code>setModel()</code>.
       </p>
@@ -44,7 +52,7 @@ export default function ModelsPage() {
         </thead>
         <tbody>
           <tr>
-            <td>Zero download, zero app-size cost</td>
+            <td>OS-managed, zero app-size cost</td>
             <td>0.5–4 GB download, managed by you</td>
           </tr>
           <tr>
@@ -159,8 +167,10 @@ if (best) await downloadModel(best.id);`}
         <li><code>ready</code> — loaded and ready for inference</li>
       </ul>
       <p>
-        Downloads are integrity-checked (SHA256) and resumable to delete with{" "}
-        <code>cancelDownload(id)</code> / <code>deleteModel(id)</code>.
+        Downloads are integrity-checked with SHA-256. Use
+        <code>cancelDownload(id)</code> to stop an active download and
+        <code>deleteModel(id)</code> to remove a downloaded model. Interrupted
+        downloads restart from the beginning.
       </p>
 
       <h2 id="bring-your-own-model">Bring Your Own Model</h2>

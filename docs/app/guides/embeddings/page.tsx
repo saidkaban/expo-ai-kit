@@ -2,6 +2,13 @@ import { DocsLayout } from "@/components/DocsLayout";
 import { Callout } from "@/components/Callout";
 import { CodeBlock } from "@/components/CodeBlock";
 import { BadgeGroup } from "@/components/Badge";
+import { createPageMetadata } from "@/lib/site";
+
+export const metadata = createPageMetadata(
+  "Embeddings & RAG",
+  "Create on-device embeddings and build private semantic search and retrieval-augmented generation with expo-ai-kit.",
+  "/guides/embeddings"
+);
 
 const headings = [
   { id: "overview", text: "Overview", level: 2 },

@@ -1,6 +1,13 @@
 import { DocsLayout } from "@/components/DocsLayout";
 import { Callout } from "@/components/Callout";
 import { CodeBlock } from "@/components/CodeBlock";
+import { createPageMetadata } from "@/lib/site";
+
+export const metadata = createPageMetadata(
+  "Migration Guide",
+  "Upgrade early expo-ai-kit applications from the session-based API to the current stateless conversation API.",
+  "/guides/migration"
+);
 
 const headings = [
   { id: "breaking-changes", text: "Breaking Changes", level: 2 },
@@ -8,7 +15,7 @@ const headings = [
   { id: "before-after", text: "Before & After", level: 2 },
   { id: "session-removal", text: "Session Removal", level: 3 },
   { id: "response-property", text: "Response Property", level: 3 },
-  { id: "prepare-model-removal", text: "prepareModel() Removal", level: 3 },
+  { id: "prepare-model-replacement", text: "Model Preparation", level: 3 },
 ];
 
 export default function MigrationPage() {
@@ -63,7 +70,7 @@ export default function MigrationPage() {
               <code>prepareModel(options)</code>
             </td>
             <td>
-              <strong>Removed</strong>
+              <code>prepareBuiltInModel()</code>
             </td>
           </tr>
           <tr>
@@ -114,11 +121,12 @@ console.log(response.reply);`}
 console.log(response.text);`}
       </CodeBlock>
 
-      <h3 id="prepare-model-removal">prepareModel() Removal</h3>
+      <h3 id="prepare-model-replacement">Model Preparation</h3>
       <p>
-        <code>prepareModel()</code> has been removed. The model is now prepared
-        automatically when needed. Use <code>isAvailable()</code> to check if
-        on-device AI is ready.
+        The old configurable <code>prepareModel(options)</code> API was removed.
+        Use <code>isAvailable()</code> to check device support, then await
+        <code>prepareBuiltInModel()</code>. On Android it prepares the
+        OS-managed ML Kit model; on iOS it validates Apple Foundation Models.
       </p>
 
       <CodeBlock language="typescript" filename="Before (v0.1.4)">
@@ -129,14 +137,15 @@ const session = await createSession({ systemPrompt: '...' });`}
       <CodeBlock language="typescript" filename="After (latest)">
         {`const available = await isAvailable();
 if (available) {
+  await prepareBuiltInModel();
   const { text } = await sendMessage(messages, { systemPrompt: '...' });
 }`}
       </CodeBlock>
 
       <Callout type="success" title="Simpler API">
         <p>
-          The new API is significantly simpler. No sessions, no model
-          preparation &mdash; just check availability and send messages.
+          The current API has no session IDs. Check support, prepare the
+          built-in model once, and pass the full conversation to each request.
         </p>
       </Callout>
     </DocsLayout>

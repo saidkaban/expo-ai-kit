@@ -2,9 +2,17 @@ import { DocsLayout } from "@/components/DocsLayout";
 import { Callout } from "@/components/Callout";
 import { CodeBlock } from "@/components/CodeBlock";
 import { BadgeGroup } from "@/components/Badge";
+import { createPageMetadata } from "@/lib/site";
+
+export const metadata = createPageMetadata(
+  "API Reference",
+  "Complete expo-ai-kit API reference for generation, tools, embeddings, RAG, model management, types, and errors.",
+  "/api"
+);
 
 const headings = [
   { id: "isavailable", text: "isAvailable()", level: 2 },
+  { id: "preparebuiltinmodel", text: "prepareBuiltInModel()", level: 2 },
   { id: "sendmessage", text: "sendMessage()", level: 2 },
   { id: "streammessage", text: "streamMessage()", level: 2 },
   { id: "generateobject", text: "generateObject()", level: 2 },
@@ -19,6 +27,7 @@ const headings = [
   { id: "model-management", text: "Model Management", level: 2 },
   { id: "getbuiltinmodels", text: "getBuiltInModels()", level: 3 },
   { id: "getdownloadablemodels", text: "getDownloadableModels()", level: 3 },
+  { id: "getdownloadedmodels", text: "getDownloadedModels()", level: 3 },
   { id: "getrecommendedmodel", text: "getRecommendedModel()", level: 3 },
   { id: "downloadmodel", text: "downloadModel()", level: 3 },
   { id: "canceldownload", text: "cancelDownload()", level: 3 },
@@ -56,9 +65,10 @@ export default function APIReferencePage() {
       {/* ------------------------------------------------------------------ */}
       <h2 id="isavailable">isAvailable()</h2>
       <p>
-        Check whether on-device AI is available. Returns <code>false</code> on
-        unsupported platforms (web) and when the OS model isn&apos;t ready (e.g.
-        Apple Intelligence disabled).
+        Check whether the current device supports its built-in on-device model.
+        Returns <code>false</code> on unsupported platforms and devices. On
+        Android, <code>true</code> means ML Kit is supported even when its
+        OS-managed model still needs to download.
       </p>
       <CodeBlock language="typescript">
         {`function isAvailable(): Promise<boolean>`}
@@ -67,9 +77,42 @@ export default function APIReferencePage() {
         {`import { isAvailable } from 'expo-ai-kit';
 
 if (await isAvailable()) {
-  // safe to call sendMessage / streamMessage / generateObject / generateText
+  await prepareBuiltInModel();
 }`}
       </CodeBlock>
+
+      <Callout type="info" title="Availability is not preparation">
+        <p>
+          Call <code>isAvailable()</code> to decide whether to show the feature.
+          Await <code>prepareBuiltInModel()</code> before inference so Android
+          can finish its first-use model download.
+        </p>
+      </Callout>
+
+      {/* ------------------------------------------------------------------ */}
+      <h2 id="preparebuiltinmodel">prepareBuiltInModel()</h2>
+      <p>
+        Make the platform&apos;s built-in generation model ready. Android downloads
+        the AICore-managed ML Kit model when needed. iOS validates Apple
+        Foundation Models availability. Repeated calls are safe and resolve
+        immediately when the model is already ready.
+      </p>
+      <CodeBlock language="typescript">
+        {`function prepareBuiltInModel(): Promise<void>`}
+      </CodeBlock>
+      <CodeBlock language="typescript">
+        {`import { isAvailable, prepareBuiltInModel } from 'expo-ai-kit';
+
+if (!(await isAvailable())) {
+  throw new Error('On-device AI is not supported on this device');
+}
+
+await prepareBuiltInModel();`}
+      </CodeBlock>
+      <p>
+        Throws <code>DEVICE_NOT_SUPPORTED</code> when the built-in model cannot
+        run and <code>DOWNLOAD_FAILED</code> if Android cannot prepare its model.
+      </p>
 
       {/* ------------------------------------------------------------------ */}
       <h2 id="sendmessage">sendMessage()</h2>
@@ -388,6 +431,15 @@ const hits = store.search(queryVector, { topK: 4 });
       </p>
       <CodeBlock language="typescript">
         {`function getDownloadableModels(): Promise<DownloadableModel[]>`}
+      </CodeBlock>
+
+      <h3 id="getdownloadedmodels">getDownloadedModels()</h3>
+      <p>
+        Return only downloadable models already present on the device, including
+        models currently loading or ready for inference.
+      </p>
+      <CodeBlock language="typescript">
+        {`function getDownloadedModels(): Promise<DownloadableModel[]>`}
       </CodeBlock>
 
       <h3 id="getrecommendedmodel">getRecommendedModel()</h3>

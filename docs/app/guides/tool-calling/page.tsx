@@ -3,6 +3,13 @@ import { Callout } from "@/components/Callout";
 import { CodeBlock } from "@/components/CodeBlock";
 import { BadgeGroup } from "@/components/Badge";
 import Link from "next/link";
+import { createPageMetadata } from "@/lib/site";
+
+export const metadata = createPageMetadata(
+  "Tool Calling",
+  "Define typed functions that on-device models can request and execute through expo-ai-kit.",
+  "/guides/tool-calling"
+);
 
 const headings = [
   { id: "overview", text: "Overview", level: 2 },

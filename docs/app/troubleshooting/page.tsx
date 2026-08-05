@@ -2,6 +2,13 @@ import { DocsLayout } from "@/components/DocsLayout";
 import { Callout } from "@/components/Callout";
 import { CodeBlock } from "@/components/CodeBlock";
 import { Badge } from "@/components/Badge";
+import { createPageMetadata } from "@/lib/site";
+
+export const metadata = createPageMetadata(
+  "Troubleshooting",
+  "Diagnose expo-ai-kit setup, device support, model downloads, native builds, memory limits, and inference errors.",
+  "/troubleshooting"
+);
 
 const headings = [
   { id: "common-issues", text: "Common Issues", level: 2 },
@@ -18,8 +25,8 @@ const headings = [
   },
   { id: "fallback-responses", text: "Fallback responses", level: 3 },
   { id: "android-specific", text: "Android Troubleshooting", level: 2 },
-  { id: "empty-responses", text: "Empty responses", level: 3 },
-  { id: "model-downloading", text: "Model downloading", level: 3 },
+  { id: "device-not-supported", text: "DEVICE_NOT_SUPPORTED", level: 3 },
+  { id: "model-not-downloaded", text: "MODEL_NOT_DOWNLOADED", level: 3 },
   { id: "debugging-tips", text: "Debugging Tips", level: 2 },
   { id: "getting-help", text: "Getting Help", level: 2 },
 ];
@@ -111,12 +118,13 @@ async function checkSupport() {
 
       <h2 id="android-specific">Android Troubleshooting</h2>
 
-      <h3 id="empty-responses">
-        <Badge platform="android" /> Empty responses
+      <h3 id="device-not-supported">
+        <Badge platform="android" /> DEVICE_NOT_SUPPORTED
       </h3>
       <p>
-        If <code>sendMessage()</code> returns an empty string, the device may not
-        support ML Kit. Check the{" "}
+        The built-in Android model throws a typed
+        <code>DEVICE_NOT_SUPPORTED</code> error when ML Kit cannot run on the
+        device. Check the{" "}
         <a
           href="https://developers.google.com/ml-kit/genai#prompt-device"
           className="text-accent hover:underline"
@@ -129,41 +137,49 @@ async function checkSupport() {
       </p>
 
       <CodeBlock language="typescript">
-        {`import { isAvailable, sendMessage } from 'expo-ai-kit';
+        {`import {
+  isAvailable,
+  prepareBuiltInModel,
+  sendMessage,
+  ModelError,
+} from 'expo-ai-kit';
 
 async function safeMessage(text: string) {
-  const available = await isAvailable();
+  const supported = await isAvailable();
 
-  if (!available) {
+  if (!supported) {
     console.log('Device does not support on-device AI');
     return null;
   }
 
-  const response = await sendMessage([
-    { role: 'user', content: text }
-  ]);
-
-  if (!response.text) {
-    console.log('Received empty response - device may not be fully supported');
-    return null;
+  try {
+    await prepareBuiltInModel();
+    const response = await sendMessage([
+      { role: 'user', content: text }
+    ]);
+    return response.text;
+  } catch (error) {
+    if (error instanceof ModelError) {
+      console.error(error.code, error.modelId, error.message);
+    }
+    throw error;
   }
-
-  return response.text;
 }`}
       </CodeBlock>
 
-      <h3 id="model-downloading">
-        <Badge platform="android" /> Model downloading
+      <h3 id="model-not-downloaded">
+        <Badge platform="android" /> MODEL_NOT_DOWNLOADED
       </h3>
       <p>
-        On Android, the model may need to be downloaded on first use. Use{" "}
-        <code>isAvailable()</code> to check status before making requests.
+        On Android, <code>isAvailable()</code> can return <code>true</code> while
+        the supported model still needs its first-use download. Await
+        <code>prepareBuiltInModel()</code> before inference.
       </p>
 
       <Callout type="info">
         <p>
-          The first request may take longer as the model downloads in the
-          background. Subsequent requests will be faster.
+          Preparation owns the download and resolves only when the model is
+          ready. Later calls return immediately.
         </p>
       </Callout>
 

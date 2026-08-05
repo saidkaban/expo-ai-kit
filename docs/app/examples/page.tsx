@@ -2,6 +2,13 @@ import { DocsLayout } from "@/components/DocsLayout";
 import { Callout } from "@/components/Callout";
 import { CodeBlock } from "@/components/CodeBlock";
 import { BadgeGroup } from "@/components/Badge";
+import { createPageMetadata } from "@/lib/site";
+
+export const metadata = createPageMetadata(
+  "Examples",
+  "Production-oriented expo-ai-kit examples for chat, streaming, structured output, tool calling, model switching, and errors.",
+  "/examples"
+);
 
 const headings = [
   { id: "complete-chat-example", text: "Complete Chat Example", level: 2 },
@@ -29,7 +36,12 @@ export default function ExamplesPage() {
       <CodeBlock language="typescript" filename="ChatScreen.tsx" showLineNumbers>
         {`import React, { useState, useEffect } from 'react';
 import { View, TextInput, Button, Text, FlatList } from 'react-native';
-import { isAvailable, sendMessage, type LLMMessage } from 'expo-ai-kit';
+import {
+  isAvailable,
+  prepareBuiltInModel,
+  sendMessage,
+  type LLMMessage,
+} from 'expo-ai-kit';
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState<LLMMessage[]>([]);
@@ -38,7 +50,11 @@ export default function ChatScreen() {
   const [available, setAvailable] = useState(false);
 
   useEffect(() => {
-    isAvailable().then(setAvailable);
+    void (async () => {
+      if (!(await isAvailable())) return;
+      await prepareBuiltInModel();
+      setAvailable(true);
+    })();
   }, []);
 
   const handleSend = async () => {
@@ -266,7 +282,13 @@ export async function setupBestModel(onProgress: (p: number) => void) {
       <p>Branch on the typed error code for robust production behavior:</p>
 
       <CodeBlock language="typescript" filename="utils/ai.ts">
-        {`import { isAvailable, sendMessage, ModelError, type LLMMessage } from 'expo-ai-kit';
+        {`import {
+  isAvailable,
+  prepareBuiltInModel,
+  sendMessage,
+  ModelError,
+  type LLMMessage,
+} from 'expo-ai-kit';
 
 export async function safeAIRequest(messages: LLMMessage[], systemPrompt?: string) {
   if (!(await isAvailable())) {
@@ -274,6 +296,7 @@ export async function safeAIRequest(messages: LLMMessage[], systemPrompt?: strin
   }
 
   try {
+    await prepareBuiltInModel();
     const { text } = await sendMessage(messages, { systemPrompt });
     return { success: true as const, result: text };
   } catch (e) {

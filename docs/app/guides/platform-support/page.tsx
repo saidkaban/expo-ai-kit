@@ -3,6 +3,13 @@ import { Callout } from "@/components/Callout";
 import { CodeBlock } from "@/components/CodeBlock";
 import { Badge, BadgeGroup } from "@/components/Badge";
 import Link from "next/link";
+import { createPageMetadata } from "@/lib/site";
+
+export const metadata = createPageMetadata(
+  "Platform Support",
+  "Compare expo-ai-kit support across Apple Foundation Models, Android ML Kit, LiteRT-LM, and on-device embeddings.",
+  "/guides/platform-support"
+);
 
 const headings = [
   { id: "overview", text: "Overview", level: 2 },
@@ -31,8 +38,9 @@ export default function PlatformSupportPage() {
       </p>
       <p>
         There are two model paths. The <strong>built-in OS models</strong> —
-        Apple Foundation Models on iOS, ML Kit on Android — need no download but
-        require a recent OS/device. <strong>Downloadable models</strong> (Gemma,
+        Apple Foundation Models on iOS and ML Kit on Android — are managed by
+        the operating system rather than bundled with your app. Android may
+        download its model on first use. <strong>Downloadable models</strong> (Gemma,
         Qwen, Phi via LiteRT-LM) run on <em>both</em> platforms and broaden
         support to devices without a built-in model, as long as they have enough
         RAM. See the{" "}
@@ -95,7 +103,7 @@ export default function PlatformSupportPage() {
           </tr>
           <tr>
             <td>Android (unsupported devices)</td>
-            <td>Returns empty string</td>
+            <td>Throws <code>DEVICE_NOT_SUPPORTED</code></td>
           </tr>
         </tbody>
       </table>
@@ -197,8 +205,9 @@ export default function PlatformSupportPage() {
       <Callout type="warning" title="Unsupported Android Devices">
         <p>
           On Android devices that don&apos;t support ML Kit, the
-          module returns an empty string. Use <code>isAvailable()</code> to
-          check status before making requests.
+          module throws a typed <code>DEVICE_NOT_SUPPORTED</code> error. Use
+          <code>isAvailable()</code> to check support before preparing the
+          model or making requests.
         </p>
       </Callout>
 
@@ -240,6 +249,13 @@ export default function PlatformSupportPage() {
             </td>
             <td>✅</td>
             <td>✅</td>
+          </tr>
+          <tr>
+            <td>
+              <code>prepareBuiltInModel()</code>
+            </td>
+            <td>✅ availability validation</td>
+            <td>✅ prepares OS-managed model</td>
           </tr>
           <tr>
             <td>
@@ -305,13 +321,22 @@ export default function PlatformSupportPage() {
 
       <CodeBlock language="typescript" filename="hooks/useAI.ts">
         {`import { useState, useEffect } from 'react';
-import { isAvailable, sendMessage, type LLMMessage } from 'expo-ai-kit';
+import {
+  isAvailable,
+  prepareBuiltInModel,
+  sendMessage,
+  type LLMMessage,
+} from 'expo-ai-kit';
 
 export function useAI() {
   const [available, setAvailable] = useState(false);
 
   useEffect(() => {
-    isAvailable().then(setAvailable);
+    void (async () => {
+      if (!(await isAvailable())) return;
+      await prepareBuiltInModel();
+      setAvailable(true);
+    })();
   }, []);
 
   const askAI = async (question: string) => {
