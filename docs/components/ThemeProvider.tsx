@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useSyncExternalStore } from "react";
 
 type Theme = "light" | "dark" | "system";
 
@@ -31,61 +31,59 @@ function getSystemTheme(): "light" | "dark" {
     : "light";
 }
 
+function subscribeToTheme(callback: () => void) {
+  window.addEventListener("storage", callback);
+  window.addEventListener("expo-ai-kit-theme-change", callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener("expo-ai-kit-theme-change", callback);
+  };
+}
+
+function getThemeSnapshot(): Theme {
+  const stored = localStorage.getItem("theme");
+  return stored === "light" || stored === "dark" || stored === "system"
+    ? stored
+    : "system";
+}
+
+function getServerThemeSnapshot(): Theme {
+  return "system";
+}
+
+function getServerSystemThemeSnapshot(): "light" | "dark" {
+  return "light";
+}
+
+function subscribeToSystemTheme(callback: () => void) {
+  const media = window.matchMedia("(prefers-color-scheme: dark)");
+  media.addEventListener("change", callback);
+  return () => media.removeEventListener("change", callback);
+}
+
 export function ThemeProvider({ children }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>("system");
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
-  const [mounted, setMounted] = useState(false);
+  const theme = useSyncExternalStore(
+    subscribeToTheme,
+    getThemeSnapshot,
+    getServerThemeSnapshot
+  );
+  const systemTheme = useSyncExternalStore(
+    subscribeToSystemTheme,
+    getSystemTheme,
+    getServerSystemThemeSnapshot
+  );
+  const resolvedTheme = theme === "system" ? systemTheme : theme;
 
-  // Load saved theme and set initial resolved theme
   useEffect(() => {
-    const stored = localStorage.getItem("theme") as Theme | null;
-    const initialTheme = stored || "system";
-    setTheme(initialTheme);
-
-    // Set initial resolved theme
-    if (initialTheme === "system") {
-      setResolvedTheme(getSystemTheme());
-    } else {
-      setResolvedTheme(initialTheme);
-    }
-
-    setMounted(true);
-  }, []);
-
-  // Apply theme changes
-  useEffect(() => {
-    if (!mounted) return;
-
     const root = document.documentElement;
-
-    const applyTheme = (resolved: "light" | "dark") => {
-      setResolvedTheme(resolved);
-      root.classList.remove("light", "dark");
-      root.classList.add(resolved);
-    };
-
-    if (theme === "system") {
-      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-      applyTheme(mediaQuery.matches ? "dark" : "light");
-
-      const handler = (e: MediaQueryListEvent) => {
-        applyTheme(e.matches ? "dark" : "light");
-      };
-      mediaQuery.addEventListener("change", handler);
-      return () => mediaQuery.removeEventListener("change", handler);
-    } else {
-      applyTheme(theme);
-    }
-  }, [theme, mounted]);
+    root.classList.remove("light", "dark");
+    root.classList.add(resolvedTheme);
+  }, [resolvedTheme]);
 
   const handleSetTheme = (newTheme: Theme) => {
-    setTheme(newTheme);
     localStorage.setItem("theme", newTheme);
+    window.dispatchEvent(new Event("expo-ai-kit-theme-change"));
   };
-
-  if (!mounted) {
-    return null;
-  }
 
   return (
     <ThemeContext.Provider

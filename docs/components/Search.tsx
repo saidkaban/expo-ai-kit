@@ -122,7 +122,10 @@ export function Search() {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm text-muted border border-border rounded-lg hover:border-muted-foreground transition-colors bg-sidebar-bg"
+        className="flex items-center gap-2 p-2 text-sm text-muted border border-border rounded-lg hover:border-muted-foreground transition-colors bg-sidebar-bg sm:px-3 sm:py-1.5"
+        aria-label="Search documentation"
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
       >
         <SearchIcon className="w-4 h-4" />
         <span className="hidden sm:inline">Search docs...</span>
@@ -139,7 +142,12 @@ export function Search() {
               onClick={() => setIsOpen(false)}
             />
             <div className="fixed top-[10vh] left-1/2 -translate-x-1/2 z-100 w-full max-w-2xl px-4">
-              <div className="bg-background rounded-xl shadow-2xl overflow-hidden border border-border">
+              <div
+                className="bg-background rounded-xl shadow-2xl overflow-hidden border border-border"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Search documentation"
+              >
                 {/* Header with search input */}
                 <div className="flex items-center gap-3 px-4 py-3">
                   <SearchIcon className="w-5 h-5 text-muted" />
@@ -150,11 +158,13 @@ export function Search() {
                     onChange={(e) => handleQueryChange(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Search..."
+                    aria-label="Search documentation"
                     className="flex-1 bg-transparent text-foreground placeholder:text-muted outline-none border-none focus:ring-0 focus:outline-none focus-visible:outline-none text-base"
                   />
                   <button
                     onClick={() => setIsOpen(false)}
                     className="p-1 hover:bg-sidebar-bg rounded transition-colors"
+                    aria-label="Close search"
                   >
                     <CloseIcon className="w-5 h-5 text-muted" />
                   </button>

@@ -34,13 +34,18 @@ export function ThemeToggle() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="p-2 hover:bg-sidebar-bg rounded-lg transition-colors"
-        aria-label="Toggle theme"
+        aria-label="Choose color theme"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
       >
         <CurrentIcon className="text-foreground" width={20} height={20} />
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 py-2 bg-background border border-border rounded-xl shadow-lg min-w-[140px] z-50">
+        <div
+          className="absolute right-0 top-full mt-2 py-2 bg-background border border-border rounded-xl shadow-lg min-w-[140px] z-50"
+          role="menu"
+        >
           <div className="px-3 py-1.5 text-xs text-muted font-medium">Theme</div>
           {options.map((option) => (
             <button
@@ -52,6 +57,8 @@ export function ThemeToggle() {
               className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-sm hover:bg-sidebar-bg transition-colors ${
                 theme === option.value ? "text-foreground" : "text-muted"
               }`}
+              role="menuitemradio"
+              aria-checked={theme === option.value}
             >
               <div className="flex items-center gap-2">
                 <option.icon

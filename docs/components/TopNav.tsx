@@ -14,8 +14,8 @@ interface TopNavProps {
 export function TopNav({ onMenuClick, isSidebarOpen }: TopNavProps) {
   return (
     <header className="fixed top-0 left-0 right-0 z-40 h-16 border-b border-border bg-header-bg backdrop-blur-md">
-      <div className="flex items-center justify-between h-full px-4 lg:px-6">
-        <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between h-full px-3 sm:px-4 lg:px-6">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           <button
             onClick={onMenuClick}
             className="lg:hidden p-2 -ml-2 hover:bg-sidebar-bg rounded-lg transition-colors"
@@ -28,25 +28,28 @@ export function TopNav({ onMenuClick, isSidebarOpen }: TopNavProps) {
             )}
           </button>
 
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/" className="flex min-w-0 items-center gap-2" aria-label="expo-ai-kit documentation home">
             <Image
               src="/logo.svg"
               alt="expo-ai-kit logo"
-              width={32}
-              height={32}
+              width={30}
+              height={30}
+              className="shrink-0"
             />
-            <span className="font-semibold text-foreground">expo-ai-kit</span>
+            <span className="whitespace-nowrap text-sm font-semibold text-foreground sm:text-base">
+              expo-ai-kit
+            </span>
           </Link>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-0.5 sm:gap-2">
           <Search />
 
           <a
             href="https://www.npmjs.com/package/expo-ai-kit"
             target="_blank"
             rel="noopener noreferrer"
-            className="p-2 hover:bg-sidebar-bg rounded-lg transition-colors"
+            className="hidden p-2 hover:bg-sidebar-bg rounded-lg transition-colors sm:inline-flex"
             aria-label="npm package"
           >
             <NpmIcon className="text-foreground" />
