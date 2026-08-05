@@ -29,6 +29,22 @@ jobs:
       - run: npm run lint
       - run: npm test
 
+  docs:
+    name: build + lint + links (docs)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+      - run: npm ci
+      - run: npm run check
+
   # Tier 2 — Android native. Kotlin/Gradle build on Linux (no macOS needed).
   # Guards the Kotlin surface the node tier can't see, by regenerating the
   # example's android/ via `expo prebuild` and compiling it.
