@@ -1,4 +1,5 @@
 import type { LanguageModelV3CallOptions } from '@ai-sdk/provider';
+
 import {
   convertCallOptions,
   extractOutput,
@@ -335,7 +336,11 @@ describe('extractOutput', () => {
 
   it('falls back to text for unknown tool names (single-shot, no repair loop)', () => {
     const raw = '{"tool": "nope", "arguments": {}}';
-    expect(extractOutput(raw, ['getWeather'], false)).toEqual({ kind: 'text', text: raw, reasoning: '' });
+    expect(extractOutput(raw, ['getWeather'], false)).toEqual({
+      kind: 'text',
+      text: raw,
+      reasoning: '',
+    });
   });
 
   it('returns plain answers as text when tools were offered', () => {

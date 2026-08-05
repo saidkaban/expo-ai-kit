@@ -11,7 +11,6 @@ import {
   MODEL_REGISTRY,
   type ModelRegistryEntry,
 } from '../models';
-
 import type { DownloadableModel } from '../types';
 
 function validEntry(overrides: Partial<ModelRegistryEntry> = {}): ModelRegistryEntry {
@@ -51,9 +50,9 @@ describe('validateModelEntry', () => {
   });
 
   it('rejects a malformed sha256', () => {
-    expect(validateModelEntry(validEntry({ sha256: 'abc' })).some((e) => e.includes('sha256'))).toBe(
-      true
-    );
+    expect(
+      validateModelEntry(validEntry({ sha256: 'abc' })).some((e) => e.includes('sha256'))
+    ).toBe(true);
   });
 
   it('rejects a non-positive sizeBytes', () => {
@@ -87,7 +86,9 @@ describe('validateModelEntry', () => {
 describe('parseHuggingFaceUrl', () => {
   it('parses a standard resolve URL', () => {
     expect(
-      parseHuggingFaceUrl('https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/m.litertlm')
+      parseHuggingFaceUrl(
+        'https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/m.litertlm'
+      )
     ).toEqual({ repo: 'litert-community/Qwen3-0.6B', revision: 'main', path: 'm.litertlm' });
   });
 
@@ -98,9 +99,9 @@ describe('parseHuggingFaceUrl', () => {
   });
 
   it('handles a nested file path', () => {
-    expect(parseHuggingFaceUrl('https://huggingface.co/a/b/resolve/main/sub/dir/m.litertlm')).toEqual(
-      { repo: 'a/b', revision: 'main', path: 'sub/dir/m.litertlm' }
-    );
+    expect(
+      parseHuggingFaceUrl('https://huggingface.co/a/b/resolve/main/sub/dir/m.litertlm')
+    ).toEqual({ repo: 'a/b', revision: 'main', path: 'sub/dir/m.litertlm' });
   });
 
   it('returns null for a non-HuggingFace URL', () => {
@@ -141,9 +142,9 @@ describe('registerModel / getRegistryEntry', () => {
   it('accepts a valid preferredBackend and rejects an invalid one', () => {
     expect(validateModelEntry(validEntry({ preferredBackend: 'cpu' }))).toEqual([]);
     expect(validateModelEntry(validEntry())).toEqual([]);
-    expect(
-      validateModelEntry(validEntry({ preferredBackend: 'npu' as never }))
-    ).toContain('preferredBackend must be "auto", "gpu", or "cpu" when provided');
+    expect(validateModelEntry(validEntry({ preferredBackend: 'npu' as never }))).toContain(
+      'preferredBackend must be "auto", "gpu", or "cpu" when provided'
+    );
   });
 
   it('pins qwen3 models to the CPU backend (GPU path broken in LiteRT-LM 0.10.0)', () => {

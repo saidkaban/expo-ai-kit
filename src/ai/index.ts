@@ -8,6 +8,7 @@ import type {
   LanguageModelV3StreamResult,
 } from '@ai-sdk/provider';
 import { Platform } from 'react-native';
+
 import { embed, getActiveModel, sendMessage, setModel, streamMessage } from '../index';
 import { ANDROID_EMBEDDING_MODEL } from '../models';
 import { ModelError, type EmbeddingTask, type SetModelOptions } from '../types';
@@ -146,7 +147,7 @@ export function createExpoAiKit(): ExpoAiKitProvider {
         resolved,
         `expo-ai-kit has one embedding model per platform — "${APPLE_EMBEDDING_MODEL_ID}" on iOS ` +
           `(Apple NLContextualEmbedding), "${ANDROID_EMBEDDING_MODEL_ID}" on Android (EmbeddingGemma). ` +
-          'Omit the id to use the current platform\'s model.'
+          "Omit the id to use the current platform's model."
       );
     }
     return createEmbeddingModel(resolved, settings);
@@ -169,10 +170,7 @@ export const expoAiKit: ExpoAiKitProvider = createExpoAiKit();
 // Language model
 // ---------------------------------------------------------------------------
 
-function createLanguageModel(
-  modelId: string,
-  settings?: ExpoAiKitModelSettings
-): LanguageModelV3 {
+function createLanguageModel(modelId: string, settings?: ExpoAiKitModelSettings): LanguageModelV3 {
   /**
    * Make sure this instance's model is the active one. 'auto' never switches.
    * Deliberately skipped when already active: reloading a multi-GB model per

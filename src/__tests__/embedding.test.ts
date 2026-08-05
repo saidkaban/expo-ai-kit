@@ -116,13 +116,11 @@ describe('composeAndroidEmbeddingRevision', () => {
     expect(composeAndroidEmbeddingRevision({ ...base, tasksTextVersion: '1.1.0' })).not.toBe(
       revision
     );
-    expect(
-      composeAndroidEmbeddingRevision({ ...base, sha256: 'b'.repeat(64) })
-    ).not.toBe(revision);
+    expect(composeAndroidEmbeddingRevision({ ...base, sha256: 'b'.repeat(64) })).not.toBe(revision);
     expect(composeAndroidEmbeddingRevision({ ...base, dimensions: 512 })).not.toBe(revision);
-    expect(
-      composeAndroidEmbeddingRevision({ ...base, formatContextProtocol: 'tfc2' })
-    ).not.toBe(revision);
+    expect(composeAndroidEmbeddingRevision({ ...base, formatContextProtocol: 'tfc2' })).not.toBe(
+      revision
+    );
   });
 
   it('produces the shipped revision from the shipped pins', () => {

@@ -402,11 +402,11 @@ export async function fetchModelMetadata(
   if (!res.ok) {
     throw new Error(`fetchModelMetadata: HuggingFace API returned ${res.status} for ${treeUrl}`);
   }
-  const items = (await res.json()) as Array<{
+  const items = (await res.json()) as {
     path?: string;
     size?: number;
     lfs?: { oid?: string; size?: number };
-  }>;
+  }[];
   const file = Array.isArray(items) ? items.find((it) => it?.path === path) : undefined;
   if (!file) {
     throw new Error(`fetchModelMetadata: "${path}" not found in ${repo}@${revision}`);
@@ -432,13 +432,9 @@ export async function fetchModelMetadata(
  * @param models - List of downloadable models with their current download status.
  * @returns A new array containing only downloaded, loading, or ready models.
  */
-export function filterDownloadedModels(
-  models: DownloadableModel[],
-): DownloadableModel[] {
+export function filterDownloadedModels(models: DownloadableModel[]): DownloadableModel[] {
   return models.filter(
     (entry) =>
-      entry.status === 'downloaded' ||
-      entry.status === 'loading' ||
-      entry.status === 'ready'
+      entry.status === 'downloaded' || entry.status === 'loading' || entry.status === 'ready'
   );
 }

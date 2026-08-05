@@ -140,7 +140,6 @@ export type LLMStreamEvent = {
  */
 export type LLMStreamCallback = (event: LLMStreamEvent) => void;
 
-
 // ============================================================================
 // Structured Output (generateObject)
 // ============================================================================
@@ -180,7 +179,7 @@ export type JSONSchema = {
   /** For `array` schemas: the schema each element must satisfy. */
   items?: JSONSchema;
   /** Restrict the value to this set of literals. */
-  enum?: ReadonlyArray<string | number | boolean | null>;
+  enum?: readonly (string | number | boolean | null)[];
   /** Other JSON Schema keywords are accepted and forwarded to the model. */
   [key: string]: unknown;
 };
@@ -217,7 +216,6 @@ export type GenerateObjectResult<T = unknown> = {
   /** The raw model output that produced `object` (useful for debugging). */
   text: string;
 };
-
 
 // ============================================================================
 // Tool / Function Calling (generateText)
@@ -341,7 +339,6 @@ export type GenerateTextResult = {
   /** Why generation stopped. See {@link GenerateTextFinishReason}. */
   finishReason: GenerateTextFinishReason;
 };
-
 
 // ============================================================================
 // Embeddings (embed)

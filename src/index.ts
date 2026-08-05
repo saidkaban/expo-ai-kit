@@ -1,5 +1,30 @@
-import ExpoAiKitModule, { type NativeGenerationConfig } from './ExpoAiKitModule';
 import { Platform } from 'react-native';
+
+import ExpoAiKitModule, { type NativeGenerationConfig } from './ExpoAiKitModule';
+import { isValidEmbeddingTask, EMBEDDING_TASKS, normalizeLanguageTag } from './embedding';
+import { parseNativeErrorMessage } from './errors';
+import {
+  ANDROID_EMBEDDING_MODEL,
+  composeAndroidEmbeddingRevision,
+  filterDownloadedModels,
+  getAllModels,
+  getRegistryEntry,
+} from './models';
+import {
+  buildSchemaInstruction,
+  buildSchemaRepair,
+  extractJson,
+  validateAgainstSchema,
+  REPAIR_INVALID_JSON,
+} from './structured';
+import { stripThinking } from './thinking';
+import {
+  buildToolInstruction,
+  parseToolCall,
+  buildUnknownToolRepair,
+  buildToolArgsRepair,
+  formatToolResult,
+} from './tools';
 import {
   LLMMessage,
   LLMSendOptions,
@@ -25,30 +50,6 @@ import {
   EmbedResult,
   EmbeddingModelState,
 } from './types';
-import {
-  buildSchemaInstruction,
-  buildSchemaRepair,
-  extractJson,
-  validateAgainstSchema,
-  REPAIR_INVALID_JSON,
-} from './structured';
-import {
-  buildToolInstruction,
-  parseToolCall,
-  buildUnknownToolRepair,
-  buildToolArgsRepair,
-  formatToolResult,
-} from './tools';
-import {
-  ANDROID_EMBEDDING_MODEL,
-  composeAndroidEmbeddingRevision,
-  filterDownloadedModels,
-  getAllModels,
-  getRegistryEntry,
-} from './models';
-import { isValidEmbeddingTask, EMBEDDING_TASKS, normalizeLanguageTag } from './embedding';
-import { parseNativeErrorMessage } from './errors';
-import { stripThinking } from './thinking';
 
 export * from './types';
 export * from './models';
@@ -229,7 +230,7 @@ export async function sendMessage(
   const hasSystemMessage = messages.some((m) => m.role === 'system');
   const systemPrompt = hasSystemMessage
     ? '' // Native will extract from messages
-    : options?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+    : (options?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
 
   acquireInference(); // throws INFERENCE_BUSY if a generation is already running
   const sessionId = generateSessionId();
@@ -354,7 +355,7 @@ export function streamMessage(
   const hasSystemMessage = messages.some((m) => m.role === 'system');
   const systemPrompt = hasSystemMessage
     ? '' // Native will extract from messages
-    : options?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+    : (options?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT);
 
   let finalText = '';
   let settled = false;
@@ -376,27 +377,22 @@ export function streamMessage(
     rejectOuter = reject;
   });
 
-  subscription = ExpoAiKitModule.addListener(
-    'onStreamToken',
-    (event: LLMStreamEvent) => {
-      if (event.sessionId !== sessionId) return;
-      finalText = event.accumulatedText;
-      onToken(event);
-      if (event.isDone) settle(() => resolveOuter({ text: finalText }));
-    }
-  );
+  subscription = ExpoAiKitModule.addListener('onStreamToken', (event: LLMStreamEvent) => {
+    if (event.sessionId !== sessionId) return;
+    finalText = event.accumulatedText;
+    onToken(event);
+    if (event.isDone) settle(() => resolveOuter({ text: finalText }));
+  });
 
-  ExpoAiKitModule.startStreaming(messages, systemPrompt, sessionId).catch(
-    (error) => {
-      settle(() => {
-        try {
-          toModelError(error);
-        } catch (me) {
-          rejectOuter(me);
-        }
-      });
-    }
-  );
+  ExpoAiKitModule.startStreaming(messages, systemPrompt, sessionId).catch((error) => {
+    settle(() => {
+      try {
+        toModelError(error);
+      } catch (me) {
+        rejectOuter(me);
+      }
+    });
+  });
 
   const stop = () => {
     // Best-effort native cancel (native also emits a terminal isDone on cancel),
@@ -818,7 +814,11 @@ function resolveEmbedOptions(options?: EmbedOptions): { task: string; language: 
  */
 export async function embed(texts: string[], options?: EmbedOptions): Promise<EmbedResult> {
   if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
-    throw new ModelError('DEVICE_NOT_SUPPORTED', '', 'embed() is only available on iOS and Android');
+    throw new ModelError(
+      'DEVICE_NOT_SUPPORTED',
+      '',
+      'embed() is only available on iOS and Android'
+    );
   }
   if (!Array.isArray(texts) || texts.length === 0) {
     throw new Error('texts array cannot be empty');
@@ -1117,20 +1117,15 @@ export async function downloadModel(
 
   let subscription: ReturnType<typeof ExpoAiKitModule.addListener> | undefined;
   if (options?.onProgress) {
-    subscription = ExpoAiKitModule.addListener(
-      'onDownloadProgress',
-      (event) => {
-        if (event.modelId === modelId) {
-          options.onProgress!(event.progress);
-        }
+    subscription = ExpoAiKitModule.addListener('onDownloadProgress', (event) => {
+      if (event.modelId === modelId) {
+        options.onProgress!(event.progress);
       }
-    );
+    });
   }
 
   try {
-    await wrapNative(() =>
-      ExpoAiKitModule.downloadModel(modelId, entry.downloadUrl, entry.sha256)
-    );
+    await wrapNative(() => ExpoAiKitModule.downloadModel(modelId, entry.downloadUrl, entry.sha256));
   } finally {
     subscription?.remove();
   }
@@ -1210,9 +1205,7 @@ export async function setModel(modelId: string, options?: SetModelOptions): Prom
   // (e.g. Qwen3 pins 'cpu' — its GPU path is broken in LiteRT-LM 0.10.0).
   const backend = options?.backend ?? entry?.preferredBackend ?? 'auto';
   const generation = toNativeGeneration(options?.generation);
-  await wrapNative(() =>
-    ExpoAiKitModule.setModel(modelId, minRamBytes, backend, generation)
-  );
+  await wrapNative(() => ExpoAiKitModule.setModel(modelId, minRamBytes, backend, generation));
 }
 
 /**
@@ -1233,4 +1226,3 @@ export function getActiveModel(): string {
 export async function unloadModel(): Promise<void> {
   await wrapNative(() => ExpoAiKitModule.unloadModel());
 }
-

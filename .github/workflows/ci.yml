@@ -14,10 +14,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Tier 1 — cheap, every PR. Catches TS/JS regressions. `lint` is intentionally
-  # omitted: the repo's .eslintrc predates ESLint 9 and is broken (see AGENTS.md).
+  # Tier 1 — cheap, every PR. Catches TS/JS regressions.
   node:
-    name: build + test (node)
+    name: build + lint + test (node)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +26,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - run: npm run lint
       - run: npm test
 
   # Tier 2 — Android native. Kotlin/Gradle build on Linux (no macOS needed).

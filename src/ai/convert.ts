@@ -5,10 +5,11 @@ import type {
   LanguageModelV3Usage,
   SharedV3Warning,
 } from '@ai-sdk/provider';
-import { ModelError, type JSONSchema, type LLMMessage, type ToolSet } from '../types';
+
 import { buildSchemaInstruction, extractJson } from '../structured';
 import { stripThinking } from '../thinking';
 import { buildToolInstruction, formatToolResult, parseToolCall } from '../tools';
+import { ModelError, type JSONSchema, type LLMMessage, type ToolSet } from '../types';
 
 // ---------------------------------------------------------------------------
 // Pure helpers for the Vercel AI SDK provider (src/ai/index.ts).

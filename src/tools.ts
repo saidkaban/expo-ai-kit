@@ -1,5 +1,5 @@
-import type { JSONSchema, ToolSet } from './types';
 import { extractJson } from './structured';
+import type { JSONSchema, ToolSet } from './types';
 
 // ---------------------------------------------------------------------------
 // Pure helpers for generateText() tool calling.
@@ -105,8 +105,7 @@ export function buildToolArgsRepair(toolName: string, errors: string[]): string 
  * Non-string results are JSON-encoded; strings pass through as-is.
  */
 export function formatToolResult(toolName: string, result: unknown): string {
-  const body =
-    typeof result === 'string' ? result : safeStringify(result);
+  const body = typeof result === 'string' ? result : safeStringify(result);
   return `Result of calling the tool "${toolName}":\n${body}`;
 }
 

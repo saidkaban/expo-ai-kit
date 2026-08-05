@@ -1,9 +1,4 @@
-import {
-  cosineSimilarity,
-  chunkText,
-  createVectorStore,
-  type VectorRecord,
-} from '../rag';
+import { cosineSimilarity, chunkText, createVectorStore, type VectorRecord } from '../rag';
 
 describe('cosineSimilarity', () => {
   it('is 1 for identical vectors', () => {

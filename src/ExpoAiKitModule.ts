@@ -1,5 +1,6 @@
 import { requireNativeModule } from 'expo-modules-core';
 import type { EventSubscription } from 'expo-modules-core';
+
 import {
   BuiltInModel,
   DownloadableModelStatus,
@@ -36,11 +37,7 @@ export interface ExpoAiKitNativeModule {
     systemPrompt: string,
     sessionId: string
   ): Promise<LLMResponse>;
-  startStreaming(
-    messages: LLMMessage[],
-    systemPrompt: string,
-    sessionId: string
-  ): Promise<void>;
+  startStreaming(messages: LLMMessage[], systemPrompt: string, sessionId: string): Promise<void>;
   // Cancels either a streaming session or a sendMessage session by id.
   stopStreaming(sessionId: string): Promise<void>;
 
@@ -63,7 +60,9 @@ export interface ExpoAiKitNativeModule {
   // Embedding model asset lifecycle. iOS returns the full state (identity is
   // native — it varies with `language`); Android returns just the status
   // string and the JS layer attaches the pinned size/identity.
-  getEmbeddingModelStatus(language: string): Promise<EmbeddingModelState | EmbeddingModelAssetStatus>;
+  getEmbeddingModelStatus(
+    language: string
+  ): Promise<EmbeddingModelState | EmbeddingModelAssetStatus>;
   // iOS ignores url/sha256 (OS-managed assets, fetched per language model);
   // Android ignores language and downloads the pinned Google-hosted bundle.
   prepareEmbeddingModel(url: string, sha256: string, language: string): Promise<void>;
@@ -98,11 +97,7 @@ export interface ExpoAiKitNativeModule {
   unloadModel(): Promise<void>;
 
   // Model lifecycle (downloadable models only)
-  downloadModel(
-    modelId: string,
-    url: string,
-    sha256: string
-  ): Promise<void>;
+  downloadModel(modelId: string, url: string, sha256: string): Promise<void>;
   // Cancels an in-flight download for the given model (no-op if none).
   cancelDownload(modelId: string): Promise<void>;
   deleteModel(modelId: string): Promise<void>;
@@ -114,7 +109,6 @@ export interface ExpoAiKitNativeModule {
   ): EventSubscription;
 }
 
-const ExpoAiKitModule =
-  requireNativeModule<ExpoAiKitNativeModule>('ExpoAiKit');
+const ExpoAiKitModule = requireNativeModule<ExpoAiKitNativeModule>('ExpoAiKit');
 
 export default ExpoAiKitModule;

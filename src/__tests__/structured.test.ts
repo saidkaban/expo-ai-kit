@@ -82,9 +82,9 @@ describe('validateAgainstSchema', () => {
   };
 
   it('accepts a valid object', () => {
-    expect(
-      validateAgainstSchema({ title: 'Pasta', minutes: 20, tags: ['quick'] }, schema)
-    ).toEqual([]);
+    expect(validateAgainstSchema({ title: 'Pasta', minutes: 20, tags: ['quick'] }, schema)).toEqual(
+      []
+    );
   });
 
   it('allows extra properties not in the schema', () => {

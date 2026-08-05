@@ -122,12 +122,7 @@ export function validateAgainstSchema(value: unknown, schema: JSONSchema): strin
   return errors;
 }
 
-function validateInto(
-  value: unknown,
-  schema: JSONSchema,
-  path: string,
-  errors: string[]
-): void {
+function validateInto(value: unknown, schema: JSONSchema, path: string, errors: string[]): void {
   if (!schema || typeof schema !== 'object') return;
 
   // enum is authoritative — when present, the value must be one of its members.
@@ -158,7 +153,9 @@ function validateInto(
   }
 
   if (Array.isArray(value) && schema.items) {
-    value.forEach((item, i) => validateInto(item, schema.items as JSONSchema, `${path}[${i}]`, errors));
+    value.forEach((item, i) =>
+      validateInto(item, schema.items as JSONSchema, `${path}[${i}]`, errors)
+    );
   }
 }
 
