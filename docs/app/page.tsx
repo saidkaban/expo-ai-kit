@@ -70,6 +70,10 @@ const capabilityCards = [
     copy: "Create embeddings and build private, on-device semantic search and RAG.",
   },
   {
+    title: "Transcribe",
+    copy: "Turn speech into text — live from the microphone or from audio files.",
+  },
+  {
     title: "Switch",
     copy: "Move between OS-native and downloadable models at runtime.",
   },
@@ -87,9 +91,10 @@ export default function Home() {
         <p className="docs-eyebrow">LOCAL AI · NATIVE SPEED · PRIVATE BY DEFAULT</p>
         <h1>Build on-device AI into Expo apps.</h1>
         <p className="docs-hero-copy">
-          One focused React Native API for Apple Foundation Models, Android ML
-          Kit, and downloadable LiteRT-LM models. No inference API keys, no
-          per-token bill, and no cloud round-trip.
+          Text generation, speech-to-text, embeddings, and RAG on the models
+          your users&apos; phones already ship with — Apple Foundation Models,
+          ML Kit, SpeechAnalyzer — plus downloadable LiteRT-LM models when you
+          need more. No API keys, no per-token bill, no cloud round-trip.
         </p>
 
         <div className="docs-hero-actions">
@@ -129,9 +134,10 @@ export default function Home() {
 
       <h2 id="why-expo-ai-kit">Why expo-ai-kit</h2>
       <p>
-        Mobile AI should not force every app through a hosted inference service.
-        expo-ai-kit gives Expo and React Native developers a small, typed layer
-        over the strongest local model available on each device.
+        Most AI features don&apos;t need a server — phones ship with capable
+        models of their own now. expo-ai-kit is a small, typed API over the best
+        of them, so your app can generate text, transcribe speech, and search
+        its own data while offline, in private, and at no cost per request.
       </p>
 
       <div className="docs-proof-grid">
@@ -221,6 +227,10 @@ console.log(text);`}
         <Link href="/guides/models">
           <strong>Model management</strong>
           <span>Compare OS models, open models, and custom LiteRT-LM files.</span>
+        </Link>
+        <Link href="/guides/speech">
+          <strong>Speech-to-text</strong>
+          <span>Transcribe the microphone live or audio files, on-device.</span>
         </Link>
         <Link href="/guides/vercel-ai-sdk">
           <strong>Vercel AI SDK</strong>

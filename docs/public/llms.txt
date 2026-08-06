@@ -1,0 +1,59 @@
+# expo-ai-kit
+
+> On-device AI for Expo and React Native. Text generation, speech-to-text, embeddings, and RAG
+> running locally on iOS and Android — Apple Foundation Models, ML Kit (incl. GenAI Speech
+> Recognition), Apple SpeechAnalyzer, and downloadable/custom LiteRT-LM models (Gemma, Qwen, Phi).
+> Zero runtime dependencies, typed errors, TypeScript-first, and a Vercel AI SDK provider
+> (LanguageModelV3 + EmbeddingModelV3 + TranscriptionModelV3 — the first cross-platform on-device
+> transcription provider). No API keys, no cloud, no per-token cost.
+
+Install: `npx expo install expo-ai-kit` (native module — needs a development build, not Expo Go).
+
+## Capabilities
+
+- Text generation: `sendMessage`, `streamMessage` (stateless — pass full history each call),
+  `generateText` (bounded tool-calling loop), `generateObject` (JSON-Schema-validated objects
+  with repair loop).
+- Speech-to-text (opt-in plugin flag `speech`): `transcribe({ audio: { uri | base64 }, locale?,
+  signal? })` for files; `streamTranscription(onUpdate, { locale? })` for live mic
+  (updates carry the full transcript; `isFinal` marks committed segments);
+  `getSpeechRecognitionAvailability`, `prepareSpeechRecognition`, `getSupportedSpeechLocales`,
+  `get/requestSpeechPermissionsAsync`. iOS 26+ SpeechAnalyzer (fast, timestamped segments,
+  no permission for files); Android 12+ ML Kit (text-only, real-time-rate file ingestion —
+  a 60s file takes ~60s; needs RECORD_AUDIO even for files; auto-upgrades to Gemini Nano).
+- Embeddings + RAG: `embed` (task-typed), `chunkText`, `cosineSimilarity`, `createVectorStore`;
+  iOS NLContextualEmbedding (iOS 17+), Android EmbeddingGemma 300M (opt-in flag
+  `androidEmbeddings`).
+- Model management: `isAvailable`, `prepareBuiltInModel`, `getBuiltInModels`,
+  `getDownloadableModels`, `getRecommendedModel`, `downloadModel`, `setModel`, `unloadModel`,
+  `deleteModel`, `registerModel` (bring-your-own LiteRT-LM with SHA-256 pin).
+- Vercel AI SDK provider from `expo-ai-kit/ai`: `expoAiKit()` → LanguageModelV3;
+  `expoAiKit.embeddingModel()`; `expoAiKit.transcriptionModel()` (AI SDK `transcribe()`).
+  Works with AI SDK 6 and 7.
+
+## Contracts agents can rely on
+
+- Every failure throws `ModelError` with a typed `.code`: MODEL_NOT_FOUND, MODEL_NOT_DOWNLOADED,
+  DOWNLOAD_FAILED, DOWNLOAD_CORRUPT, DOWNLOAD_STORAGE_FULL, DOWNLOAD_CANCELLED, INFERENCE_OOM,
+  INFERENCE_FAILED, INFERENCE_BUSY, INFERENCE_CANCELLED, MODEL_LOAD_FAILED, DEVICE_NOT_SUPPORTED,
+  EMBEDDINGS_NOT_ENABLED, LANGUAGE_NOT_SUPPORTED, SPEECH_BUSY, SPEECH_NOT_ENABLED,
+  MIC_PERMISSION_DENIED, AUDIO_DECODE_FAILED, TRANSCRIPTION_FAILED, UNKNOWN.
+  Nothing resolves with placeholder or empty text on failure.
+- One text generation at a time (INFERENCE_BUSY); one speech session at a time (SPEECH_BUSY);
+  the two guards are independent, so voice → LLM pipelines work. `embed()` is independent of both.
+- Availability is explicit: check `isAvailable()` / `getSpeechRecognitionAvailability()` /
+  `getEmbeddingModelStatus()` and call the matching `prepare*()` before first use.
+- Config plugin: `["expo-ai-kit", { "speech": true, "androidEmbeddings": true }]` — each flag
+  is opt-in and requires a new native build (not OTA).
+- Platform floors: library iOS 15.1+ / Android API 26+; Apple Foundation Models iOS 26+ on
+  Apple-Intelligence devices; SpeechAnalyzer iOS 26+; ML Kit speech Android 12+ (API 31).
+
+## Links
+
+- Docs: https://expo-ai-kit.dev
+- Speech guide: https://expo-ai-kit.dev/guides/speech
+- API reference: https://expo-ai-kit.dev/api
+- AI SDK guide: https://expo-ai-kit.dev/guides/vercel-ai-sdk
+- Troubleshooting: https://expo-ai-kit.dev/troubleshooting
+- Source: https://github.com/saidkaban/expo-ai-kit
+- Changelog: https://github.com/saidkaban/expo-ai-kit/blob/main/CHANGELOG.md

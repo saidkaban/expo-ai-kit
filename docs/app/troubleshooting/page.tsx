@@ -106,8 +106,8 @@ async function checkSupport() {
   const available = await isAvailable();
 
   if (Platform.OS === 'ios' && !available) {
-    // On iOS < 26, responses will be fallback messages
-    console.log('Running on older iOS - fallback responses enabled');
+    // On iOS < 26, generation calls throw a typed DEVICE_NOT_SUPPORTED error
+    console.log('Running on older iOS - on-device generation unavailable');
   }
 
   return available;
@@ -119,12 +119,14 @@ async function checkSupport() {
       <h2 id="android-specific">Android Troubleshooting</h2>
 
       <h3 id="device-not-supported">
-        <Badge platform="android" /> DEVICE_NOT_SUPPORTED
+        <Badge platform="android" /> <Badge platform="ios" /> DEVICE_NOT_SUPPORTED
       </h3>
       <p>
         The built-in Android model throws a typed
         <code>DEVICE_NOT_SUPPORTED</code> error when ML Kit cannot run on the
-        device. Check the{" "}
+        device. iOS throws the same code below iOS 26 or when Apple Intelligence
+        is disabled, and unsupported platforms (web) throw it for all generation
+        calls. Check the{" "}
         <a
           href="https://developers.google.com/ml-kit/genai#prompt-device"
           className="text-accent hover:underline"
@@ -168,12 +170,14 @@ async function safeMessage(text: string) {
       </CodeBlock>
 
       <h3 id="model-not-downloaded">
-        <Badge platform="android" /> MODEL_NOT_DOWNLOADED
+        <Badge platform="android" /> <Badge platform="ios" /> MODEL_NOT_DOWNLOADED
       </h3>
       <p>
         On Android, <code>isAvailable()</code> can return <code>true</code> while
         the supported model still needs its first-use download. Await
-        <code>prepareBuiltInModel()</code> before inference.
+        <code>prepareBuiltInModel()</code> before inference. On iOS, the same
+        error is thrown for <code>apple-fm</code> while the OS is still preparing
+        the Apple Intelligence model assets — retry after the OS finishes.
       </p>
 
       <Callout type="info">

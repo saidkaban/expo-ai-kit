@@ -1,7 +1,7 @@
 {
   "name": "expo-ai-kit",
   "version": "0.13.0",
-  "description": "On-device AI for Expo — run Gemma 4, Apple Foundation Models & ML Kit locally: streaming, structured output, tool calling, embeddings & RAG, Vercel AI SDK provider, zero API keys",
+  "description": "On-device AI for Expo and React Native — local AI inference and speech-to-text with Apple Foundation Models, SpeechAnalyzer, ML Kit, and LiteRT-LM; no API keys or cloud",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "files": [
@@ -59,11 +59,17 @@
     "rag",
     "semantic-search",
     "vector-search",
+    "speech-to-text",
+    "speech-recognition",
+    "transcription",
+    "asr",
+    "on-device-speech",
+    "speech-analyzer",
+    "ml-kit-speech-recognition",
     "ai-sdk",
     "vercel-ai-sdk",
     "ai-sdk-provider",
-    "expo-ai-kit",
-    "ExpoAiKit"
+    "expo-ai-kit"
   ],
   "repository": "https://github.com/saidkaban/expo-ai-kit",
   "bugs": {

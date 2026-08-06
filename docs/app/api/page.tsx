@@ -19,6 +19,7 @@ const headings = [
   { id: "generatetext", text: "generateText()", level: 2 },
   { id: "embed", text: "embed()", level: 2 },
   { id: "embedding-lifecycle", text: "Embedding model lifecycle", level: 2 },
+  { id: "speech-to-text", text: "Speech-to-Text", level: 2 },
   { id: "ai-sdk-provider", text: "AI SDK Provider", level: 2 },
   { id: "rag-toolkit", text: "RAG Toolkit", level: 2 },
   { id: "chunktext", text: "chunkText()", level: 3 },
@@ -313,6 +314,51 @@ function deleteEmbeddingModel(): Promise<void>
 function getSupportedEmbeddingLanguages(): Promise<string[]> // iOS catalog; [] on Android
 function stripThinking(text: string): { text: string; reasoning: string }
 // pure helper — splits <think>…</think> reasoning (Qwen3-style models) from an answer`}
+      </CodeBlock>
+
+      {/* ------------------------------------------------------------------ */}
+      <h2 id="speech-to-text">Speech-to-Text</h2>
+      <BadgeGroup platforms={["ios", "android", "new"]} />
+      <p>
+        On-device transcription — live microphone streaming and audio-file
+        transcripts. Opt-in via the config plugin&apos;s <code>speech</code>{" "}
+        flag; runs its own single-flight (<code>SPEECH_BUSY</code>),
+        independent of text generation. See the{" "}
+        <a href="/guides/speech" className="text-accent hover:underline">
+          Speech-to-Text guide
+        </a>{" "}
+        for platform behavior and examples.
+      </p>
+      <CodeBlock language="typescript">
+        {`function transcribe(options: {
+  audio: { uri: string } | { base64: string; mediaType?: string };
+  locale?: string;        // BCP-47; defaults to the device locale
+  signal?: AbortSignal;
+}): Promise<{
+  text: string;
+  segments: { text: string; startSeconds: number; endSeconds: number }[]; // iOS; [] on Android
+  language?: string;
+  durationSeconds?: number;
+}>
+
+function streamTranscription(
+  onUpdate: (update: { text: string; isFinal: boolean }) => void,
+  options?: { locale?: string }
+): { promise: Promise<TranscribeResult>; stop: () => void }
+
+function getSpeechRecognitionAvailability(options?: { locale?: string }): Promise<
+  | { status: 'available' }
+  | { status: 'downloadable' | 'downloading' }
+  | { status: 'unavailable';
+      reason: 'platform' | 'os-version' | 'device' | 'locale' | 'not-enabled' }
+>
+function prepareSpeechRecognition(options?: {
+  locale?: string;
+  onProgress?: (progress: number) => void; // 0–1
+}): Promise<void>
+function getSupportedSpeechLocales(): Promise<string[]>
+function getSpeechPermissionsAsync(): Promise<SpeechPermissionResponse>
+function requestSpeechPermissionsAsync(): Promise<SpeechPermissionResponse>`}
       </CodeBlock>
 
       {/* ------------------------------------------------------------------ */}

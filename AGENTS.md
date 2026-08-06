@@ -4,14 +4,17 @@ This file contains repository-specific working rules. Public API usage belongs i
 release history in `CHANGELOG.md`, and implementation details in source comments and tests. Do not
 duplicate those records here.
 
-`expo-ai-kit` provides on-device AI for Expo and React Native across Apple Foundation Models, ML Kit,
-and downloadable or custom LiteRT-LM models on iOS and Android.
+`expo-ai-kit` provides on-device AI for Expo and React Native — text generation, speech-to-text,
+and embeddings — across Apple Foundation Models, Apple SpeechAnalyzer, ML Kit (Prompt API and GenAI
+Speech Recognition), and downloadable or custom LiteRT-LM models on iOS and Android.
 
 ## Build, test, and publish
 
 - `npm run build` — compile `src/` to `build/`.
-- `npm test` — run Jest tests for pure TypeScript logic. Modules that import the native module cannot
-  run under Jest.
+- `npm test` — run Jest tests. Pure TypeScript logic is tested directly; behavior that reaches the
+  native module is tested with `jest.mock('../ExpoAiKitModule')` and a mocked `react-native`
+  (see `src/__tests__/inference.test.ts`). Real native behavior is verified by CI platform builds
+  and on-device gates.
 - `npm run lint` — run ESLint using the flat config in `eslint.config.js`.
 - CI routes by changed path: `docs/`-only changes run the docs checks; other changes run Node tests and
   the Android/Kotlin and iOS/Swift builds; mixed changes run both. Native changes are not verified by
@@ -48,6 +51,12 @@ a side effect of unrelated work.
 - **Embeddings are independent of generation.** `embed()` does not use the generation single-flight
   guard and never downloads a model implicitly. Persisted vectors are compatible only when their model
   identities match exactly.
+- **Speech is opt-in and independent.** The config plugin's `speech` flag compiles the Android speech
+  backend (reflection-resolved, like embeddings) and adds microphone permissions; without it, speech
+  APIs throw `SPEECH_NOT_ENABLED`. Speech has its own single-flight (`SPEECH_BUSY`) and never touches
+  the generation guard. Native layers forward raw engine updates (with an `error` event channel); the
+  JS layer assembles transcripts. Android's engine ingests non-mic audio at real-time rate by
+  contract and requires `RECORD_AUDIO` even for file input.
 - **The AI SDK provider preserves core behavior.** `src/ai/` must stay a thin adapter over the public
   inference and embedding primitives. Imports from `@ai-sdk/provider` must remain type-only so the
   zero-runtime-dependency contract holds.
@@ -62,12 +71,14 @@ preference is not a ban on a well-designed stateful-session primitive.
 
 - `src/index.ts` — public API, native calls, model lifecycle, error normalization, and generation guard.
 - `src/types.ts` — public types and backend capability contracts.
-- `src/structured.ts`, `src/tools.ts`, `src/rag.ts`, `src/embedding.ts`, `src/errors.ts`, and
-  `src/thinking.ts` — pure logic with Jest coverage.
+- `src/structured.ts`, `src/tools.ts`, `src/rag.ts`, `src/embedding.ts`, `src/errors.ts`,
+  `src/speech.ts`, and `src/thinking.ts` — pure logic with Jest coverage.
 - `src/ai/` — Vercel AI SDK adapter; `ai.js` and `ai.d.ts` are its package-root shims.
 - `src/models.ts` — downloadable/custom model registry and Android embedding-model pins.
-- `app.plugin.js` — Expo config plugin, including optional Android embeddings.
-- `ios/` and `android/` — native backends and model/asset lifecycle code.
+- `app.plugin.js` — Expo config plugin: opt-in Android embeddings and opt-in speech (permissions +
+  conditional native source sets).
+- `ios/` and `android/` — native backends and model/asset lifecycle code; speech lives in
+  `ios/SpeechRecognitionClient.swift` and the conditionally compiled `android/src/speech/`.
 - `example/` — tracked development and CI fixture, not part of the published package.
 
 ## Change checklist
@@ -84,7 +95,7 @@ preference is not a ban on a well-designed stateful-session primitive.
 
 Keep exactly one roadmap item active. Do not start or add a later item while it is active.
 
-- **Next:** add on-device speech-to-text (STT) for iOS and Android.
+- **Next:** _(none — awaiting the maintainer's next item)_
 
 When the item is complete, clear the `Next` value, report completion, and ask the maintainer for exactly
 one next item. Do not retain completed items or release history in this section.

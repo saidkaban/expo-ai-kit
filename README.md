@@ -16,21 +16,23 @@
 <p align="center">
   <a href="https://expo-ai-kit.dev">Documentation</a> ·
   <a href="https://www.npmjs.com/package/expo-ai-kit">npm</a> ·
-  <a href="https://github.com/saidkaban/expo-ai-kit/blob/main/CHANGELOG.md">Changelog</a>
+  <a href="https://github.com/saidkaban/expo-ai-kit/blob/main/CHANGELOG.md">Changelog</a> ·
+  <a href="https://expo-ai-kit.dev/llms.txt">llms.txt</a>
 </p>
 
 Run private, local AI across **Apple Foundation Models**, **ML Kit**, and downloadable
 **Gemma 4**, **Qwen3**, and **Phi-4 Mini** models—or register your own
-[LiteRT-LM](https://ai.google.dev/edge/litert-lm) model.
-Stream text, generate typed objects, call tools, build on-device RAG, switch models at
-runtime, or use the package as a **Vercel AI SDK provider**.
+[LiteRT-LM](https://ai.google.dev/edge/litert-lm) model. Transcribe speech on-device with native
+Apple and Google speech models. Stream text, generate typed objects, call tools, build on-device
+RAG, switch models at runtime, or use the package as a **Vercel AI SDK provider**.
 
 | | |
 |---|---|
-| 🔒 **Private by default** | Inference and embeddings run on the device. |
+| 🔒 **Private by default** | Inference, speech, and embeddings run on the device. |
 | 📱 **Native first** | Use Apple Foundation Models and ML Kit without bundling model weights. |
+| 🎙️ **On-device speech** | Transcribe audio locally with native Apple and Google speech models. |
 | 🧠 **Bring your model** | Download curated models or register any compatible LiteRT-LM bundle. |
-| 🧩 **Useful primitives** | Streaming, structured output, tools, embeddings, RAG, and cancellation. |
+| 🧩 **Useful primitives** | Streaming, speech, structured output, tools, embeddings, RAG, and cancellation. |
 | 🔌 **AI SDK compatible** | Use `expo-ai-kit/ai` with familiar AI SDK APIs and patterns. |
 | 🪶 **Zero runtime dependencies** | The core package keeps `dependencies` empty. |
 
@@ -41,6 +43,7 @@ runtime, or use the package as a **Vercel AI SDK provider**.
 | Library minimum | iOS 15.1+ | API 26+ |
 | Built-in generation | Apple Foundation Models, iOS 26+ when available | ML Kit Prompt API on supported devices |
 | Downloadable generation | Gemma, Qwen, Phi, and custom LiteRT-LM models | Gemma, Qwen, Phi, and custom LiteRT-LM models |
+| Speech-to-text | SpeechAnalyzer, iOS 26+ when available | ML Kit GenAI Speech Recognition on supported devices |
 | Embeddings | `NLContextualEmbedding`, iOS 17+ | EmbeddingGemma 300M, opt-in |
 | Expo | Expo SDK 54+, development or production build | Expo SDK 54+, development or production build |
 
@@ -95,6 +98,52 @@ const { promise, stop } = streamMessage(
 const response = await promise;
 // Call stop() to cancel an active stream.
 ```
+
+## Speech-to-text
+
+On-device transcription — live from the microphone with revising (volatile) and finalized updates,
+or batch from a recorded file. iOS uses Apple SpeechAnalyzer (iOS 26+); Android uses ML Kit GenAI
+Speech Recognition (Android 12+, upgrading to Gemini Nano automatically on supported devices).
+Availability, locale support, and model readiness are explicit so apps can handle unsupported
+devices without falling back to a cloud service.
+
+Speech is **opt-in** (it adds microphone permissions to the app): add
+`["expo-ai-kit", { "speech": true }]` to your config plugins and make a new native build.
+
+```tsx
+import {
+  getSpeechRecognitionAvailability,
+  prepareSpeechRecognition,
+  requestSpeechPermissionsAsync,
+  streamTranscription,
+  transcribe,
+} from 'expo-ai-kit';
+
+const availability = await getSpeechRecognitionAvailability({ locale: 'en-US' });
+if (availability.status === 'downloadable') {
+  await prepareSpeechRecognition({ locale: 'en-US' }); // OS-managed model download
+}
+
+// Live: updates carry the full transcript so far; isFinal marks committed segments.
+await requestSpeechPermissionsAsync();
+const { promise, stop } = streamTranscription((update) => setText(update.text));
+// … later, when the user releases the button:
+stop();
+const { text } = await promise;
+
+// Batch: transcribe a recording (WAV, M4A, MP3, …).
+const result = await transcribe({ audio: { uri: recordingUri } });
+// iOS: result.segments carries audio timestamps. Android: text only.
+```
+
+Platform notes:
+
+- **Android transcribes files at real-time rate** (a 60-second file takes about a minute) — the
+  engine's documented ingestion contract. Right for voice notes and dictation; use a cloud service
+  for podcast-length audio. Android also requires the microphone permission even for file input
+  (an engine requirement) and returns no segment timestamps.
+- iOS batch transcription is faster than real time, returns timestamped segments, and needs no
+  permission at all; only live listening uses the microphone.
 
 ## Choose your API
 
@@ -272,8 +321,9 @@ const { embedding } = await embed({
 });
 ```
 
-Tool calling and structured output reuse expo-ai-kit's core protocols. The AI SDK remains
-responsible for its own orchestration around the provider.
+Tool calling and structured output reuse expo-ai-kit's core protocols. Speech-to-text is exposed
+through the provider's transcription model. The AI SDK remains responsible for its own
+orchestration around the provider.
 
 <details>
 <summary><strong>AI SDK behavior and React Native setup</strong></summary>
@@ -371,6 +421,9 @@ files remain on disk and recover their status after the same id is registered ag
 - **Embeddings and RAG:** `embed`, `getEmbeddingModelStatus`, `prepareEmbeddingModel`,
   `cancelEmbeddingModelDownload`, `deleteEmbeddingModel`, `getSupportedEmbeddingLanguages`,
   `chunkText`, `cosineSimilarity`, `createVectorStore`.
+- **Speech-to-text:** `transcribe`, `streamTranscription`, `getSpeechRecognitionAvailability`,
+  `prepareSpeechRecognition`, `getSupportedSpeechLocales`, `getSpeechPermissionsAsync`,
+  `requestSpeechPermissionsAsync` — opt-in via the config plugin's `speech` flag.
 - **Models:** `getBuiltInModels`, `getDownloadableModels`, `getDownloadedModels`,
   `getRecommendedModel`, `downloadModel`, `cancelDownload`, `deleteModel`, `setModel`,
   `unloadModel`, `getActiveModel`.

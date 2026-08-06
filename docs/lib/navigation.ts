@@ -55,6 +55,11 @@ export const navigation: NavSection[] = [
         description: "Let on-device models call functions in your app",
       },
       {
+        title: "Speech-to-Text",
+        href: "/guides/speech",
+        description: "Transcribe live speech and audio files on-device",
+      },
+      {
         title: "Embeddings & RAG",
         href: "/guides/embeddings",
         description: "Build semantic search and retrieval-augmented generation",
@@ -118,6 +123,11 @@ export const navigation: NavSection[] = [
         title: "Embedding lifecycle",
         href: "/api#embedding-lifecycle",
         description: "Prepare and manage embedding model assets",
+      },
+      {
+        title: "Speech-to-Text",
+        href: "/api#speech-to-text",
+        description: "transcribe(), streamTranscription(), and the speech lifecycle",
       },
       {
         title: "AI SDK Provider",
