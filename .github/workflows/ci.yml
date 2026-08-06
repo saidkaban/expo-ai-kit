@@ -7,6 +7,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Manual full runs (both areas — the router's missing-base fallback handles
+  # dispatch events), e.g. to re-run CI after a GitHub incident ate a push event.
+  workflow_dispatch:
 
 permissions:
   contents: read
