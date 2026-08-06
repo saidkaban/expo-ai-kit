@@ -15,11 +15,16 @@ import {
   generateObject,
   getActiveModel,
   getDownloadableModels,
+  getSpeechRecognitionAvailability,
+  prepareSpeechRecognition,
+  requestSpeechPermissionsAsync,
   sendMessage,
   setModel,
   streamMessage,
+  streamTranscription,
   unloadModel,
   type DownloadableModel,
+  type TranscriptionHandle,
 } from 'expo-ai-kit';
 
 const TARGET_MODEL_ID = 'gemma-e2b';
@@ -52,6 +57,80 @@ function StatusBadge({ label }: { label: string }) {
   const c = palette[label] ?? palette['not-downloaded'];
   return (
     <Text style={[styles.badge, { backgroundColor: c.bg, color: c.fg }]}>{label}</Text>
+  );
+}
+
+function SpeechSection() {
+  const [availability, setAvailability] = useState<string>('checking…');
+  const [transcript, setTranscript] = useState<string>('');
+  const [listening, setListening] = useState<TranscriptionHandle | null>(null);
+  const [speechError, setSpeechError] = useState<string | null>(null);
+
+  const refreshAvailability = async () => {
+    try {
+      const a = await getSpeechRecognitionAvailability();
+      setAvailability(a.status === 'unavailable' ? `unavailable (${a.reason})` : a.status);
+    } catch (e: any) {
+      setAvailability(`error: ${e?.message ?? String(e)}`);
+    }
+  };
+  useEffect(() => {
+    refreshAvailability();
+  }, []);
+
+  const doPrepare = async () => {
+    setSpeechError(null);
+    try {
+      await prepareSpeechRecognition();
+    } catch (e: any) {
+      setSpeechError(e?.message ?? String(e));
+    }
+    await refreshAvailability();
+  };
+
+  const doListen = async () => {
+    setSpeechError(null);
+    try {
+      const permission = await requestSpeechPermissionsAsync();
+      if (!permission.granted) {
+        setSpeechError('Microphone permission was not granted.');
+        return;
+      }
+      setTranscript('');
+      const handle = streamTranscription((update) => setTranscript(update.text));
+      setListening(handle);
+      handle.promise
+        .catch((e: any) => setSpeechError(e?.message ?? String(e)))
+        .finally(() => setListening(null));
+    } catch (e: any) {
+      setSpeechError(e?.message ?? String(e));
+    }
+  };
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>speech-to-text</Text>
+      <Text style={styles.meta}>availability: {availability}</Text>
+      <View style={styles.buttons}>
+        <Button title="Prepare" onPress={doPrepare} disabled={!!listening} />
+        <Button
+          title={listening ? 'Stop' : 'Listen'}
+          onPress={listening ? () => listening.stop() : doListen}
+        />
+      </View>
+      {transcript !== '' && (
+        <View style={styles.outputBox}>
+          <Text style={styles.outputLabel}>transcript</Text>
+          <Text style={styles.outputText}>{transcript}</Text>
+        </View>
+      )}
+      {speechError && (
+        <View style={[styles.outputBox, { borderColor: '#f85149' }]}>
+          <Text style={[styles.outputLabel, { color: '#f85149' }]}>speech error</Text>
+          <Text style={styles.outputText}>{speechError}</Text>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -217,6 +296,9 @@ export default function App() {
             </Text>
           </View>
         )}
+
+        {/* Speech-to-text (opt-in config-plugin flag) */}
+        <SpeechSection />
 
         {error && (
           <View style={[styles.outputBox, { borderColor: '#f85149' }]}>

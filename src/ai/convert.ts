@@ -314,3 +314,24 @@ function safeStringify(value: unknown): string {
     return String(value);
   }
 }
+
+const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+/**
+ * Encode bytes as base64 without Buffer/btoa (neither is guaranteed in React
+ * Native). Used by the transcription model to pass AI SDK audio input
+ * (Uint8Array) to the native layer.
+ */
+export function uint8ToBase64(bytes: Uint8Array): string {
+  let result = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i];
+    const b1 = i + 1 < bytes.length ? bytes[i + 1] : undefined;
+    const b2 = i + 2 < bytes.length ? bytes[i + 2] : undefined;
+    result += BASE64_CHARS[b0 >> 2];
+    result += BASE64_CHARS[((b0 & 3) << 4) | ((b1 ?? 0) >> 4)];
+    result += b1 === undefined ? '=' : BASE64_CHARS[((b1 & 15) << 2) | ((b2 ?? 0) >> 6)];
+    result += b2 === undefined ? '=' : BASE64_CHARS[b2 & 63];
+  }
+  return result;
+}

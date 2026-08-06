@@ -1,13 +1,20 @@
 package expo.modules.aikit
 
+import android.Manifest
 import android.app.ActivityManager
 import android.content.Context
+import expo.modules.interfaces.permissions.Permissions
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.functions.Coroutine
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
 
@@ -45,6 +52,37 @@ class ExpoAiKitModule : Module() {
     }
   }
 
+  // Optional ML Kit speech backend. Present only when the app was prebuilt
+  // with ["expo-ai-kit", { "speech": true }], which compiles android/src/speech
+  // and adds the genai-speech-recognition dependency. Resolved by reflection so
+  // this module compiles without ML Kit speech on the classpath.
+  private val speechBackend: SpeechBackend? by lazy {
+    try {
+      Class.forName("expo.modules.aikit.speech.MlKitSpeechBackend")
+        .getDeclaredConstructor(Context::class.java)
+        .newInstance(appContext.reactContext ?: throw RuntimeException("React context not available"))
+        as SpeechBackend
+    } catch (e: ReflectiveOperationException) {
+      null
+    } catch (e: LinkageError) {
+      null
+    }
+  }
+
+  private fun requireSpeechBackend(): SpeechBackend =
+    speechBackend ?: throw RuntimeException(
+      "SPEECH_NOT_ENABLED:mlkit-speech:" +
+        "Speech is opt-in. Add [\"expo-ai-kit\", { \"speech\": true }] to your app config plugins " +
+        "and make a new native build (dev client / EAS — not OTA)."
+    )
+
+  // SupervisorJob is load-bearing: with a plain Job, one failed transcription
+  // would cancel the scope forever and every later call would surface as
+  // INFERENCE_CANCELLED instead of its real typed error.
+  private val speechScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+  private val activeSpeechJobs = mutableMapOf<String, Deferred<Map<String, Any?>>>()
+  private var activeLiveSpeechSessionId: String? = null
+
   private fun requireEmbeddingBackend(): EmbeddingBackend =
     embeddingBackend ?: throw RuntimeException(
       "EMBEDDINGS_NOT_ENABLED:${EmbeddingAssetManager.EMBEDDING_MODEL_ID}:" +
@@ -59,10 +97,20 @@ class ExpoAiKitModule : Module() {
   // Active model routing: "mlkit" (default) or a downloadable model ID
   private var activeModelId: String = "mlkit"
 
+  /**
+   * Contract string for stream error events: pass through messages already in
+   * "CODE:modelId:reason" form; wrap anything else as INFERENCE_FAILED.
+   */
+  private fun streamErrorContract(e: Throwable, modelId: String): String {
+    val message = e.message ?: e.toString()
+    return if (Regex("^[A-Z][A-Z_]*:").containsMatchIn(message)) message
+    else "INFERENCE_FAILED:$modelId:$message"
+  }
+
   override fun definition() = ModuleDefinition {
     Name("ExpoAiKit")
 
-    Events("onStreamToken", "onDownloadProgress", "onModelStateChange")
+    Events("onStreamToken", "onDownloadProgress", "onModelStateChange", "onTranscriptionUpdate")
 
     // ==================================================================
     // Existing inference API -- ML Kit path completely untouched
@@ -136,38 +184,66 @@ class ExpoAiKitModule : Module() {
             "accumulatedText" to accumulatedText,
             "isDone" to isDone
           ))
-
-          if (isDone) {
-            activeStreamJobs.remove(sessionId)
-          }
         }
 
-        // Route to active model
-        if (activeModelId == "mlkit") {
-          // ML Kit: use role-prefixed format since it has no conversation API
-          val conversationPrompt = nonSystemMessages
-            .joinToString("\n") { msg ->
-              val role = (msg["role"] as? String ?: "user").uppercase()
-              val content = msg["content"] as? String ?: ""
-              "$role: $content"
-            } + "\nASSISTANT:"
-          promptClient.generateTextStream(conversationPrompt, systemPrompt, streamCallback)
-        } else {
-          // Gemma/LiteRT-LM: pass raw content — Conversation API handles turn formatting
-          val conversationPrompt = nonSystemMessages
-            .joinToString("\n") { msg ->
-              msg["content"] as? String ?: ""
-            }
-          gemmaClient.generateTextStream(conversationPrompt, systemPrompt, streamCallback)
+        try {
+          // Route to active model
+          if (activeModelId == "mlkit") {
+            // ML Kit: use role-prefixed format since it has no conversation API
+            val conversationPrompt = nonSystemMessages
+              .joinToString("\n") { msg ->
+                val role = (msg["role"] as? String ?: "user").uppercase()
+                val content = msg["content"] as? String ?: ""
+                "$role: $content"
+              } + "\nASSISTANT:"
+            promptClient.generateTextStream(conversationPrompt, systemPrompt, streamCallback)
+          } else {
+            // Gemma/LiteRT-LM: pass raw content — Conversation API handles turn formatting
+            val conversationPrompt = nonSystemMessages
+              .joinToString("\n") { msg ->
+                msg["content"] as? String ?: ""
+              }
+            gemmaClient.generateTextStream(conversationPrompt, systemPrompt, streamCallback)
+          }
+        } catch (e: CancellationException) {
+          // User stop() has already settled the JS side (this event is ignored),
+          // but a cancellation from anywhere else (e.g. the Play-services task
+          // under ML Kit) would otherwise leave the stream hanging and the
+          // single-flight guard locked — always emit terminal done, like iOS.
+          sendEvent("onStreamToken", mapOf(
+            "sessionId" to sessionId,
+            "token" to "",
+            "accumulatedText" to "",
+            "isDone" to true
+          ))
+          throw e
+        } catch (e: Throwable) {
+          // Reject the JS stream promise with the typed contract instead of
+          // resolving successfully with silent empty or "[Error: …]" text.
+          sendEvent("onStreamToken", mapOf(
+            "sessionId" to sessionId,
+            "token" to "",
+            "accumulatedText" to "",
+            "isDone" to true,
+            "error" to streamErrorContract(e, activeModelId)
+          ))
         }
       }
 
       activeStreamJobs[sessionId] = job
+      job.invokeOnCompletion { activeStreamJobs.remove(sessionId) }
+      // Last expression must be Unit: Coroutine { } infers the JS return value
+      // from it, and a DisposableHandle would fail JS-value conversion and
+      // reject every startStreaming promise.
+      Unit
     }
 
     AsyncFunction("stopStreaming") { sessionId: String ->
       activeStreamJobs[sessionId]?.cancel()
       activeStreamJobs.remove(sessionId)
+      // Last expression must be Unit — a Job? return would fail JS-value
+      // conversion and reject the promise (see startStreaming).
+      Unit
     }
 
     // ==================================================================
@@ -300,6 +376,10 @@ class ExpoAiKitModule : Module() {
 
     AsyncFunction("setModel") Coroutine { modelId: String, minRamBytes: Long, backend: String, generation: Map<String, Double> ->
       if (modelId == "mlkit") {
+        // setModel is the sole gatekeeper: activating the built-in must verify it
+        // can actually serve on this device (DEVICE_NOT_SUPPORTED / MODEL_NOT_DOWNLOADED),
+        // just as downloadable models verify their file on disk below.
+        promptClient.requireAvailable()
         // Switch to built-in: unload any Gemma model
         if (gemmaClient.isModelLoaded()) {
           gemmaClient.unloadModel()
@@ -416,6 +496,113 @@ class ExpoAiKitModule : Module() {
         "modelId" to modelId,
         "status" to "not-downloaded"
       ))
+    }
+
+    // ==================================================================
+    // Speech-to-text (ML Kit GenAI Speech Recognition — opt-in)
+    // ==================================================================
+    // Compiled only with ["expo-ai-kit", { "speech": true }]; without the flag
+    // the backend is null and calls throw SPEECH_NOT_ENABLED. Independent of
+    // the generation single-flight; the JS layer enforces the speech one.
+
+    AsyncFunction("getSpeechAvailability") Coroutine { locale: String ->
+      // Availability never throws for the flag: it *reports* not-enabled.
+      val backend = speechBackend
+        ?: return@Coroutine mapOf("status" to "unavailable", "reason" to "not-enabled")
+      backend.availability(locale)
+    }
+
+    AsyncFunction("prepareSpeechRecognition") Coroutine { locale: String ->
+      requireSpeechBackend().prepare(locale) { progress ->
+        sendEvent("onDownloadProgress", mapOf(
+          "modelId" to "mlkit-speech",
+          "progress" to progress
+        ))
+      }
+    }
+
+    AsyncFunction("getSupportedSpeechLocalesNative") Coroutine { ->
+      // The engine has no locale-enumeration API; the JS registry answers.
+      emptyList<String>()
+    }
+
+    AsyncFunction("getSpeechPermissions") { promise: Promise ->
+      Permissions.getPermissionsWithPermissionsManager(
+        appContext.permissions, promise, Manifest.permission.RECORD_AUDIO
+      )
+    }
+
+    AsyncFunction("requestSpeechPermissions") { promise: Promise ->
+      Permissions.askForPermissionsWithPermissionsManager(
+        appContext.permissions, promise, Manifest.permission.RECORD_AUDIO
+      )
+    }
+
+    AsyncFunction("transcribeAudio") Coroutine {
+      uri: String, base64: String, mediaType: String, locale: String, sessionId: String ->
+      val unused = mediaType // Android decodes by content (MediaExtractor sniffs)
+      val backend = requireSpeechBackend()
+      // file:// URIs can carry percent-escapes (expo-audio recordings do);
+      // Uri.parse().path decodes them — a raw prefix-strip would not.
+      val path = when {
+        uri.isEmpty() -> null
+        uri.startsWith("file://") -> android.net.Uri.parse(uri).path ?: uri.removePrefix("file://")
+        else -> uri
+      }
+      val payload = if (base64.isEmpty()) null else base64
+      val work = speechScope.async { backend.transcribeFile(path, payload, locale) }
+      activeSpeechJobs[sessionId] = work
+      try {
+        work.await()
+      } catch (e: CancellationException) {
+        throw RuntimeException("INFERENCE_CANCELLED:mlkit-speech:Transcription was cancelled")
+      } finally {
+        activeSpeechJobs.remove(sessionId)
+      }
+    }
+
+    AsyncFunction("startTranscription") Coroutine { locale: String, sessionId: String ->
+      activeLiveSpeechSessionId = sessionId
+      requireSpeechBackend().startLive(
+        locale,
+        onUpdate = { text, isFinal ->
+          sendEvent("onTranscriptionUpdate", mapOf(
+            "sessionId" to sessionId,
+            "text" to text,
+            "isFinal" to isFinal
+          ))
+        },
+        onError = { contract ->
+          sendEvent("onTranscriptionUpdate", mapOf(
+            "sessionId" to sessionId,
+            "text" to "",
+            "isFinal" to true,
+            "error" to contract
+          ))
+        },
+        onEnd = {
+          sendEvent("onTranscriptionUpdate", mapOf(
+            "sessionId" to sessionId,
+            "text" to "",
+            "isFinal" to false,
+            "isSessionEnd" to true
+          ))
+        }
+      )
+    }
+
+    AsyncFunction("stopTranscription") Coroutine { sessionId: String ->
+      // Scope teardown to the session that was asked for: cancelling an
+      // aborted batch transcription must not kill an unrelated live session.
+      val batch = activeSpeechJobs.remove(sessionId)
+      if (batch != null) {
+        batch.cancel()
+      } else if (sessionId == activeLiveSpeechSessionId) {
+        activeLiveSpeechSessionId = null
+        speechBackend?.stopLive()
+      }
+      // Last expression must be Unit — see startStreaming.
+      Unit
     }
   }
 }

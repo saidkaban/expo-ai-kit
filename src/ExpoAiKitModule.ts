@@ -11,12 +11,16 @@ import {
   LLMStreamEvent,
   ModelDownloadProgressEvent,
   ModelStateChangeEvent,
+  SpeechPermissionResponse,
+  TranscriptionNativeEvent,
+  TranscriptionSegment,
 } from './types';
 
 export type ExpoAiKitModuleEvents = {
   onStreamToken: (event: LLMStreamEvent) => void;
   onDownloadProgress: (event: ModelDownloadProgressEvent) => void;
   onModelStateChange: (event: ModelStateChangeEvent) => void;
+  onTranscriptionUpdate: (event: TranscriptionNativeEvent) => void;
 };
 
 /** Generation parameters passed to native. All fields optional; -1 / absent means "unset". */
@@ -104,6 +108,38 @@ export interface ExpoAiKitNativeModule {
   // Cancels an in-flight download for the given model (no-op if none).
   cancelDownload(modelId: string): Promise<void>;
   deleteModel(modelId: string): Promise<void>;
+
+  // Speech-to-text (opt-in via the config plugin's `speech` flag).
+  // Absent optionals travel as '' — the natives resolve '' locale to the
+  // device locale. Availability `mode` is Android-only ('basic' | 'advanced');
+  // the JS layer combines it with the pure locale registries in speech.ts.
+  getSpeechAvailability(
+    locale: string
+  ): Promise<{ status: string; reason?: string; mode?: string }>;
+  // Downloads OS-managed speech assets when needed; progress arrives on
+  // onDownloadProgress with modelId 'apple-speech' / 'mlkit-speech'.
+  prepareSpeechRecognition(locale: string): Promise<void>;
+  // iOS: the engine's supported locales. Android returns [] (JS registry answers).
+  getSupportedSpeechLocalesNative(): Promise<string[]>;
+  getSpeechPermissions(): Promise<SpeechPermissionResponse>;
+  requestSpeechPermissions(): Promise<SpeechPermissionResponse>;
+  // Batch transcription. Exactly one of uri/base64 is non-empty; sessionId
+  // lets stopTranscription() cancel it (same pattern as sendMessage).
+  transcribeAudio(
+    uri: string,
+    base64: string,
+    mediaType: string,
+    locale: string,
+    sessionId: string
+  ): Promise<{
+    text: string;
+    segments: TranscriptionSegment[];
+    language?: string;
+    durationSeconds?: number;
+  }>;
+  // Live mic transcription; raw engine updates arrive on onTranscriptionUpdate.
+  startTranscription(locale: string, sessionId: string): Promise<void>;
+  stopTranscription(sessionId: string): Promise<void>;
 
   // Event subscription
   addListener<K extends keyof ExpoAiKitModuleEvents>(

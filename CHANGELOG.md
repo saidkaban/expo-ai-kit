@@ -4,6 +4,25 @@
 
 ### Added
 
+- **On-device speech-to-text (opt-in).** Live microphone transcription — `streamTranscription()`
+  with revising (volatile) and finalized updates — and batch file transcription — `transcribe()`
+  for WAV/M4A/MP3/… — on iOS 26+ (Apple SpeechAnalyzer) and Android 12+ (ML Kit GenAI Speech
+  Recognition, upgrading to Gemini Nano automatically where available). Explicit availability and
+  lifecycle (`getSpeechRecognitionAvailability`, `prepareSpeechRecognition`,
+  `getSupportedSpeechLocales`) plus microphone permission helpers
+  (`get`/`requestSpeechPermissionsAsync`). Enable with `["expo-ai-kit", { "speech": true }]` —
+  it adds `RECORD_AUDIO` (Android) and `NSMicrophoneUsageDescription` (iOS, customizable);
+  without the flag, speech APIs throw a typed `SPEECH_NOT_ENABLED` error and apps pay zero cost.
+  Speech has its own single-flight guard (`SPEECH_BUSY`), independent of generation, so voice →
+  LLM pipelines never trip `INFERENCE_BUSY`. New error codes: `SPEECH_BUSY`,
+  `SPEECH_NOT_ENABLED`, `MIC_PERMISSION_DENIED`, `AUDIO_DECODE_FAILED`, `TRANSCRIPTION_FAILED`.
+  Platform notes: iOS batch returns timestamped segments and needs no permission; Android is
+  text-only, requires the microphone permission even for file input (engine requirement), and
+  ingests files at real-time rate (a 60-second file takes about a minute).
+- **AI SDK transcription model.** The provider gains `expoAiKit.transcriptionModel()`
+  (`TranscriptionModelV3`) — on-device speech-to-text through the AI SDK's `transcribe()` call,
+  with a locale option via `providerOptions['expo-ai-kit']` and honest warnings where the Android
+  engine cannot provide segments.
 - **Built-in model preparation** — `prepareBuiltInModel()` makes Android's OS-managed ML Kit
   model ready before inference and is a no-op when it is already available. On iOS, the same call
   validates Apple Foundation Models availability.
@@ -12,6 +31,26 @@
 
 - **Android ML Kit could silently return an empty response when its model was not downloaded** —
   generation now throws a typed `MODEL_NOT_DOWNLOADED` error with a clear preparation step.
+- **Unavailable built-in models now fail with typed errors instead of fake successes.** On
+  iOS below 26, `sendMessage`/`streamMessage` used to resolve successfully with the literal
+  string `[On-device AI requires iOS 26+]`; they now throw/reject with `DEVICE_NOT_SUPPORTED`.
+  On iOS 26, generation now checks Apple Intelligence availability up front and throws
+  `DEVICE_NOT_SUPPORTED` (device not eligible, or Apple Intelligence disabled) or
+  `MODEL_NOT_DOWNLOADED` (OS still preparing the model) instead of surfacing Apple's raw
+  error as `UNKNOWN`. Unsupported platforms (web) reject with `DEVICE_NOT_SUPPORTED`
+  instead of resolving `{ text: '' }`.
+- **Streaming failures now reject the stream promise.** The native `onStreamToken` event
+  gained a typed error channel; mid-stream failures on both platforms — built-in and
+  LiteRT-LM models alike — reject `streamMessage`'s promise with a `ModelError` instead of
+  resolving successfully with `[Error: …]` or empty text. Android's streaming path also no
+  longer swallows unavailability: it throws the same typed errors as non-streaming
+  generation, and a crash-on-throw hazard inside the stream coroutine was removed.
+- **Activating a built-in model now validates it.** `setModel('apple-fm')` and
+  `setModel('mlkit')` verify the built-in can actually serve on this device (same typed
+  errors as above), honoring the "sole gatekeeper" contract. To release a downloadable
+  model's memory without activating a ready built-in, use `unloadModel()` — it (and
+  `deleteModel()`) still reverts to the platform built-in without validating it; their
+  docs now say so.
 
 ## 0.13.0
 

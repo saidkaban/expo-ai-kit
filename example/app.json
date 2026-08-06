@@ -36,7 +36,8 @@
       [
         "expo-ai-kit",
         {
-          "androidEmbeddings": true
+          "androidEmbeddings": true,
+          "speech": true
         }
       ]
     ]

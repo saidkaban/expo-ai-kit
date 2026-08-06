@@ -115,7 +115,11 @@ export type LLMStreamOptions = {
  * Handle returned by streamMessage.
  */
 export type LLMStreamHandle = {
-  /** Resolves with the final text when streaming completes or is stopped. */
+  /**
+   * Resolves with the final text when streaming completes or is stopped.
+   * Rejects with a ModelError when the stream fails (device or model
+   * unavailable, mid-stream native failure, unsupported platform).
+   */
   promise: Promise<LLMResponse>;
   /** Stop streaming. Resolves `promise` with the text accumulated so far. */
   stop: () => void;
@@ -133,6 +137,12 @@ export type LLMStreamEvent = {
   accumulatedText: string;
   /** Whether this is the final chunk */
   isDone: boolean;
+  /**
+   * Native failure channel carrying the "CODE:modelId:reason" contract when the
+   * stream failed. Events with this field never reach the onToken callback —
+   * streamMessage rejects its promise with the parsed ModelError instead.
+   */
+  error?: string;
 };
 
 /**
@@ -512,6 +522,120 @@ export type DownloadableModelStatus =
   | 'loading'
   | 'ready';
 
+// ============================================================================
+// Speech-to-text
+// ============================================================================
+
+/** Why speech recognition is unavailable on this device. */
+export type SpeechUnavailableReason =
+  /** Unsupported platform (web, etc.). */
+  | 'platform'
+  /** OS too old (iOS < 26, Android < 12). */
+  | 'os-version'
+  /** OS is new enough but this device cannot run the speech engine. */
+  | 'device'
+  /** The requested locale is not supported by the on-device engine. */
+  | 'locale'
+  /** The app was built without the speech feature (config-plugin flag off). */
+  | 'not-enabled';
+
+/**
+ * Availability of on-device speech recognition, per locale.
+ * 'downloadable'/'downloading' mean the device is supported but the OS-managed
+ * speech model assets are not ready — call prepareSpeechRecognition() first.
+ */
+export type SpeechRecognitionAvailability =
+  | { status: 'available' }
+  | { status: 'downloadable' | 'downloading' }
+  | { status: 'unavailable'; reason: SpeechUnavailableReason };
+
+export type SpeechAvailabilityOptions = {
+  /** BCP-47 locale (e.g. 'en-US'). Defaults to the device locale. */
+  locale?: string;
+};
+
+export type PrepareSpeechOptions = {
+  /** BCP-47 locale (e.g. 'en-US'). Defaults to the device locale. */
+  locale?: string;
+  /** Asset download progress, 0..1 (OS-managed on both platforms). */
+  onProgress?: (progress: number) => void;
+};
+
+/** Audio input for transcribe(): a local file URI or base64-encoded bytes. */
+export type TranscribeAudioSource = { uri: string } | { base64: string; mediaType?: string };
+
+export type TranscribeOptions = {
+  audio: TranscribeAudioSource;
+  /** BCP-47 locale (e.g. 'en-US'). Defaults to the device locale. */
+  locale?: string;
+  /** Abort the transcription; rejects with INFERENCE_CANCELLED. */
+  signal?: AbortSignal;
+};
+
+/** A finalized portion of the transcript with audio timing (iOS only in v1). */
+export type TranscriptionSegment = {
+  text: string;
+  startSeconds: number;
+  endSeconds: number;
+};
+
+export type TranscribeResult = {
+  /** The full transcript. */
+  text: string;
+  /** Timestamped segments. iOS: native audio timings. Android: [] (engine is text-only). */
+  segments: TranscriptionSegment[];
+  /** The locale the engine actually used (not language detection). */
+  language?: string;
+  /** Duration of the decoded audio in seconds, when determinable. */
+  durationSeconds?: number;
+};
+
+/** Live-transcription update delivered to the streamTranscription callback. */
+export type TranscriptionUpdate = {
+  /** Full assembled transcript so far: finalized segments plus the volatile tail. */
+  text: string;
+  /** True when this update finalized a segment (the tail was committed). */
+  isFinal: boolean;
+};
+
+export type TranscriptionCallback = (update: TranscriptionUpdate) => void;
+
+export type StreamTranscriptionOptions = {
+  /** BCP-47 locale (e.g. 'en-US'). Defaults to the device locale. */
+  locale?: string;
+};
+
+/** Handle returned by streamTranscription. */
+export type TranscriptionHandle = {
+  /**
+   * Resolves with the transcript assembled so far when the session ends
+   * (stop(), or the engine ending the session). Rejects with a ModelError
+   * when the session fails.
+   */
+  promise: Promise<TranscribeResult>;
+  /** Stop listening. Resolves `promise` with the transcript heard so far. */
+  stop: () => void;
+};
+
+/** Microphone permission state for speech recognition. */
+export type SpeechPermissionResponse = {
+  status: 'granted' | 'denied' | 'undetermined';
+  granted: boolean;
+  canAskAgain: boolean;
+};
+
+/** Native event payload for live transcription (internal). */
+export type TranscriptionNativeEvent = {
+  sessionId: string;
+  /** Raw engine text: the current volatile/partial tail, or a finalized segment. */
+  text: string;
+  isFinal: boolean;
+  /** The engine ended the session on its own (JS settles the stream). */
+  isSessionEnd?: boolean;
+  /** "CODE:modelId:reason" failure contract; JS rejects the stream promise. */
+  error?: string;
+};
+
 /**
  * Error codes for model-related operations.
  */
@@ -540,6 +664,20 @@ export type ModelErrorCode =
    * the Latin model.
    */
   | 'LANGUAGE_NOT_SUPPORTED'
+  /** A speech session (transcribe or streamTranscription) is already active. */
+  | 'SPEECH_BUSY'
+  /**
+   * The app was built without the speech feature. Enable it with the config
+   * plugin — `["expo-ai-kit", { "speech": true }]` — and make a new native
+   * build (dev client / EAS; not OTA).
+   */
+  | 'SPEECH_NOT_ENABLED'
+  /** Microphone permission was not granted (Android needs it even for files). */
+  | 'MIC_PERMISSION_DENIED'
+  /** The audio file could not be decoded to PCM for the speech engine. */
+  | 'AUDIO_DECODE_FAILED'
+  /** The speech engine failed mid-session. */
+  | 'TRANSCRIPTION_FAILED'
   | 'UNKNOWN';
 
 /**

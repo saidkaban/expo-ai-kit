@@ -33,6 +33,11 @@ export const KNOWN_ERROR_CODES: ReadonlySet<ModelErrorCode> = new Set<ModelError
   'DEVICE_NOT_SUPPORTED',
   'EMBEDDINGS_NOT_ENABLED',
   'LANGUAGE_NOT_SUPPORTED',
+  'SPEECH_BUSY',
+  'SPEECH_NOT_ENABLED',
+  'MIC_PERMISSION_DENIED',
+  'AUDIO_DECODE_FAILED',
+  'TRANSCRIPTION_FAILED',
 ]);
 
 export type ParsedNativeError = {

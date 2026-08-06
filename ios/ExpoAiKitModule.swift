@@ -1,3 +1,4 @@
+import AVFoundation
 import ExpoModulesCore
 import FoundationModels
 import NaturalLanguage
@@ -21,6 +22,94 @@ public class ExpoAiKitModule: Module {
   // Embedding model identifiers with an OS asset request currently in flight
   // (lets getEmbeddingModelStatus report "downloading").
   private var embeddingAssetRequests: Set<String> = []
+
+  // Speech recognition client (iOS 26+). Stored type-erased so the property
+  // needs no availability annotation; only touched inside #available blocks.
+  private var speechClientStorage: Any?
+
+  @available(iOS 26.0, *)
+  private func speechClient() -> SpeechRecognitionClient {
+    if let client = speechClientStorage as? SpeechRecognitionClient {
+      return client
+    }
+    let client = SpeechRecognitionClient()
+    speechClientStorage = client
+    return client
+  }
+
+  // In-flight batch transcriptions so stopTranscription can cancel them.
+  private var activeSpeechTasks: [String: Task<[String: Any], Error>] = [:]
+  // The live session's id, so stopTranscription only tears down live capture
+  // when asked about that session (not when cancelling an aborted batch).
+  private var activeLiveSpeechSessionId: String?
+
+  /// iOS builds always compile the speech code; the config-plugin `speech`
+  /// flag's job here is the microphone usage string. Requesting microphone
+  /// access without NSMicrophoneUsageDescription crashes the app by iOS
+  /// policy, so the live paths gate on its presence with a typed error.
+  private func hasMicUsageDescription() -> Bool {
+    return Bundle.main.object(forInfoDictionaryKey: "NSMicrophoneUsageDescription") != nil
+  }
+
+  private func speechNotEnabledError() -> NSError {
+    return contractError(
+      "SPEECH_NOT_ENABLED", "apple-speech",
+      "The app was built without the speech feature. Add [\"expo-ai-kit\", { \"speech\": true }] "
+        + "to the app config plugins and make a new native build")
+  }
+
+  private func speechPermissionMap() -> [String: Any] {
+    let status: String
+    if #available(iOS 17.0, *) {
+      switch AVAudioApplication.shared.recordPermission {
+      case .granted: status = "granted"
+      case .denied: status = "denied"
+      default: status = "undetermined"
+      }
+    } else {
+      switch AVAudioSession.sharedInstance().recordPermission {
+      case .granted: status = "granted"
+      case .denied: status = "denied"
+      default: status = "undetermined"
+      }
+    }
+    return [
+      "status": status,
+      "granted": status == "granted",
+      "canAskAgain": status == "undetermined",
+    ]
+  }
+
+  /// Resolve transcribe() input to a local file URL. Base64 payloads are
+  /// staged into the temp directory (deleted after transcription).
+  private func resolveAudioInput(uri: String, base64: String, mediaType: String) throws -> URL {
+    if !uri.isEmpty {
+      if uri.hasPrefix("file://"), let url = URL(string: uri) { return url }
+      return URL(fileURLWithPath: uri)
+    }
+    guard let data = Data(base64Encoded: base64, options: [.ignoreUnknownCharacters]) else {
+      throw contractError("AUDIO_DECODE_FAILED", "apple-speech", "Invalid base64 audio payload")
+    }
+    let ext: String
+    switch mediaType.lowercased() {
+    case "audio/wav", "audio/x-wav", "audio/wave": ext = "wav"
+    case "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/aac": ext = "m4a"
+    case "audio/mpeg", "audio/mp3": ext = "mp3"
+    case "audio/flac", "audio/x-flac": ext = "flac"
+    case "audio/aiff", "audio/x-aiff": ext = "aiff"
+    default: ext = "wav"
+    }
+    let url = FileManager.default.temporaryDirectory
+      .appendingPathComponent("expo-ai-kit-\(UUID().uuidString).\(ext)")
+    do {
+      try data.write(to: url)
+    } catch {
+      throw contractError(
+        "AUDIO_DECODE_FAILED", "apple-speech",
+        "Could not stage audio for transcription: \(error.localizedDescription)")
+    }
+    return url
+  }
 
   // Build Apple Foundation Models generation options from the stored config.
   @available(iOS 26.0, *)
@@ -103,11 +192,60 @@ public class ExpoAiKitModule: Module {
     return ["id": model.modelIdentifier, "revision": String(model.revision)]
   }
 
+  /// Build an NSError carrying the typed "CODE:modelId:reason" native-error contract.
+  private func contractError(_ code: String, _ modelId: String, _ reason: String) -> NSError {
+    return NSError(
+      domain: "ExpoAiKit", code: 0,
+      userInfo: [NSLocalizedDescriptionKey: "\(code):\(modelId):\(reason)"]
+    )
+  }
+
+  /// Contract string for stream error events: pass through messages that already
+  /// carry a "CODE:" prefix; wrap anything else as INFERENCE_FAILED.
+  private func streamErrorContract(_ error: Error, modelId: String) -> String {
+    let message = error.localizedDescription
+    if message.range(of: "^[A-Z][A-Z_]*:", options: .regularExpression) != nil {
+      return message
+    }
+    return "INFERENCE_FAILED:\(modelId):\(message)"
+  }
+
+  /// Typed reason Apple Foundation Models cannot serve requests right now, or nil
+  /// when it is ready. modelNotReady maps to MODEL_NOT_DOWNLOADED (transient,
+  /// OS-managed download) rather than DEVICE_NOT_SUPPORTED (permanent).
+  @available(iOS 26.0, *)
+  private func appleFMAvailabilityError() -> NSError? {
+    switch SystemLanguageModel.default.availability {
+    case .available:
+      return nil
+    case .unavailable(let reason):
+      switch reason {
+      case .deviceNotEligible:
+        return contractError(
+          "DEVICE_NOT_SUPPORTED", "apple-fm", "This device does not support Apple Intelligence")
+      case .appleIntelligenceNotEnabled:
+        return contractError(
+          "DEVICE_NOT_SUPPORTED", "apple-fm",
+          "Apple Intelligence is not enabled. Enable it in Settings to use Apple Foundation Models")
+      case .modelNotReady:
+        return contractError(
+          "MODEL_NOT_DOWNLOADED", "apple-fm",
+          "The Apple Foundation model is not ready yet (the OS may still be downloading it). Try again later")
+      @unknown default:
+        return contractError(
+          "DEVICE_NOT_SUPPORTED", "apple-fm", "Apple Foundation Models is unavailable on this device")
+      }
+    @unknown default:
+      return contractError(
+        "DEVICE_NOT_SUPPORTED", "apple-fm", "Apple Foundation Models is unavailable on this device")
+    }
+  }
+
   public func definition() -> ModuleDefinition {
     Name("ExpoAiKit")
 
     // Declare events that can be sent to JavaScript
-    Events("onStreamToken", "onDownloadProgress", "onModelStateChange")
+    Events("onStreamToken", "onDownloadProgress", "onModelStateChange", "onTranscriptionUpdate")
 
     // ==================================================================
     // Inference API
@@ -130,15 +268,13 @@ public class ExpoAiKitModule: Module {
       // the app to download; validate availability so both platforms expose the
       // same preparation call and unsupported devices fail clearly.
       if #available(iOS 26.0, *) {
-        if case .available = SystemLanguageModel.default.availability {
-          return
+        if let unavailable = self.appleFMAvailabilityError() {
+          throw unavailable
         }
+        return
       }
-      throw NSError(
-        domain: "ExpoAiKit", code: 0,
-        userInfo: [NSLocalizedDescriptionKey:
-          "DEVICE_NOT_SUPPORTED:apple-fm:Apple Foundation Models is not available on this device"]
-      )
+      throw self.contractError(
+        "DEVICE_NOT_SUPPORTED", "apple-fm", "Apple Foundation Models requires iOS 26 or later")
     }
 
     AsyncFunction("sendMessage") {
@@ -170,13 +306,17 @@ public class ExpoAiKitModule: Module {
             .joined(separator: "\n") + "\nASSISTANT:"
 
           if #available(iOS 26.0, *) {
+            if let unavailable = self.appleFMAvailabilityError() {
+              throw unavailable
+            }
             let session = LanguageModelSession(instructions: baseSystemPrompt)
             let response = try await session.respond(
               to: conversationPrompt, options: self.appleGenerationOptions()
             )
             return ["text": response.content]
           } else {
-            return ["text": "[On-device AI requires iOS 26+]"]
+            throw self.contractError(
+              "DEVICE_NOT_SUPPORTED", "apple-fm", "Apple Foundation Models requires iOS 26 or later")
           }
         } else {
           // Gemma/LiteRT-LM: Conversation API handles turn formatting; pass raw content joined.
@@ -200,7 +340,7 @@ public class ExpoAiKitModule: Module {
         messages: [[String: Any]],
         fallbackSystemPrompt: String,
         sessionId: String
-      ) in
+      ) throws in
 
       let baseSystemPrompt =
         messages
@@ -221,13 +361,16 @@ public class ExpoAiKitModule: Module {
           .joined(separator: "\n") + "\nASSISTANT:"
 
         if #available(iOS 26.0, *) {
+          if let unavailable = self.appleFMAvailabilityError() {
+            throw unavailable
+          }
           let task = Task {
+            var accumulatedText = ""
             do {
               let session = LanguageModelSession(instructions: baseSystemPrompt)
               let stream = session.streamResponse(
                 to: conversationPrompt, options: self.appleGenerationOptions()
               )
-              var accumulatedText = ""
 
               for try await partialResponse in stream {
                 if Task.isCancelled { break }
@@ -251,24 +394,29 @@ public class ExpoAiKitModule: Module {
                 "accumulatedText": accumulatedText,
                 "isDone": true
               ])
+            } catch is CancellationError {
+              // stop() already settled the JS side; emit terminal done for parity.
+              self.sendEvent("onStreamToken", [
+                "sessionId": sessionId,
+                "token": "",
+                "accumulatedText": accumulatedText,
+                "isDone": true
+              ])
             } catch {
               self.sendEvent("onStreamToken", [
                 "sessionId": sessionId,
                 "token": "",
-                "accumulatedText": "[Error: \(error.localizedDescription)]",
-                "isDone": true
+                "accumulatedText": accumulatedText,
+                "isDone": true,
+                "error": self.streamErrorContract(error, modelId: "apple-fm")
               ])
             }
             self.activeStreamTasks.removeValue(forKey: sessionId)
           }
           self.activeStreamTasks[sessionId] = task
         } else {
-          self.sendEvent("onStreamToken", [
-            "sessionId": sessionId,
-            "token": "[On-device AI requires iOS 26+]",
-            "accumulatedText": "[On-device AI requires iOS 26+]",
-            "isDone": true
-          ])
+          throw self.contractError(
+            "DEVICE_NOT_SUPPORTED", "apple-fm", "Apple Foundation Models requires iOS 26 or later")
         }
       } else {
         // Gemma/LiteRT-LM path
@@ -289,12 +437,21 @@ public class ExpoAiKitModule: Module {
                 "isDone": isDone
               ])
             }
+          } catch is CancellationError {
+            // stop() already settled the JS side; emit terminal done for parity.
+            self.sendEvent("onStreamToken", [
+              "sessionId": sessionId,
+              "token": "",
+              "accumulatedText": "",
+              "isDone": true
+            ])
           } catch {
             self.sendEvent("onStreamToken", [
               "sessionId": sessionId,
               "token": "",
-              "accumulatedText": "[Error: \(error.localizedDescription)]",
-              "isDone": true
+              "accumulatedText": "",
+              "isDone": true,
+              "error": self.streamErrorContract(error, modelId: self.activeModelId)
             ])
           }
           self.activeStreamTasks.removeValue(forKey: sessionId)
@@ -501,6 +658,16 @@ public class ExpoAiKitModule: Module {
       // applies it below at conversation creation.
       self.generationConfig = generation
       if modelId == "apple-fm" {
+        // setModel is the sole gatekeeper: activating the built-in must verify it
+        // can actually serve on this device, just as downloadable models verify disk.
+        if #available(iOS 26.0, *) {
+          if let unavailable = self.appleFMAvailabilityError() {
+            throw unavailable
+          }
+        } else {
+          throw self.contractError(
+            "DEVICE_NOT_SUPPORTED", "apple-fm", "Apple Foundation Models requires iOS 26 or later")
+        }
         if await self.gemmaClient.isModelLoaded() {
           let previousId = self.activeModelId
           await self.gemmaClient.unloadModel()
@@ -619,6 +786,136 @@ public class ExpoAiKitModule: Module {
         "modelId": modelId,
         "status": "not-downloaded"
       ])
+    }
+
+    // ==================================================================
+    // Speech-to-text (SpeechAnalyzer, iOS 26+)
+    // ==================================================================
+    // Independent of the generation path and its single-flight guard; the JS
+    // layer enforces the speech single-flight. Batch file transcription needs
+    // no permission; live transcription needs microphone permission only.
+
+    AsyncFunction("getSpeechAvailability") { (locale: String) async -> [String: Any] in
+      if #available(iOS 26.0, *) {
+        return await self.speechClient().availability(requestedLocale: locale)
+      }
+      return ["status": "unavailable", "reason": "os-version"]
+    }
+
+    AsyncFunction("prepareSpeechRecognition") { (locale: String) async throws in
+      guard #available(iOS 26.0, *) else {
+        throw self.contractError(
+          "DEVICE_NOT_SUPPORTED", "apple-speech",
+          "On-device speech recognition requires iOS 26 or later")
+      }
+      try await self.speechClient().prepare(requestedLocale: locale) { progress in
+        self.sendEvent("onDownloadProgress", [
+          "modelId": "apple-speech",
+          "progress": progress
+        ])
+      }
+    }
+
+    AsyncFunction("getSupportedSpeechLocalesNative") { () async -> [String] in
+      if #available(iOS 26.0, *) {
+        return await self.speechClient().supportedLocaleIdentifiers()
+      }
+      return []
+    }
+
+    AsyncFunction("getSpeechPermissions") { () async -> [String: Any] in
+      return self.speechPermissionMap()
+    }
+
+    AsyncFunction("requestSpeechPermissions") { () async throws -> [String: Any] in
+      guard self.hasMicUsageDescription() else {
+        throw self.speechNotEnabledError()
+      }
+      if #available(iOS 17.0, *) {
+        _ = await AVAudioApplication.requestRecordPermission()
+      } else {
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+          AVAudioSession.sharedInstance().requestRecordPermission { _ in cont.resume() }
+        }
+      }
+      return self.speechPermissionMap()
+    }
+
+    AsyncFunction("transcribeAudio") {
+      (uri: String, base64: String, mediaType: String, locale: String, sessionId: String)
+        async throws -> [String: Any] in
+      guard #available(iOS 26.0, *) else {
+        throw self.contractError(
+          "DEVICE_NOT_SUPPORTED", "apple-speech",
+          "On-device speech recognition requires iOS 26 or later")
+      }
+      let isStagedTempFile = uri.isEmpty
+      let url = try self.resolveAudioInput(uri: uri, base64: base64, mediaType: mediaType)
+      defer {
+        if isStagedTempFile {
+          try? FileManager.default.removeItem(at: url)
+        }
+      }
+      let task = Task { () async throws -> [String: Any] in
+        try await self.speechClient().transcribeFile(url: url, requestedLocale: locale)
+      }
+      self.activeSpeechTasks[sessionId] = task
+      defer { self.activeSpeechTasks.removeValue(forKey: sessionId) }
+      do {
+        return try await task.value
+      } catch is CancellationError {
+        throw self.contractError("INFERENCE_CANCELLED", "apple-speech", "Transcription was cancelled")
+      }
+    }
+
+    AsyncFunction("startTranscription") { (locale: String, sessionId: String) async throws in
+      guard #available(iOS 26.0, *) else {
+        throw self.contractError(
+          "DEVICE_NOT_SUPPORTED", "apple-speech",
+          "On-device speech recognition requires iOS 26 or later")
+      }
+      guard self.hasMicUsageDescription() else {
+        throw self.speechNotEnabledError()
+      }
+      self.activeLiveSpeechSessionId = sessionId
+      try await self.speechClient().startLive(
+        requestedLocale: locale,
+        onUpdate: { text, isFinal in
+          self.sendEvent("onTranscriptionUpdate", [
+            "sessionId": sessionId,
+            "text": text,
+            "isFinal": isFinal
+          ])
+        },
+        onError: { contract in
+          self.sendEvent("onTranscriptionUpdate", [
+            "sessionId": sessionId,
+            "text": "",
+            "isFinal": true,
+            "error": contract
+          ])
+        },
+        onEnd: {
+          self.sendEvent("onTranscriptionUpdate", [
+            "sessionId": sessionId,
+            "text": "",
+            "isFinal": false,
+            "isSessionEnd": true
+          ])
+        }
+      )
+    }
+
+    AsyncFunction("stopTranscription") { (sessionId: String) async in
+      if let task = self.activeSpeechTasks[sessionId] {
+        task.cancel()
+        self.activeSpeechTasks.removeValue(forKey: sessionId)
+      } else if sessionId == self.activeLiveSpeechSessionId {
+        self.activeLiveSpeechSessionId = nil
+        if #available(iOS 26.0, *) {
+          await self.speechClient().stopLive()
+        }
+      }
     }
   }
 }

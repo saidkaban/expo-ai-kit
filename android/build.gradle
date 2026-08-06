@@ -38,6 +38,12 @@ if (useManagedAndroidSdkVersions) {
 // not compiled — zero bytes added to the APK. On: ~+25 MB APK (arm64).
 def androidEmbeddingsEnabled = (findProperty("expoAiKit.androidEmbeddings") ?: "false").toString().toBoolean()
 
+// Opt-in speech-to-text (ML Kit GenAI Speech Recognition). The config plugin
+// writes this property at prebuild when the app enables
+// ["expo-ai-kit", { "speech": true }]. Off (default): no speech dependency and
+// src/speech is not compiled.
+def speechEnabled = (findProperty("expoAiKit.speech") ?: "false").toString().toBoolean()
+
 android {
   namespace "expo.modules.aikit"
   defaultConfig {
@@ -54,6 +60,9 @@ android {
     main {
       if (androidEmbeddingsEnabled) {
         java.srcDirs += 'src/embeddings/java'
+      }
+      if (speechEnabled) {
+        java.srcDirs += 'src/speech/java'
       }
     }
   }
@@ -75,5 +84,8 @@ dependencies {
     // Keep in sync with tasksTextVersion in src/models.ts — it is part of the
     // embedding model identity, so bumping this must bump the JS pin too.
     implementation "com.google.mediapipe:tasks-text:1.0.0"
+  }
+  if (speechEnabled) {
+    implementation "com.google.mlkit:genai-speech-recognition:1.0.0-alpha1"
   }
 }

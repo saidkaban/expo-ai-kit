@@ -6,13 +6,22 @@ import type {
   LanguageModelV3GenerateResult,
   LanguageModelV3StreamPart,
   LanguageModelV3StreamResult,
+  SharedV3Warning,
+  TranscriptionModelV3,
+  TranscriptionModelV3CallOptions,
 } from '@ai-sdk/provider';
 import { Platform } from 'react-native';
 
-import { embed, getActiveModel, sendMessage, setModel, streamMessage } from '../index';
+import { embed, getActiveModel, sendMessage, setModel, streamMessage, transcribe } from '../index';
 import { ANDROID_EMBEDDING_MODEL } from '../models';
 import { ModelError, type EmbeddingTask, type SetModelOptions } from '../types';
-import { convertCallOptions, extractOutput, EMPTY_USAGE, newPartId } from './convert';
+import {
+  convertCallOptions,
+  extractOutput,
+  uint8ToBase64,
+  EMPTY_USAGE,
+  newPartId,
+} from './convert';
 
 // ---------------------------------------------------------------------------
 // Vercel AI SDK provider for expo-ai-kit — `import { expoAiKit } from 'expo-ai-kit/ai'`.
@@ -51,6 +60,12 @@ export const ANDROID_EMBEDDING_MODEL_ID = ANDROID_EMBEDDING_MODEL.id;
  * {@link ANDROID_EMBEDDING_MODEL_ID}, or omit the id to get the platform default.
  */
 export const EMBEDDING_MODEL_ID = APPLE_EMBEDDING_MODEL_ID;
+
+/** Model id for the iOS speech engine (Apple SpeechAnalyzer, iOS 26+). */
+export const APPLE_SPEECH_MODEL_ID = 'apple-speech';
+
+/** Model id for the Android speech engine (ML Kit GenAI Speech Recognition, API 31+). */
+export const ANDROID_SPEECH_MODEL_ID = 'mlkit-speech';
 
 /**
  * Per-instance embedding settings. `task` says what the vectors are for
@@ -91,6 +106,15 @@ export interface ExpoAiKitProvider {
   embeddingModel(modelId?: string, settings?: ExpoAiKitEmbeddingSettings): EmbeddingModelV3;
   /** @deprecated Spec alias for {@link ExpoAiKitProvider.embeddingModel}. */
   textEmbeddingModel(modelId?: string, settings?: ExpoAiKitEmbeddingSettings): EmbeddingModelV3;
+  /**
+   * A TranscriptionModelV3 over transcribe() — on-device speech-to-text for
+   * the AI SDK's `transcribe()` call. Omit `modelId` for the platform engine
+   * ('apple-speech' on iOS 26+, 'mlkit-speech' on Android 12+). Requires the
+   * `speech` config-plugin flag. Pass a locale via
+   * `providerOptions['expo-ai-kit'].locale`. Android returns no segment
+   * timestamps (reported as a warning) and transcribes at real-time rate.
+   */
+  transcriptionModel(modelId?: string): TranscriptionModelV3;
   /** expo-ai-kit has no image models; always throws MODEL_NOT_FOUND. */
   imageModel(modelId: string): never;
 }
@@ -153,10 +177,28 @@ export function createExpoAiKit(): ExpoAiKitProvider {
     return createEmbeddingModel(resolved, settings);
   };
 
+  const transcriptionModel = (modelId?: string): TranscriptionModelV3 => {
+    // One speech engine per platform; the instance reports the resolved id.
+    const platformDefault =
+      Platform.OS === 'android' ? ANDROID_SPEECH_MODEL_ID : APPLE_SPEECH_MODEL_ID;
+    const resolved = modelId ?? platformDefault;
+    if (resolved !== platformDefault) {
+      throw new ModelError(
+        'MODEL_NOT_FOUND',
+        resolved,
+        `expo-ai-kit has one speech engine per platform — "${APPLE_SPEECH_MODEL_ID}" on iOS ` +
+          `(SpeechAnalyzer), "${ANDROID_SPEECH_MODEL_ID}" on Android (ML Kit). ` +
+          "Omit the id to use the current platform's engine."
+      );
+    }
+    return createTranscriptionModel(resolved);
+  };
+
   const provider = languageModel as ExpoAiKitProvider;
   provider.languageModel = languageModel;
   provider.embeddingModel = embeddingModel;
   provider.textEmbeddingModel = embeddingModel;
+  provider.transcriptionModel = transcriptionModel;
   provider.imageModel = (modelId: string): never => {
     throw new ModelError('MODEL_NOT_FOUND', modelId, 'expo-ai-kit does not provide image models.');
   };
@@ -412,6 +454,59 @@ function createEmbeddingModel(
 
       const { embeddings } = await embed(values, { task, language });
       return { embeddings, warnings: [] };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Transcription model (speech-to-text)
+// ---------------------------------------------------------------------------
+
+function createTranscriptionModel(modelId: string): TranscriptionModelV3 {
+  return {
+    specificationVersion: 'v3',
+    provider: PROVIDER,
+    modelId,
+
+    async doGenerate(options: TranscriptionModelV3CallOptions) {
+      const base64 =
+        typeof options.audio === 'string' ? options.audio : uint8ToBase64(options.audio);
+      const providerOptions = options.providerOptions?.[PROVIDER] as
+        | { locale?: string }
+        | undefined;
+
+      const result = await transcribe({
+        audio: { base64, mediaType: options.mediaType },
+        locale: typeof providerOptions?.locale === 'string' ? providerOptions.locale : undefined,
+        signal: options.abortSignal,
+      });
+
+      const warnings: SharedV3Warning[] = [];
+      if (Platform.OS === 'android') {
+        warnings.push({
+          type: 'unsupported',
+          feature: 'segments',
+          details:
+            'The Android speech engine (ML Kit) is text-only: no segment timestamps, and it ' +
+            'ingests audio at real-time rate (a 60s file takes ~60s). iOS returns native segments.',
+        });
+      }
+
+      return {
+        text: result.text,
+        segments: result.segments.map((segment) => ({
+          text: segment.text,
+          startSecond: segment.startSeconds,
+          endSecond: segment.endSeconds,
+        })),
+        language: result.language,
+        durationInSeconds: result.durationSeconds,
+        warnings,
+        response: {
+          timestamp: new Date(),
+          modelId,
+        },
+      };
     },
   };
 }

@@ -11,6 +11,14 @@ import {
   getRegistryEntry,
 } from './models';
 import {
+  ANDROID_ADVANCED_SPEECH_LOCALES,
+  ANDROID_BASIC_SPEECH_LOCALES,
+  createTranscriptAssembler,
+  normalizeSpeechLocale,
+  resolveSpeechLocale,
+  validateTranscribeAudio,
+} from './speech';
+import {
   buildSchemaInstruction,
   buildSchemaRepair,
   extractJson,
@@ -49,6 +57,16 @@ import {
   EmbedOptions,
   EmbedResult,
   EmbeddingModelState,
+  PrepareSpeechOptions,
+  SpeechAvailabilityOptions,
+  SpeechPermissionResponse,
+  SpeechRecognitionAvailability,
+  StreamTranscriptionOptions,
+  TranscribeOptions,
+  TranscribeResult,
+  TranscriptionCallback,
+  TranscriptionHandle,
+  TranscriptionNativeEvent,
 } from './types';
 
 export * from './types';
@@ -165,8 +183,19 @@ function toNativeGeneration(g?: GenerationConfig): NativeGenerationConfig {
 // ============================================================================
 
 /**
- * Check if on-device AI is available on the current device.
- * Returns false on unsupported platforms (web, etc.).
+ * Check if this device supports the platform's built-in on-device model.
+ *
+ * Semantics differ slightly per platform:
+ * - iOS: `true` only when Apple Foundation Models is ready to use right now
+ *   (iOS 26+, Apple Intelligence enabled, model assets present).
+ * - Android: `true` when the ML Kit model is supported on this device, even if
+ *   its OS-managed model still needs a one-time download. Call
+ *   {@link prepareBuiltInModel} before the first generation; generating before
+ *   it completes throws a typed MODEL_NOT_DOWNLOADED error.
+ * - Unsupported platforms (web, etc.): always `false`.
+ *
+ * `false` does not rule out downloadable models — see
+ * {@link getRecommendedModel} / {@link setModel} for the LiteRT-LM path.
  */
 export async function isAvailable(): Promise<boolean> {
   if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
@@ -233,7 +262,11 @@ export async function sendMessage(
   options?: LLMSendOptions
 ): Promise<LLMResponse> {
   if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
-    return { text: '' };
+    throw new ModelError(
+      'DEVICE_NOT_SUPPORTED',
+      '',
+      'On-device inference is only available on iOS and Android'
+    );
   }
 
   if (!messages || messages.length === 0) {
@@ -341,7 +374,13 @@ export function streamMessage(
   // Handle unsupported platforms
   if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
     return {
-      promise: Promise.resolve({ text: '' }),
+      promise: Promise.reject(
+        new ModelError(
+          'DEVICE_NOT_SUPPORTED',
+          '',
+          'On-device inference is only available on iOS and Android'
+        )
+      ),
       stop: () => {},
     };
   }
@@ -397,6 +436,20 @@ export function streamMessage(
 
   subscription = ExpoAiKitModule.addListener('onStreamToken', (event: LLMStreamEvent) => {
     if (event.sessionId !== sessionId) return;
+    // Native failure channel: reject with the typed contract instead of
+    // surfacing error text as a successful completion. Error events never
+    // reach the caller's onToken.
+    if (event.error) {
+      const nativeError = new Error(event.error);
+      settle(() => {
+        try {
+          toModelError(nativeError);
+        } catch (me) {
+          rejectOuter(me);
+        }
+      });
+      return;
+    }
     finalText = event.accumulatedText;
     onToken(event);
     if (event.isDone) settle(() => resolveOuter({ text: finalText }));
@@ -1168,7 +1221,9 @@ export async function cancelDownload(modelId: string): Promise<void> {
 /**
  * Delete a downloaded model from the device.
  *
- * If the model is currently loaded, it will be unloaded first.
+ * If the model is currently loaded, it will be unloaded first and the active
+ * model reverts to the platform built-in — which, like {@link unloadModel},
+ * is not validated here and may be unavailable on this device.
  *
  * @param modelId - ID of the model to delete
  * @throws {ModelError} MODEL_NOT_FOUND if modelId is not in the registry
@@ -1208,6 +1263,13 @@ export async function deleteModel(modelId: string): Promise<void> {
  *   Android (emulators on Intel/AMD hosts) — LiteRT-LM's native x86 backend
  *   crashes the app process, so activation fails fast instead. Use a physical
  *   device or an arm64 emulator image; built-in models are unaffected.
+ * @throws {ModelError} DEVICE_NOT_SUPPORTED or MODEL_NOT_DOWNLOADED when
+ *   activating a built-in model that cannot serve on this device: 'apple-fm'
+ *   below iOS 26, with Apple Intelligence disabled, or while its OS-managed
+ *   assets are still preparing; 'mlkit' on unsupported devices or before
+ *   prepareBuiltInModel() has completed. To release a downloadable model's
+ *   memory without activating a ready built-in, use {@link unloadModel} — it
+ *   never validates the built-in.
  */
 export async function setModel(modelId: string, options?: SetModelOptions): Promise<void> {
   if (modelId === ANDROID_EMBEDDING_MODEL.id) {
@@ -1241,7 +1303,365 @@ export function getActiveModel(): string {
  *
  * Frees memory and reverts to the platform built-in model.
  * No-op if no downloadable model is currently loaded.
+ *
+ * The built-in is not validated here: on devices where it is unavailable
+ * (e.g. iOS below 26, or Android without ML Kit support), later generation
+ * calls throw typed errors (DEVICE_NOT_SUPPORTED / MODEL_NOT_DOWNLOADED)
+ * until {@link setModel} activates a downloaded model again.
  */
 export async function unloadModel(): Promise<void> {
   await wrapNative(() => ExpoAiKitModule.unloadModel());
+}
+
+// ============================================================================
+// Speech-to-text
+// ============================================================================
+// Opt-in via the config plugin (["expo-ai-kit", { "speech": true }]) because it
+// adds microphone permissions to the app. Independent of the generation
+// single-flight guard: a voice pipeline (streamTranscription -> sendMessage)
+// never trips INFERENCE_BUSY. Speech has its own single-flight instead — the
+// platform engines run one recognition session at a time.
+
+let speechInFlight = false;
+
+function acquireSpeech(): void {
+  if (speechInFlight) {
+    throw new ModelError(
+      'SPEECH_BUSY',
+      '',
+      'A speech session is already active. Stop the active transcription first.'
+    );
+  }
+  speechInFlight = true;
+}
+
+const SPEECH_MODEL_IDS = new Set(['apple-speech', 'mlkit-speech']);
+
+function speechUnsupportedPlatformError(): ModelError {
+  return new ModelError(
+    'DEVICE_NOT_SUPPORTED',
+    '',
+    'On-device speech recognition is only available on iOS and Android'
+  );
+}
+
+/**
+ * Check whether on-device speech recognition can run on this device for a
+ * locale (defaults to the device locale).
+ *
+ * - `available` — ready right now.
+ * - `downloadable` / `downloading` — supported, but the OS-managed speech
+ *   model is not ready. Call {@link prepareSpeechRecognition} first.
+ * - `unavailable` — with a reason: 'platform' (web), 'os-version' (iOS < 26,
+ *   Android < 12), 'device', 'locale', or 'not-enabled' (the app was built
+ *   without the config-plugin `speech` flag).
+ */
+export async function getSpeechRecognitionAvailability(
+  options?: SpeechAvailabilityOptions
+): Promise<SpeechRecognitionAvailability> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    return { status: 'unavailable', reason: 'platform' };
+  }
+  const locale = normalizeSpeechLocale(options?.locale) ?? '';
+  const native = await wrapNative(() => ExpoAiKitModule.getSpeechAvailability(locale));
+
+  // Android locale support is a static registry per mode (the engine has no
+  // enumeration API); intersect the native device status with it here, with
+  // the same language-fallback matching iOS applies ('en' resolves to 'en-US').
+  if (Platform.OS === 'android' && locale !== '' && native.status !== 'unavailable') {
+    const supported =
+      native.mode === 'advanced' ? ANDROID_ADVANCED_SPEECH_LOCALES : ANDROID_BASIC_SPEECH_LOCALES;
+    if (resolveSpeechLocale(locale, supported) === undefined) {
+      return { status: 'unavailable', reason: 'locale' };
+    }
+  }
+
+  if (native.status === 'available') return { status: 'available' };
+  if (native.status === 'downloadable') return { status: 'downloadable' };
+  if (native.status === 'downloading') return { status: 'downloading' };
+  const reason = native.reason;
+  return {
+    status: 'unavailable',
+    reason:
+      reason === 'os-version' ||
+      reason === 'device' ||
+      reason === 'locale' ||
+      reason === 'not-enabled'
+        ? reason
+        : 'device',
+  };
+}
+
+/**
+ * Make on-device speech recognition ready: downloads the OS-managed speech
+ * model assets when needed (AssetInventory on iOS, ML Kit on Android).
+ * Resolves immediately when already ready. Progress is 0..1.
+ */
+export async function prepareSpeechRecognition(options?: PrepareSpeechOptions): Promise<void> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    throw speechUnsupportedPlatformError();
+  }
+  const locale = normalizeSpeechLocale(options?.locale) ?? '';
+  let subscription: ReturnType<typeof ExpoAiKitModule.addListener> | undefined;
+  if (options?.onProgress) {
+    subscription = ExpoAiKitModule.addListener('onDownloadProgress', (event) => {
+      if (SPEECH_MODEL_IDS.has(event.modelId)) {
+        options.onProgress!(event.progress);
+      }
+    });
+  }
+  try {
+    await wrapNative(() => ExpoAiKitModule.prepareSpeechRecognition(locale));
+  } finally {
+    subscription?.remove();
+  }
+}
+
+/**
+ * BCP-47 locales the on-device speech engine supports. iOS asks the engine;
+ * Android answers from the documented ML Kit locale registry for the mode the
+ * device runs ('basic' broadly, 'advanced' on Gemini Nano devices).
+ */
+export async function getSupportedSpeechLocales(): Promise<string[]> {
+  if (Platform.OS === 'ios') {
+    return await wrapNative(() => ExpoAiKitModule.getSupportedSpeechLocalesNative());
+  }
+  if (Platform.OS === 'android') {
+    const native = await wrapNative(() => ExpoAiKitModule.getSpeechAvailability(''));
+    if (native.status === 'unavailable') return [];
+    return [
+      ...(native.mode === 'advanced'
+        ? ANDROID_ADVANCED_SPEECH_LOCALES
+        : ANDROID_BASIC_SPEECH_LOCALES),
+    ];
+  }
+  return [];
+}
+
+/** Current microphone permission state for speech recognition. */
+export async function getSpeechPermissionsAsync(): Promise<SpeechPermissionResponse> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    return { status: 'denied', granted: false, canAskAgain: false };
+  }
+  return await wrapNative(() => ExpoAiKitModule.getSpeechPermissions());
+}
+
+/**
+ * Request microphone permission for speech recognition. Required before
+ * {@link streamTranscription} on both platforms, and before {@link transcribe}
+ * on Android (its speech engine checks RECORD_AUDIO even for file input).
+ */
+export async function requestSpeechPermissionsAsync(): Promise<SpeechPermissionResponse> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    return { status: 'denied', granted: false, canAskAgain: false };
+  }
+  return await wrapNative(() => ExpoAiKitModule.requestSpeechPermissions());
+}
+
+/**
+ * Transcribe recorded audio on-device.
+ *
+ * iOS (26+, SpeechAnalyzer): faster than real time, returns timestamped
+ * {@link TranscriptionSegment}s. Android (12+, ML Kit): the engine ingests
+ * audio at real-time rate, so a 60-second file takes about a minute — right
+ * for voice notes, wrong for podcasts — and returns text only
+ * (`segments: []`). Android also requires the microphone permission even for
+ * file input.
+ *
+ * @throws {ModelError} SPEECH_NOT_ENABLED when the app was built without the
+ *   config-plugin `speech` flag; DEVICE_NOT_SUPPORTED / MODEL_NOT_DOWNLOADED /
+ *   LANGUAGE_NOT_SUPPORTED per {@link getSpeechRecognitionAvailability};
+ *   MIC_PERMISSION_DENIED (Android); AUDIO_DECODE_FAILED for undecodable
+ *   input; SPEECH_BUSY when a session is active; INFERENCE_CANCELLED on abort.
+ */
+export async function transcribe(options: TranscribeOptions): Promise<TranscribeResult> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    throw speechUnsupportedPlatformError();
+  }
+  const audio = validateTranscribeAudio(options.audio);
+  const locale = normalizeSpeechLocale(options.locale) ?? '';
+
+  if (options.signal?.aborted) {
+    throw new ModelError('INFERENCE_CANCELLED', '', 'Aborted before start');
+  }
+
+  acquireSpeech();
+  const sessionId = generateSessionId();
+
+  // Same hold-until-native-settles pattern as sendMessage: the engine may keep
+  // running briefly after an abort, so the flag is released only on settle.
+  // A synchronous throw (e.g. the JS shipped over OTA onto a native binary
+  // without the speech functions) must release the guard immediately.
+  let native: ReturnType<typeof ExpoAiKitModule.transcribeAudio>;
+  try {
+    native = ExpoAiKitModule.transcribeAudio(
+      audio.uri,
+      audio.base64,
+      audio.mediaType,
+      locale,
+      sessionId
+    );
+  } catch (e) {
+    speechInFlight = false;
+    toModelError(e);
+  }
+  const release = () => {
+    speechInFlight = false;
+  };
+  native.then(release, release);
+
+  const signal = options.signal;
+  if (!signal) {
+    try {
+      return await native;
+    } catch (e) {
+      toModelError(e);
+    }
+  }
+
+  return await new Promise<TranscribeResult>((resolve, reject) => {
+    let done = false;
+    const finish = (action: () => void) => {
+      if (done) return;
+      done = true;
+      signal.removeEventListener('abort', onAbort);
+      action();
+    };
+    function onAbort() {
+      ExpoAiKitModule.stopTranscription(sessionId).catch(() => {});
+      finish(() => reject(new ModelError('INFERENCE_CANCELLED', '', 'Aborted by caller')));
+    }
+    signal.addEventListener('abort', onAbort);
+    native.then(
+      (r) => finish(() => resolve(r)),
+      (e) =>
+        finish(() => {
+          try {
+            toModelError(e);
+          } catch (me) {
+            reject(me);
+          }
+        })
+    );
+  });
+}
+
+/**
+ * Live microphone transcription with volatile (revising) and finalized
+ * updates. Requires microphone permission — see
+ * {@link requestSpeechPermissionsAsync}.
+ *
+ * `onUpdate` receives the full assembled transcript so far; `isFinal` marks
+ * updates that committed a segment. `stop()` is the normal ending: it resolves
+ * `promise` with the transcript heard so far. Failures reject `promise` with a
+ * typed ModelError; error events never reach `onUpdate`.
+ */
+export function streamTranscription(
+  onUpdate: TranscriptionCallback,
+  options?: StreamTranscriptionOptions
+): TranscriptionHandle {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    return {
+      promise: Promise.reject(speechUnsupportedPlatformError()),
+      stop: () => {},
+    };
+  }
+
+  if (speechInFlight) {
+    return {
+      promise: Promise.reject(
+        new ModelError(
+          'SPEECH_BUSY',
+          '',
+          'A speech session is already active. Stop the active transcription first.'
+        )
+      ),
+      stop: () => {},
+    };
+  }
+  speechInFlight = true; // set synchronously — race-free with other JS
+
+  const locale = normalizeSpeechLocale(options?.locale) ?? '';
+  const sessionId = generateSessionId();
+  const assembler = createTranscriptAssembler();
+
+  let settled = false;
+  let subscription: ReturnType<typeof ExpoAiKitModule.addListener> | undefined;
+  let resolveOuter!: (r: TranscribeResult) => void;
+  let rejectOuter!: (e: unknown) => void;
+
+  const settle = (action: () => void) => {
+    if (settled) return;
+    settled = true;
+    subscription?.remove();
+    speechInFlight = false;
+    action();
+  };
+
+  const promise = new Promise<TranscribeResult>((resolve, reject) => {
+    resolveOuter = resolve;
+    rejectOuter = reject;
+  });
+
+  const resolveWithTranscript = () =>
+    settle(() =>
+      resolveOuter({
+        text: assembler.current(),
+        segments: [],
+        language: locale || undefined,
+      })
+    );
+
+  subscription = ExpoAiKitModule.addListener(
+    'onTranscriptionUpdate',
+    (event: TranscriptionNativeEvent) => {
+      if (event.sessionId !== sessionId) return;
+      if (event.error) {
+        const nativeError = new Error(event.error);
+        settle(() => {
+          try {
+            toModelError(nativeError);
+          } catch (me) {
+            rejectOuter(me);
+          }
+        });
+        return;
+      }
+      if (event.text.length > 0 || event.isFinal) {
+        const text = assembler.apply(event);
+        onUpdate({ text, isFinal: event.isFinal });
+      }
+      if (event.isSessionEnd) resolveWithTranscript();
+    }
+  );
+
+  try {
+    ExpoAiKitModule.startTranscription(locale, sessionId).catch((error) => {
+      settle(() => {
+        try {
+          toModelError(error);
+        } catch (me) {
+          rejectOuter(me);
+        }
+      });
+    });
+  } catch (error) {
+    // Synchronous throw (e.g. OTA JS on a pre-speech native binary): settle so
+    // the guard and subscription are released and the caller gets a rejection.
+    settle(() => {
+      try {
+        toModelError(error);
+      } catch (me) {
+        rejectOuter(me);
+      }
+    });
+  }
+
+  const stop = () => {
+    // Best-effort native stop; resolve immediately so `promise` can never hang.
+    ExpoAiKitModule.stopTranscription(sessionId).catch(() => {});
+    resolveWithTranscript();
+  };
+
+  return { promise, stop };
 }
