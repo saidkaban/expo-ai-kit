@@ -4,6 +4,7 @@ import android.os.Build
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.prompt.Generation
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -70,6 +71,11 @@ class PromptApiClient {
 
   /** Fail clearly when inference starts before the OS-managed model is ready. */
   suspend fun requireAvailable() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+      throw RuntimeException(
+        "DEVICE_NOT_SUPPORTED:mlkit:ML Kit Prompt API requires Android API 26 or later"
+      )
+    }
     when (model.checkStatus()) {
       FeatureStatus.AVAILABLE -> return
       FeatureStatus.DOWNLOADABLE -> throw RuntimeException(
@@ -124,36 +130,37 @@ class PromptApiClient {
     onChunk: (token: String, accumulatedText: String, isDone: Boolean) -> Unit
   ) = withContext(Dispatchers.IO) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-      onChunk("", "", true)
-      return@withContext
+      throw RuntimeException(
+        "DEVICE_NOT_SUPPORTED:mlkit:ML Kit Prompt API requires Android API 26 or later"
+      )
     }
 
+    // Same typed gate as generateText. The module pre-checks before launching the
+    // stream, but the status can change between that check and collection time.
+    requireAvailable()
+
+    // Prepend system prompt as context if provided
+    val fullPrompt = if (systemPrompt.isNotBlank()) {
+      "$systemPrompt\n\nUser: $prompt"
+    } else {
+      prompt
+    }
+
+    var accumulatedText = ""
+
     try {
-      val status = model.checkStatus()
-      if (status != FeatureStatus.AVAILABLE) {
-        onChunk("", "", true)
-        return@withContext
-      }
-
-      // Prepend system prompt as context if provided
-      val fullPrompt = if (systemPrompt.isNotBlank()) {
-        "$systemPrompt\n\nUser: $prompt"
-      } else {
-        prompt
-      }
-
-      var accumulatedText = ""
-
       model.generateContentStream(fullPrompt).collect { response ->
         val newChunk = response.candidates.firstOrNull()?.text.orEmpty()
         accumulatedText += newChunk
         onChunk(newChunk, accumulatedText, false)
       }
-
-      // Send final done event
-      onChunk("", accumulatedText, true)
+    } catch (e: CancellationException) {
+      throw e
     } catch (e: Throwable) {
-      onChunk("", "[Error: ${e.message}]", true)
+      throw RuntimeException("INFERENCE_FAILED:mlkit:${e.message}")
     }
+
+    // Send final done event
+    onChunk("", accumulatedText, true)
   }
 }
