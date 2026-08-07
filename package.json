@@ -1,6 +1,6 @@
 {
   "name": "expo-ai-kit",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "On-device AI for Expo and React Native — local AI inference and speech-to-text with Apple Foundation Models, SpeechAnalyzer, ML Kit, and LiteRT-LM; no API keys or cloud",
   "main": "build/index.js",
   "types": "build/index.d.ts",
