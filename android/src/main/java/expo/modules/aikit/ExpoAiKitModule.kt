@@ -3,6 +3,7 @@ package expo.modules.aikit
 import android.Manifest
 import android.app.ActivityManager
 import android.content.Context
+import android.os.SystemClock
 import expo.modules.interfaces.permissions.Permissions
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
@@ -93,6 +94,12 @@ class ExpoAiKitModule : Module() {
 
   private val activeStreamJobs = mutableMapOf<String, Job>()
   private val streamScope = CoroutineScope(Dispatchers.IO)
+
+  // Android's Expo event bridge retains each event until JS consumes it. The
+  // download loop reads 8KB chunks, so emitting one event per chunk overflows
+  // ART's global JNI reference table on large model downloads.
+  private var lastDownloadProgressAt = 0L
+  private var lastDownloadProgress = -1.0
 
   // Active model routing: "mlkit" (default) or a downloadable model ID
   private var activeModelId: String = "mlkit"
@@ -286,16 +293,28 @@ class ExpoAiKitModule : Module() {
     AsyncFunction("prepareEmbeddingModel") Coroutine { url: String, sha256: String, language: String ->
       requireEmbeddingBackend()
       if (embeddingAssets.isDownloaded()) return@Coroutine
+      lastDownloadProgressAt = 0L
+      lastDownloadProgress = -1.0
       sendEvent("onModelStateChange", mapOf(
         "modelId" to EmbeddingAssetManager.EMBEDDING_MODEL_ID,
         "status" to "downloading"
       ))
       try {
         embeddingAssets.download(url, sha256) { bytesRead, totalBytes ->
-          sendEvent("onDownloadProgress", mapOf(
-            "modelId" to EmbeddingAssetManager.EMBEDDING_MODEL_ID,
-            "progress" to if (totalBytes > 0) bytesRead.toDouble() / totalBytes else 0.0
-          ))
+          val progress = if (totalBytes > 0) bytesRead.toDouble() / totalBytes else 0.0
+          val now = SystemClock.elapsedRealtime()
+          if (
+            progress >= 1.0 ||
+            now - lastDownloadProgressAt >= 250L ||
+            progress - lastDownloadProgress >= 0.01
+          ) {
+            lastDownloadProgressAt = now
+            lastDownloadProgress = progress
+            sendEvent("onDownloadProgress", mapOf(
+              "modelId" to EmbeddingAssetManager.EMBEDDING_MODEL_ID,
+              "progress" to progress
+            ))
+          }
         }
         sendEvent("onModelStateChange", mapOf(
           "modelId" to EmbeddingAssetManager.EMBEDDING_MODEL_ID,
@@ -452,6 +471,8 @@ class ExpoAiKitModule : Module() {
     // ==================================================================
 
     AsyncFunction("downloadModel") Coroutine { modelId: String, url: String, sha256: String ->
+      lastDownloadProgressAt = 0L
+      lastDownloadProgress = -1.0
       sendEvent("onModelStateChange", mapOf(
         "modelId" to modelId,
         "status" to "downloading"
@@ -459,10 +480,20 @@ class ExpoAiKitModule : Module() {
 
       try {
         gemmaClient.downloadModelFile(modelId, url, sha256) { bytesRead, totalBytes ->
-          sendEvent("onDownloadProgress", mapOf(
-            "modelId" to modelId,
-            "progress" to if (totalBytes > 0) bytesRead.toDouble() / totalBytes else 0.0
-          ))
+          val progress = if (totalBytes > 0) bytesRead.toDouble() / totalBytes else 0.0
+          val now = SystemClock.elapsedRealtime()
+          if (
+            progress >= 1.0 ||
+            now - lastDownloadProgressAt >= 250L ||
+            progress - lastDownloadProgress >= 0.01
+          ) {
+            lastDownloadProgressAt = now
+            lastDownloadProgress = progress
+            sendEvent("onDownloadProgress", mapOf(
+              "modelId" to modelId,
+              "progress" to progress
+            ))
+          }
         }
 
         // Download succeeded: file is on disk, awaiting setModel() to load it.
