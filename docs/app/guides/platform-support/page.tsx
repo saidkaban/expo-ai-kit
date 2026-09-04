@@ -7,7 +7,7 @@ import { createPageMetadata } from "@/lib/site";
 
 export const metadata = createPageMetadata(
   "Platform Support",
-  "Compare expo-ai-kit support across Apple Foundation Models, Android ML Kit, LiteRT-LM, and on-device embeddings.",
+  "Compare expo-ai-kit support for text, speech, vision, and embeddings across Apple Foundation Models, Apple Vision, SpeechAnalyzer, Android ML Kit, and LiteRT-LM.",
   "/guides/platform-support"
 );
 
@@ -33,12 +33,14 @@ export default function PlatformSupportPage() {
 
       <h2 id="overview">Overview</h2>
       <p>
-        expo-ai-kit provides on-device AI capabilities by leveraging native
-        platform frameworks. Both iOS and Android are fully supported.
+        expo-ai-kit provides four on-device capabilities, text, speech,
+        vision, and embeddings, by leveraging native platform frameworks. Both
+        iOS and Android are fully supported; this page starts with text
+        generation and ends with a per-feature comparison.
       </p>
       <p>
-        There are two model paths. The <strong>built-in OS models</strong> —
-        Apple Foundation Models on iOS and ML Kit on Android — are managed by
+        There are two model paths. The <strong>built-in OS models</strong>,
+        Apple Foundation Models on iOS and ML Kit on Android, are managed by
         the operating system rather than bundled with your app. Android may
         download its model on first use. <strong>Downloadable models</strong> (Gemma,
         Qwen, Phi via LiteRT-LM) run on <em>both</em> platforms and broaden
@@ -99,7 +101,7 @@ export default function PlatformSupportPage() {
         <tbody>
           <tr>
             <td>iOS &lt; 26</td>
-            <td>Returns fallback message</td>
+            <td>Throws <code>DEVICE_NOT_SUPPORTED</code> for the built-in model</td>
           </tr>
           <tr>
             <td>Android (unsupported devices)</td>
@@ -115,7 +117,7 @@ export default function PlatformSupportPage() {
           <Link href="/guides/models" className="text-accent hover:underline">
             downloadable model
           </Link>{" "}
-          (Gemma / Qwen / Phi) if it meets the model&apos;s RAM requirement —
+          (Gemma / Qwen / Phi) if it meets the model&apos;s RAM requirement,
           check <code>getRecommendedModel()</code> at runtime.
         </p>
       </Callout>
@@ -164,9 +166,11 @@ export default function PlatformSupportPage() {
 
       <Callout type="warning" title="iOS &lt; 26">
         <p>
-          On iOS versions below 26, the module returns a fallback message. This
-          allows you to develop and test your app on older devices while still
-          building the UI.
+          On iOS versions below 26, <code>isAvailable()</code> returns{" "}
+          <code>false</code> and generation calls throw a typed{" "}
+          <code>DEVICE_NOT_SUPPORTED</code> error. Vision, embeddings, and
+          downloadable models still work on older iOS versions (see the table
+          below), so you can build a graceful UI around the missing built-in.
         </p>
       </Callout>
 
@@ -308,8 +312,50 @@ export default function PlatformSupportPage() {
               ~184 MB model download)
             </td>
           </tr>
+          <tr>
+            <td>
+              <code>transcribe()</code> / <code>streamTranscription()</code>{" "}
+              (speech-to-text)
+            </td>
+            <td>✅ iOS 26+ (SpeechAnalyzer)</td>
+            <td>
+              ✅ Android 12+, opt-in (<code>speech</code> config-plugin flag)
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>removeBackground()</code> (vision)
+            </td>
+            <td>✅ iOS 17+, physical device</td>
+            <td>
+              ✅ opt-in (<code>vision</code> flag) with Google Play services
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>labelImage()</code> (vision)
+            </td>
+            <td>✅ physical device</td>
+            <td>✅ opt-in (<code>vision</code> flag), model bundled</td>
+          </tr>
+          <tr>
+            <td>
+              <code>recognizeText()</code> (vision / OCR)
+            </td>
+            <td>✅</td>
+            <td>
+              ✅ opt-in (<code>vision</code> flag) with Google Play services
+            </td>
+          </tr>
         </tbody>
       </table>
+      <p>
+        Speech, vision, and embeddings have their own availability calls, {" "}
+        <code>getSpeechRecognitionAvailability()</code>,{" "}
+        <code>getVisionAvailability()</code>, and{" "}
+        <code>getEmbeddingModelStatus()</code>, because their requirements
+        differ from the built-in text model&apos;s.
+      </p>
 
       <hr />
 

@@ -7,7 +7,7 @@ import { createPageMetadata } from "@/lib/site";
 
 export const metadata = createPageMetadata(
   "Android Setup",
-  "Configure expo-ai-kit with Android ML Kit, prepare the built-in model, and enable optional on-device embeddings.",
+  "Configure expo-ai-kit with Android ML Kit, prepare the built-in model, and enable the optional speech, vision, and embeddings features.",
   "/guides/android-setup"
 );
 
@@ -15,7 +15,10 @@ const headings = [
   { id: "requirements", text: "Requirements", level: 2 },
   { id: "installation", text: "Installation", level: 2 },
   { id: "configuration", text: "Configuration", level: 2 },
-  { id: "android-embeddings", text: "Android Embeddings (opt-in)", level: 2 },
+  { id: "optional-features", text: "Optional Features (opt-in)", level: 2 },
+  { id: "android-speech", text: "Speech", level: 3 },
+  { id: "android-vision", text: "Vision", level: 3 },
+  { id: "android-embeddings", text: "Embeddings", level: 3 },
   { id: "how-it-works", text: "How It Works", level: 2 },
   { id: "supported-devices", text: "Supported Devices", level: 2 },
   { id: "troubleshooting", text: "Troubleshooting", level: 2 },
@@ -92,22 +95,61 @@ export default function AndroidSetupPage() {
 npx expo run:android`}
       </CodeBlock>
 
-      <h2 id="android-embeddings">Android Embeddings (opt-in)</h2>
+      <h2 id="optional-features">Optional features (opt-in)</h2>
       <p>
-        <code>embed()</code> on Android (EmbeddingGemma 300M via MediaPipe
-        TextEmbedder) is gated behind a config-plugin flag — off by default, so
-        apps that don&apos;t use embeddings pay zero APK bytes:
+        Text generation needs nothing beyond the setup above. Speech, vision,
+        and embeddings are gated behind config-plugin flags, off by default,
+        so apps that don&apos;t use them pay zero APK bytes and add no
+        permissions. Each flag requires a <strong>new native build</strong>{" "}
+        (dev client / EAS, an OTA update is not enough):
       </p>
       <CodeBlock language="json" filename="app.json">
 {`{
   "expo": {
     "plugins": [
       ["expo-build-properties", { "android": { "minSdkVersion": 26 } }],
-      ["expo-ai-kit", { "androidEmbeddings": true }]
+      ["expo-ai-kit", { "speech": true, "vision": true, "androidEmbeddings": true }]
     ]
   }
 }`}
       </CodeBlock>
+
+      <h3 id="android-speech">Speech</h3>
+      <p>
+        <code>speech</code> compiles the ML Kit GenAI Speech Recognition backend
+        and adds <code>RECORD_AUDIO</code> (the engine requires it even for file
+        input). Android 12+; the OS-managed model downloads via{" "}
+        <code>prepareSpeechRecognition()</code>. Without the flag, speech APIs
+        throw <code>SPEECH_NOT_ENABLED</code>. See the{" "}
+        <Link href="/guides/speech" className="text-accent hover:underline">
+          Speech guide
+        </Link>
+        .
+      </p>
+
+      <h3 id="android-vision">Vision</h3>
+      <p>
+        <code>vision</code> compiles the ML Kit vision backend, {" "}
+        <code>removeBackground()</code> (Subject Segmentation),{" "}
+        <code>labelImage()</code> (Image Labeling), and{" "}
+        <code>recognizeText()</code> (Text Recognition v2), and adds no
+        permissions. The label model is bundled with the app; the segmentation
+        and OCR models are Google Play services modules downloaded once by{" "}
+        <code>prepareVision()</code>. Devices without Google Play services can
+        still label images but report background removal and OCR as{" "}
+        <code>unavailable</code>. Without the flag, vision APIs throw{" "}
+        <code>VISION_NOT_ENABLED</code>. See the{" "}
+        <Link href="/guides/vision" className="text-accent hover:underline">
+          Vision guide
+        </Link>
+        .
+      </p>
+
+      <h3 id="android-embeddings">Embeddings</h3>
+      <p>
+        <code>androidEmbeddings</code> compiles the EmbeddingGemma 300M backend
+        (MediaPipe TextEmbedder) behind <code>embed()</code>:
+      </p>
       <ul>
         <li>
           <strong>Off (default):</strong> the MediaPipe dependency isn&apos;t
@@ -116,13 +158,13 @@ npx expo run:android`}
         </li>
         <li>
           <strong>On:</strong> ~+25 MB APK (arm64). Requires a{" "}
-          <strong>new native build</strong> (dev client / EAS — an OTA update is
+          <strong>new native build</strong> (dev client / EAS, an OTA update is
           not enough).
         </li>
         <li>
           The ~184 MB model downloads at runtime via{" "}
           <code>prepareEmbeddingModel()</code> (SHA-256-verified, stored
-          per-app) — <code>embed()</code> itself never downloads. See the{" "}
+          per-app), <code>embed()</code> itself never downloads. See the{" "}
           <Link
             href="/guides/embeddings"
             className="text-accent hover:underline"

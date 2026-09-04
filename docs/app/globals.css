@@ -388,6 +388,44 @@ code {
   font-size: 1.05rem;
 }
 
+/* Wide tables scroll inside their own box so the page never scrolls sideways. */
+.docs-table-scroll {
+  overflow-x: auto;
+  margin: 1.4rem 0 1.8rem;
+}
+
+.docs-table-scroll table {
+  min-width: 46rem;
+  margin: 0;
+}
+
+/* Capability cards on the landing page link to their guide. */
+.prose .docs-capability-grid > a {
+  display: block;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: var(--card-bg);
+  color: var(--foreground);
+  text-decoration: none;
+  transition: border-color 150ms, transform 150ms;
+}
+
+.prose .docs-capability-grid > a:hover {
+  border-color: var(--accent);
+  opacity: 1;
+  text-decoration: none;
+  transform: translateY(-2px);
+}
+
+.prose .docs-capability-grid > a code {
+  display: block;
+  margin-top: 0.7rem;
+  color: var(--accent);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
 .prose .docs-model-grid p,
 .prose .docs-capability-grid p {
   margin: 0;

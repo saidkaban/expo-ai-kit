@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>On-device AI for Expo & React Native.</strong><br />
-  No API keys. No cloud. No cost.
+  Text · Speech · Vision · Embeddings, running on the phone. No API keys. No cloud. No cost.
 </p>
 
 <p align="center">
@@ -20,35 +20,48 @@
   <a href="https://expo-ai-kit.dev/llms.txt">llms.txt</a>
 </p>
 
-Run private, local AI across **Apple Foundation Models**, **ML Kit**, and downloadable
-**Gemma 4**, **Qwen3**, and **Phi-4 Mini** models—or register your own
-[LiteRT-LM](https://ai.google.dev/edge/litert-lm) model. Transcribe speech on-device with native
-Apple and Google speech models. Stream text, generate typed objects, call tools, build on-device
-RAG, switch models at runtime, or use the package as a **Vercel AI SDK provider**.
+Phones already ship with capable AI models. expo-ai-kit is one small, typed API over the best of
+them, so your app can chat, transcribe, see, and search on the device: offline, private, and with
+no per-request bill. One package, both platforms.
+
+## Everything in one import
+
+```ts
+import {
+  sendMessage, streamMessage, generateObject, generateText, // 💬 Text
+  transcribe, streamTranscription,                          // 🎙️ Speech
+  removeBackground, labelImage, recognizeText,              // 👁️ Vision
+  embed, chunkText, createVectorStore,                      // 🔎 Embeddings & RAG
+} from 'expo-ai-kit';
+```
+
+## What your app can do
+
+| | You call | Instead of | iOS | Android |
+|---|---|---|---|---|
+| 💬 Chat with a local model, stream tokens | `sendMessage` / `streamMessage` | a hosted LLM API | Apple Foundation Models | ML Kit Prompt API |
+| 🧾 Get a typed object back | `generateObject` | prompt hacks + JSON parsing | ″ | ″ |
+| 🛠️ Let the model call your functions | `generateText({ tools })` | a function-calling API | ″ | ″ |
+| 🎙️ Transcribe voice, live or from a file | `streamTranscription` / `transcribe` | a speech-to-text API | SpeechAnalyzer | ML Kit Speech Recognition |
+| ✂️ Cut the subject out of a photo | `removeBackground` | a background-removal API | Apple Vision | ML Kit Subject Segmentation |
+| 🏷️ Describe what is in a photo | `labelImage` | an image-tagging API | Apple Vision | ML Kit Image Labeling |
+| 🔤 Read the text in a photo | `recognizeText` | an OCR API | Apple Vision | ML Kit Text Recognition |
+| 🔎 Search by meaning, build RAG | `embed` + `createVectorStore` | an embeddings API + a vector DB | NLContextualEmbedding | EmbeddingGemma |
+| 🧠 Run a Gemma, Qwen, or Phi model you choose | `downloadModel` + `setModel` | a model-hosting service | LiteRT-LM | LiteRT-LM |
+
+Every capability has the same three-step shape: **check availability → prepare once → use.**
+Preparation is the only step that ever downloads anything, and it resolves immediately when the
+device is already ready. Failures throw a `ModelError` with a typed `.code`, never a fake
+success or empty text.
 
 | | |
 |---|---|
-| 🔒 **Private by default** | Inference, speech, and embeddings run on the device. |
-| 📱 **Native first** | Use Apple Foundation Models and ML Kit without bundling model weights. |
-| 🎙️ **On-device speech** | Transcribe audio locally with native Apple and Google speech models. |
-| 🧠 **Bring your model** | Download curated models or register any compatible LiteRT-LM bundle. |
-| 🧩 **Useful primitives** | Streaming, speech, structured output, tools, embeddings, RAG, and cancellation. |
-| 🔌 **AI SDK compatible** | Use `expo-ai-kit/ai` with familiar AI SDK APIs and patterns. |
-| 🪶 **Zero runtime dependencies** | The core package keeps `dependencies` empty. |
-
-## Compatibility
-
-| Capability | iOS | Android |
-|---|---|---|
-| Library minimum | iOS 15.1+ | API 26+ |
-| Built-in generation | Apple Foundation Models, iOS 26+ when available | ML Kit Prompt API on supported devices |
-| Downloadable generation | Gemma, Qwen, Phi, and custom LiteRT-LM models | Gemma, Qwen, Phi, and custom LiteRT-LM models |
-| Speech-to-text | SpeechAnalyzer, iOS 26+ when available | ML Kit GenAI Speech Recognition on supported devices |
-| Embeddings | `NLContextualEmbedding`, iOS 17+ | EmbeddingGemma 300M, opt-in |
-| Expo | Expo SDK 54+, development or production build | Expo SDK 54+, development or production build |
-
-Runtime support still depends on the device, OS configuration, available memory, and selected model.
-Use `isAvailable()` and the model-management APIs instead of assuming support.
+| 🔒 **Private by default** | Every capability runs on the device. Nothing is sent anywhere. |
+| 📱 **Native first** | OS-provided models mean no weights to bundle for most features. |
+| 🧩 **Small primitives** | Plain async functions that compose. No hidden state, no framework. |
+| 🔌 **AI SDK compatible** | `expo-ai-kit/ai` plugs the same engines into the Vercel AI SDK. |
+| 🪶 **Zero runtime dependencies** | `dependencies` is empty; optional features are opt-in build flags. |
+| 🤖 **Agent friendly** | Typed errors, explicit lifecycles, and an [llms.txt](https://expo-ai-kit.dev/llms.txt) your coding agent can read. |
 
 ## Install
 
@@ -58,10 +71,23 @@ npx expo install expo-ai-kit
 
 > **expo-ai-kit contains native Swift and Kotlin code and is not available in Expo Go.** Use a
 > [development build](https://docs.expo.dev/develop/development-builds/introduction/),
-> `npx expo run:ios|android`, or EAS Build.
+> `npx expo run:ios|android`, or EAS Build. Bare React Native needs Expo modules installed,
+> `npx pod-install` on iOS, and `minSdkVersion 26` on Android.
 
-For bare React Native, first ensure Expo modules are installed, then run `npx pod-install` for iOS.
-Android requires `minSdkVersion 26`.
+**Text** works with no configuration. **Speech**, **Vision** (Android), and **Embeddings**
+(Android) are opt-in build flags, so apps that don't use them pay nothing in size or permissions:
+
+```json
+{
+  "expo": {
+    "plugins": [["expo-ai-kit", { "speech": true, "vision": true, "androidEmbeddings": true }]]
+  }
+}
+```
+
+Turning a flag on requires a new native build (dev client or EAS, not an OTA update). Without a
+flag, the corresponding APIs throw a typed error (`SPEECH_NOT_ENABLED`, `VISION_NOT_ENABLED`,
+`EMBEDDINGS_NOT_ENABLED`) instead of failing silently.
 
 ## Quick start
 
@@ -78,14 +104,13 @@ await prepareBuiltInModel();
 const { text } = await sendMessage([
   { role: 'user', content: 'Explain local-first AI in one sentence.' },
 ]);
-
-console.log(text);
 ```
 
-`messages` is an array of `{ role: 'system' | 'user' | 'assistant'; content: string }`.
-The current message APIs are stateless, so pass the complete history on every call.
+## 💬 Text
 
-### Stream a response
+Generate and stream text with the OS model or a downloaded one. `messages` is an array of
+`{ role: 'system' | 'user' | 'assistant'; content: string }`. The message APIs are stateless, so
+pass the complete history on every call.
 
 ```tsx
 import { streamMessage } from 'expo-ai-kit';
@@ -95,69 +120,14 @@ const { promise, stop } = streamMessage(
   ({ token }) => console.log(token)
 );
 
-const response = await promise;
-// Call stop() to cancel an active stream.
+const { text } = await promise; // call stop() to cancel early
 ```
 
-## Speech-to-text
+### Structured output
 
-On-device transcription — live from the microphone with revising (volatile) and finalized updates,
-or batch from a recorded file. iOS uses Apple SpeechAnalyzer (iOS 26+); Android uses ML Kit GenAI
-Speech Recognition (Android 12+, upgrading to Gemini Nano automatically on supported devices).
-Availability, locale support, and model readiness are explicit so apps can handle unsupported
-devices without falling back to a cloud service.
-
-Speech is **opt-in** (it adds microphone permissions to the app): add
-`["expo-ai-kit", { "speech": true }]` to your config plugins and make a new native build.
-
-```tsx
-import {
-  getSpeechRecognitionAvailability,
-  prepareSpeechRecognition,
-  requestSpeechPermissionsAsync,
-  streamTranscription,
-  transcribe,
-} from 'expo-ai-kit';
-
-const availability = await getSpeechRecognitionAvailability({ locale: 'en-US' });
-if (availability.status === 'downloadable') {
-  await prepareSpeechRecognition({ locale: 'en-US' }); // OS-managed model download
-}
-
-// Live: updates carry the full transcript so far; isFinal marks committed segments.
-await requestSpeechPermissionsAsync();
-const { promise, stop } = streamTranscription((update) => setText(update.text));
-// … later, when the user releases the button:
-stop();
-const { text } = await promise;
-
-// Batch: transcribe a recording (WAV, M4A, MP3, …).
-const result = await transcribe({ audio: { uri: recordingUri } });
-// iOS: result.segments carries audio timestamps. Android: text only.
-```
-
-Platform notes:
-
-- **Android transcribes files at real-time rate** (a 60-second file takes about a minute) — the
-  engine's documented ingestion contract. Right for voice notes and dictation; use a cloud service
-  for podcast-length audio. Android also requires the microphone permission even for file input
-  (an engine requirement) and returns no segment timestamps.
-- iOS batch transcription is faster than real time, returns timestamped segments, and needs no
-  permission at all; only live listening uses the microphone.
-
-## Choose your API
-
-| Use | Import | Best for |
-|---|---|---|
-| Core primitives | `expo-ai-kit` | Direct control, no AI SDK dependency, explicit model lifecycle |
-| Vercel AI SDK provider | `expo-ai-kit/ai` | Existing AI SDK code, provider portability, AI SDK orchestration |
-
-Both routes use the same on-device models and core inference path.
-
-## Structured output
-
-Generate a typed object from a JSON Schema. expo-ai-kit prompts the model, extracts JSON,
-validates it, and repairs invalid output within a bounded retry loop.
+Describe the shape you want with a JSON Schema. expo-ai-kit prompts the model, extracts and
+validates the JSON, and repairs invalid output within a bounded retry loop (two attempts by
+default). Keep schemas small and shallow for compact on-device models.
 
 ```tsx
 import { generateObject } from 'expo-ai-kit';
@@ -176,17 +146,13 @@ const { object } = await generateObject<Recipe>(
     required: ['title', 'minutes', 'ingredients'],
   }
 );
-
-console.log(object.title);
 ```
 
-The default is two repair attempts. Keep schemas small and shallow for the most reliable
-results from compact on-device models.
+### Tool calling
 
-## Tool calling
-
-Let the model select a tool, validate its arguments, run your function, and use its result
-to answer. The loop is bounded by `maxSteps` (default 5).
+Let the model pick a tool, validate its arguments, run your function, and answer from the result.
+The loop is bounded by `maxSteps` (default 5). Omit `execute` to get the proposed call back for
+human approval instead.
 
 ```tsx
 import { generateText } from 'expo-ai-kit';
@@ -209,13 +175,84 @@ const { text } = await generateText(
 );
 ```
 
-Omit `execute` to return the proposed call for human approval. Tool implementations remain
-under your control and may use the network or other device capabilities when you choose.
+## 🎙️ Speech
 
-## Embeddings and on-device RAG
+Transcribe on-device, live from the microphone with revising and finalized updates, or from a
+recorded file. Enable it with `"speech": true` (it adds microphone permissions).
 
-Split a document, embed its chunks, retrieve the closest matches, and add them to the model's
-context—all with small, dependency-free primitives.
+```tsx
+import {
+  getSpeechRecognitionAvailability,
+  prepareSpeechRecognition,
+  requestSpeechPermissionsAsync,
+  streamTranscription,
+  transcribe,
+} from 'expo-ai-kit';
+
+const availability = await getSpeechRecognitionAvailability({ locale: 'en-US' });
+if (availability.status === 'downloadable') {
+  await prepareSpeechRecognition({ locale: 'en-US' }); // OS-managed model download
+}
+
+// Live: updates carry the full transcript so far; isFinal marks committed segments.
+await requestSpeechPermissionsAsync();
+const { promise, stop } = streamTranscription((update) => setText(update.text));
+// … when the user releases the button:
+stop();
+const { text } = await promise;
+
+// Batch: transcribe a recording (WAV, M4A, MP3, …).
+const result = await transcribe({ audio: { uri: recordingUri } });
+```
+
+- **iOS (26+):** faster than real time, timestamped `segments`, no permission needed for files.
+- **Android (12+):** text only, and the engine ingests files at real-time rate (a 60-second file
+  takes about a minute). It requires the microphone permission even for file input. Right for
+  voice notes and dictation; use a cloud service for podcast-length audio.
+
+## 👁️ Vision
+
+Three things a phone can do with a photo, entirely on-device. Enable the Android side with
+`"vision": true`; iOS needs no configuration. Pass any local image as `{ uri }` (a `file://` URI
+or path, for example from `expo-image-picker`).
+
+```tsx
+import { labelImage, prepareVision, recognizeText, removeBackground } from 'expo-ai-kit';
+
+// Android downloads its Google Play services models once; iOS resolves immediately.
+await prepareVision({ features: ['background-removal', 'text-recognition'] });
+
+// Background removal: a PNG cutout with a transparent background, in the app cache.
+const cutout = await removeBackground({ uri: photo.uri });
+// <Image source={{ uri: cutout.uri }} />  ·  cutout.bounds, cutout.foregroundCoverage, …
+// Keep only the subject the user tapped, and get the mask too:
+const one = await removeBackground({ uri: photo.uri }, { subject: { x: 0.3, y: 0.6 }, mask: true });
+// one.uri (cutout), one.maskUri (grayscale mask PNG)
+
+// Image labels, what is in the picture, highest confidence first.
+const labels = await labelImage({ uri: photo.uri }, { maxResults: 5 });
+// [{ label: 'Dog', confidence: 0.97 }, { label: 'Pet', confidence: 0.81 }, …]
+
+// Text recognition (OCR), the text plus normalized bounds for every block and line.
+const { text, blocks } = await recognizeText({ uri: photo.uri });
+```
+
+| | iOS | Android |
+|---|---|---|
+| `removeBackground` | Vision subject lifting, iOS 17+ (physical device) | ML Kit Subject Segmentation (Play services model) |
+| `labelImage` | Vision image classifier, ~1,300 labels (physical device) | ML Kit Image Labeling, ~400 labels, bundled with the app |
+| `recognizeText` | Vision text recognition, auto-detects language | ML Kit Text Recognition v2: Latin, Chinese, Japanese, Korean, Devanagari |
+
+Vision calls are independent of the text and speech guards, so they can run alongside a
+generation or a transcription. `getVisionAvailability()` reports each feature separately, and
+`getSupportedTextRecognitionLanguages()` lists what the device can read.
+
+## 🔎 Embeddings & RAG
+
+Turn text into vectors for semantic search, then feed the best matches to the model, with small,
+dependency-free primitives. iOS uses Apple's zero-download `NLContextualEmbedding` (iOS 17+);
+Android uses EmbeddingGemma 300M behind the `androidEmbeddings` flag (about 25 MB of APK plus a
+184 MB one-time model download via `prepareEmbeddingModel()`; Gemma Terms of Use apply).
 
 ```tsx
 import { chunkText, createVectorStore, embed, sendMessage } from 'expo-ai-kit';
@@ -225,11 +262,7 @@ const { embeddings } = await embed(chunks, { task: 'retrieval-document' });
 
 const store = createVectorStore<{ text: string }>();
 store.addMany(
-  chunks.map((text, index) => ({
-    id: `chunk-${index}`,
-    vector: embeddings[index],
-    metadata: { text },
-  }))
+  chunks.map((text, index) => ({ id: `chunk-${index}`, vector: embeddings[index], metadata: { text } }))
 );
 
 const { embeddings: [query] } = await embed([question], { task: 'retrieval-query' });
@@ -244,103 +277,66 @@ const { text } = await sendMessage([
 ]);
 ```
 
-Use `'semantic-similarity'` (default), `'retrieval-query'`, or `'retrieval-document'` to
-describe the embedding task.
+Every result carries a `model: { id, revision }` identity; persisted vectors are only comparable
+when that identity matches exactly. `chunkText`, `cosineSimilarity`, and `createVectorStore` are
+pure JavaScript and work with any vectors.
 
-### Embedding backends
+## Recipes: the capabilities compose
 
-- **iOS 17+:** Apple `NLContextualEmbedding`—zero-download, OS-maintained Latin, Cyrillic,
-  and CJK script models. Select a model with `options.language`; call
-  `getSupportedEmbeddingLanguages()` for the running device's authoritative list.
-- **Android:** EmbeddingGemma 300M through MediaPipe TextEmbedder—768 dimensions,
-  multilingual, CPU, and opt-in. Enable it in your app config and create a new native build:
+The primitives are designed to chain. A few patterns that fit in a screen of code:
 
-```json
-{
-  "expo": {
-    "plugins": [["expo-ai-kit", { "androidEmbeddings": true }]]
+**Voice memo → structured summary.** Speech feeds Text.
+
+```tsx
+const { text } = await transcribe({ audio: { uri: memoUri } });
+const { object } = await generateObject<{ title: string; actionItems: string[] }>(
+  [{ role: 'user', content: `Summarize this voice memo:\n${text}` }],
+  {
+    type: 'object',
+    properties: { title: { type: 'string' }, actionItems: { type: 'array', items: { type: 'string' } } },
+    required: ['title', 'actionItems'],
   }
-}
+);
 ```
 
-Then prepare the model once before embedding:
+**Receipt scanner.** Vision feeds Text.
 
 ```tsx
-import { getEmbeddingModelStatus, prepareEmbeddingModel } from 'expo-ai-kit';
-
-const { status } = await getEmbeddingModelStatus();
-if (status !== 'downloaded') {
-  await prepareEmbeddingModel({ onProgress: console.log });
-}
+const { text } = await recognizeText({ uri: receipt.uri });
+const { object } = await generateObject<{ merchant: string; total: number; date: string }>(
+  [{ role: 'user', content: `Extract the merchant, total, and date from this receipt:\n${text}` }],
+  {
+    type: 'object',
+    properties: { merchant: { type: 'string' }, total: { type: 'number' }, date: { type: 'string' } },
+    required: ['merchant', 'total'],
+  }
+);
 ```
 
-Enabling Android embeddings adds approximately 25 MB to an arm64 APK. Its approximately
-184 MB model is downloaded per app and verified with SHA-256. EmbeddingGemma uses the Gemma
-Terms of Use.
-
-### Model identity
-
-Every embedding result includes `model: { id, revision }`. Persist that identity with an
-index: vectors are compatible only when the complete model identity matches. Do not mix
-vectors across platforms or iOS script models.
-
-`chunkText`, `cosineSimilarity`, and `createVectorStore` are pure JavaScript and work with
-any vector source. `embed()` can run alongside text generation.
-
-## Vercel AI SDK
-
-Install the AI SDK, then point `model` at the on-device provider:
-
-```bash
-npm install ai
-```
-
-expo-ai-kit currently supports AI SDK 6 and 7 through `LanguageModelV3`.
+**Photo search by meaning.** Vision feeds Embeddings.
 
 ```tsx
-import { embed, generateText, streamText } from 'ai';
-import { expoAiKit } from 'expo-ai-kit/ai';
-
-const { text } = await generateText({
-  model: expoAiKit(),
-  prompt: 'Capital of France?',
+const labels = await labelImage({ uri: photo.uri });
+const { embeddings: [vector] } = await embed([labels.map((l) => l.label).join(', ')], {
+  task: 'retrieval-document',
 });
-
-const result = streamText({
-  model: expoAiKit('gemma-e2b'),
-  prompt: 'Write a short story.',
-});
-
-for await (const chunk of result.textStream) {
-  console.log(chunk);
-}
-
-const { embedding } = await embed({
-  model: expoAiKit.embeddingModel(undefined, { task: 'retrieval-query' }),
-  value: 'sunny day at the beach',
-});
+photoIndex.add(photo.id, vector, { uri: photo.uri });
+// later: embed the user's query with task 'retrieval-query' and photoIndex.search(queryVector)
 ```
 
-Tool calling and structured output reuse expo-ai-kit's core protocols. Speech-to-text is exposed
-through the provider's transcription model. The AI SDK remains responsible for its own
-orchestration around the provider.
+**Product cutout.** One call.
 
-<details>
-<summary><strong>AI SDK behavior and React Native setup</strong></summary>
+```tsx
+const cutout = await removeBackground({ uri: photo.uri }); // transparent PNG, subject-trimmed
+```
 
-- Generation is single-flight; overlapping calls reject with `INFERENCE_BUSY`.
-- Sampling is fixed when a model is activated, not per AI SDK call.
-- Tool and JSON streams buffer until the complete structured envelope can be parsed.
-- On-device runtimes do not currently report token usage.
-- Image and file inputs are not supported.
-- React Native may require the AI SDK's
-  [Expo polyfills](https://ai-sdk.dev/docs/getting-started/expo#polyfills).
+Text generation, speech, vision, and embeddings each have their own concurrency rules (text and
+speech are single-flight; vision and embeddings are not), so these pipelines never trip each other.
 
-</details>
+## Models
 
-## Downloadable models
-
-Choose from a size ladder of curated LiteRT-LM models or register your own.
+Text generation defaults to the OS model. Switch to a downloadable model when the device has no
+built-in one or you need a specific model.
 
 | Model id | Parameters | Download | License |
 |---|---:|---:|---|
@@ -352,87 +348,85 @@ Choose from a size ladder of curated LiteRT-LM models or register your own.
 | `phi-4-mini` | 3.8B | ~3.9 GB | MIT |
 
 ```tsx
-import {
-  downloadModel,
-  getDownloadableModels,
-  getRecommendedModel,
-  setModel,
-} from 'expo-ai-kit';
+import { downloadModel, getRecommendedModel, setModel } from 'expo-ai-kit';
 
-const models = await getDownloadableModels();
-const best = await getRecommendedModel();
-
+const best = await getRecommendedModel(); // largest model this device can run, or null
 if (best) {
   await downloadModel(best.id, { onProgress: console.log });
   await setModel(best.id, { generation: { temperature: 0.7 } });
 }
 ```
 
-Check each model's license before distributing it to your users.
+Register your own LiteRT-LM model with `registerModel({ id, downloadUrl, sha256, … })` and it
+gets the same download, integrity, status, and activation flow. Check each model's license before
+shipping it.
 
-> **Android x86/x86_64:** LiteRT-LM downloadable models are disabled because its x86 backend
-> can crash natively. Use a physical Android device or an arm64 emulator image. Built-in ML Kit
-> is unaffected.
+> **Android x86/x86_64:** downloadable models are disabled because LiteRT-LM's x86 backend can
+> crash natively. Use a physical device or an arm64 emulator image. Built-in ML Kit is unaffected.
 
-### Bring your own LiteRT-LM model
+## Vercel AI SDK
 
-Register a compatible model at runtime. expo-ai-kit applies the same download, integrity,
-status, and activation flow as the curated registry.
+Prefer the AI SDK's API? The provider wraps the same on-device engines (AI SDK 6 and 7,
+`LanguageModelV3`, `EmbeddingModelV3`, `TranscriptionModelV3`).
 
-```tsx
-import {
-  downloadModel,
-  fetchModelMetadata,
-  registerModel,
-  setModel,
-} from 'expo-ai-kit';
-
-const url =
-  'https://huggingface.co/litert-community/Qwen3-4B/resolve/main/qwen3_4b_mixed_int4.litertlm';
-
-// Dev time only: fetch once, then pin the returned values in your app.
-// const { sha256, sizeBytes } = await fetchModelMetadata(url);
-
-registerModel({
-  id: 'qwen3-4b-custom',
-  name: 'Qwen3 4B',
-  parameterCount: '4B',
-  quantization: 'int4',
-  downloadUrl: url,
-  sha256: 'f0794bc77efeaaf4f7af815f04c483b19b8f2ae4a102cef1b7b760a25848a18e',
-  sizeBytes: 2_659_057_664,
-  contextWindow: 4096,
-  minRamBytes: 3_000_000_000,
-  supportedPlatforms: ['ios', 'android'],
-  license: 'Apache-2.0',
-});
-
-await downloadModel('qwen3-4b-custom');
-await setModel('qwen3-4b-custom');
+```bash
+npm install ai
 ```
 
-Custom registrations are in memory, so register them during app startup. Downloaded model
-files remain on disk and recover their status after the same id is registered again.
+```tsx
+import { embed, generateText, streamText, transcribe } from 'ai';
+import { expoAiKit } from 'expo-ai-kit/ai';
 
-## API overview
+const { text } = await generateText({ model: expoAiKit(), prompt: 'Capital of France?' });
 
-- **Inference:** `isAvailable`, `prepareBuiltInModel`, `sendMessage`, `streamMessage`,
-  `generateObject`, `generateText`.
-- **Embeddings and RAG:** `embed`, `getEmbeddingModelStatus`, `prepareEmbeddingModel`,
-  `cancelEmbeddingModelDownload`, `deleteEmbeddingModel`, `getSupportedEmbeddingLanguages`,
-  `chunkText`, `cosineSimilarity`, `createVectorStore`.
-- **Speech-to-text:** `transcribe`, `streamTranscription`, `getSpeechRecognitionAvailability`,
-  `prepareSpeechRecognition`, `getSupportedSpeechLocales`, `getSpeechPermissionsAsync`,
-  `requestSpeechPermissionsAsync` — opt-in via the config plugin's `speech` flag.
-- **Models:** `getBuiltInModels`, `getDownloadableModels`, `getDownloadedModels`,
-  `getRecommendedModel`, `downloadModel`, `cancelDownload`, `deleteModel`, `setModel`,
-  `unloadModel`, `getActiveModel`.
-- **Custom models:** `registerModel`, `unregisterModel`, `getRegisteredModels`,
-  `fetchModelMetadata`.
-- **AI SDK provider:** `expoAiKit`, `createExpoAiKit` from `expo-ai-kit/ai`.
+const result = streamText({ model: expoAiKit('gemma-e2b'), prompt: 'Write a short story.' });
+for await (const chunk of result.textStream) console.log(chunk);
 
-Failures throw `ModelError` with a typed `.code`. Full TypeScript definitions ship with the
-package; see the [documentation](https://expo-ai-kit.dev) for the complete reference.
+const { embedding } = await embed({
+  model: expoAiKit.embeddingModel(undefined, { task: 'retrieval-query' }),
+  value: 'sunny day at the beach',
+});
+
+const transcript = await transcribe({ model: expoAiKit.transcriptionModel(), audio });
+```
+
+Tool calling and structured output reuse the core protocols. Vision has no AI SDK model type, so
+use the core functions for it. Generation is single-flight (`INFERENCE_BUSY`), sampling is fixed
+at model activation, on-device runtimes report no token usage, and image prompt parts are not
+supported. React Native may need the AI SDK's
+[Expo polyfills](https://ai-sdk.dev/docs/getting-started/expo#polyfills).
+
+## API map
+
+Everything is exported from `expo-ai-kit` (the AI SDK provider from `expo-ai-kit/ai`).
+
+| Capability | Do the work | Availability & preparation | Opt-in flag |
+|---|---|---|---|
+| 💬 Text | `sendMessage`, `streamMessage`, `generateObject`, `generateText`, `stripThinking` | `isAvailable`, `prepareBuiltInModel` |, |
+| 🎙️ Speech | `transcribe`, `streamTranscription` | `getSpeechRecognitionAvailability`, `prepareSpeechRecognition`, `getSupportedSpeechLocales`, `getSpeechPermissionsAsync`, `requestSpeechPermissionsAsync` | `speech` |
+| 👁️ Vision | `removeBackground`, `labelImage`, `recognizeText` | `getVisionAvailability`, `prepareVision`, `getSupportedTextRecognitionLanguages` | `vision` (Android) |
+| 🔎 Embeddings & RAG | `embed`, `chunkText`, `cosineSimilarity`, `createVectorStore` | `getEmbeddingModelStatus`, `prepareEmbeddingModel`, `cancelEmbeddingModelDownload`, `deleteEmbeddingModel`, `getSupportedEmbeddingLanguages` | `androidEmbeddings` (Android) |
+| 🧠 Models | `setModel`, `unloadModel`, `getActiveModel` | `getBuiltInModels`, `getDownloadableModels`, `getDownloadedModels`, `getRecommendedModel`, `downloadModel`, `cancelDownload`, `deleteModel`, `registerModel`, `unregisterModel`, `getRegisteredModels`, `fetchModelMetadata` |, |
+| 🔌 AI SDK | `expoAiKit()`, `expoAiKit.embeddingModel()`, `expoAiKit.transcriptionModel()`, `createExpoAiKit` |, |, |
+
+Full TypeScript definitions ship with the package; the [documentation](https://expo-ai-kit.dev) has
+the complete reference, and [llms.txt](https://expo-ai-kit.dev/llms.txt) is the same information
+condensed for coding agents.
+
+## Compatibility
+
+| | iOS | Android |
+|---|---|---|
+| Library minimum | iOS 15.1+ | API 26+ |
+| Text (built-in) | Apple Foundation Models, iOS 26+ on Apple Intelligence devices | ML Kit Prompt API on supported devices |
+| Text (downloadable) | Gemma, Qwen, Phi, custom LiteRT-LM | Gemma, Qwen, Phi, custom LiteRT-LM (arm64) |
+| Speech | SpeechAnalyzer, iOS 26+ | ML Kit GenAI Speech Recognition, Android 12+ |
+| Vision | Vision framework; background removal iOS 17+; cutouts and labels need a physical device, OCR also runs in the Simulator | ML Kit Vision with Google Play services (labels work without it) |
+| Embeddings | `NLContextualEmbedding`, iOS 17+ | EmbeddingGemma 300M, opt-in |
+| Expo | SDK 54+, development or production build | SDK 54+, development or production build |
+
+Support still depends on the device, OS configuration, memory, and model. Use the availability
+functions instead of assuming support.
 
 ## Support and contributing
 

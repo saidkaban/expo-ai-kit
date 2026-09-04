@@ -27,7 +27,7 @@ export default function VercelAiSdkPage() {
       <h1>Vercel AI SDK</h1>
       <p className="text-xl text-muted leading-relaxed">
         Use the AI SDK&apos;s <code>generateText</code>, <code>streamText</code>,{" "}
-        <code>generateObject</code>, and <code>embed</code> with on-device models —
+        <code>generateObject</code>, and <code>embed</code> with on-device models,
         the same code you&apos;d write for a cloud provider, with no API key and no
         data leaving the phone.
       </p>
@@ -45,7 +45,7 @@ export default function VercelAiSdkPage() {
         >
           Vercel AI SDK
         </a>{" "}
-        provider implementing the <code>LanguageModelV3</code> spec — native to AI
+        provider implementing the <code>LanguageModelV3</code> spec, native to AI
         SDK 6, and accepted by AI SDK 7 as well. Point <code>model:</code> at{" "}
         <code>expoAiKit()</code> and everything the SDK offers rides on the same
         on-device engine as the core API: the ecosystem&apos;s patterns, examples,
@@ -53,7 +53,7 @@ export default function VercelAiSdkPage() {
       </p>
       <p>
         It&apos;s a thin wrapper over the same <code>sendMessage</code> /{" "}
-        <code>streamMessage</code> / <code>embed</code> calls — you can mix AI SDK
+        <code>streamMessage</code> / <code>embed</code> calls, you can mix AI SDK
         calls and core calls freely in one app. The core package stays{" "}
         <strong>zero-dependency</strong>; <code>@ai-sdk/provider</code> is an
         optional peer used only for types.
@@ -86,7 +86,7 @@ if (!('structuredClone' in globalThis)) {
       <h2 id="text">Generate &amp; Stream Text</h2>
       <p>
         <code>expoAiKit()</code> with no arguments targets whatever model is
-        currently active — the OS built-in by default.
+        currently active, the OS built-in by default.
       </p>
       <CodeBlock language="typescript" filename="App.tsx">
         {`import { generateText, streamText } from 'ai';
@@ -98,7 +98,7 @@ const { text } = await generateText({
   prompt: 'Capital of France?',
 });
 
-// Streaming — token-by-token for plain text
+// Streaming, token-by-token for plain text
 const result = streamText({
   model: expoAiKit(),
   messages: [{ role: 'user', content: 'Write a short story' }],
@@ -110,7 +110,7 @@ for await (const chunk of result.textStream) {
 
       <h2 id="models">Choosing a Model</h2>
       <p>
-        Pass any model id <code>setModel()</code> accepts — a downloadable id like{" "}
+        Pass any model id <code>setModel()</code> accepts, a downloadable id like{" "}
         <code>&apos;gemma-e2b&apos;</code>, a built-in, or an id you registered
         with <code>registerModel()</code>. The provider activates it before
         generating (the model must already be downloaded). Settings take the same
@@ -132,17 +132,17 @@ const { text } = await generateText({ model: gemma, prompt: '…' });`}
         <p>
           On-device runtimes build their sampler when the model loads, so a{" "}
           <em>per-call</em> <code>temperature</code>/<code>topK</code> passed
-          through the AI SDK can&apos;t be honored — it&apos;s reported as an{" "}
+          through the AI SDK can&apos;t be honored, it&apos;s reported as an{" "}
           <code>unsupported</code> call warning and ignored. Set sampling in the
           provider settings (above) or via <code>setModel()</code>. If the model
           is already active, the provider does <em>not</em> reload it to apply new
-          settings — reloading a multi-GB model per call would be far worse.
+          settings, reloading a multi-GB model per call would be far worse.
         </p>
       </Callout>
 
       <h2 id="tools">Tool Calling</h2>
       <p>
-        AI SDK tools work — they ride the exact same prompt protocol as the core{" "}
+        AI SDK tools work, they ride the exact same prompt protocol as the core{" "}
         <code>generateText()</code>, so a model behaves identically through either
         API. The SDK owns the loop (<code>stopWhen</code>, step callbacks, etc.);
         the provider translates each round.
@@ -166,7 +166,7 @@ const { text } = await generateText({
 });`}
       </CodeBlock>
       <p>
-        Keep tool sets small and schemas flat — on-device models pick tools far
+        Keep tool sets small and schemas flat, on-device models pick tools far
         more reliably that way. <code>toolChoice: &apos;required&apos;</code> and{" "}
         <code>{`{ type: 'tool' }`}</code> are best-effort prompt nudges (flagged
         with a <code>compatibility</code> warning) until native constrained
@@ -193,10 +193,10 @@ const { object } = await generateObject({
         <p>
           The provider extracts JSON from the model&apos;s output with the same
           tolerant parser as the core <code>generateObject()</code>, but it is{" "}
-          <strong>single-shot</strong> — the SDK doesn&apos;t re-prompt on schema
+          <strong>single-shot</strong>, the SDK doesn&apos;t re-prompt on schema
           mismatches. Small on-device models sometimes need a repair round, so if
           you want the retry loop, use the core{" "}
-          <code>generateObject()</code> from <code>expo-ai-kit</code> — it repairs
+          <code>generateObject()</code> from <code>expo-ai-kit</code>, it repairs
           and retries automatically.
         </p>
       </Callout>
@@ -204,12 +204,12 @@ const { object } = await generateObject({
       <h2 id="embeddings">Embeddings</h2>
       <p>
         <code>expoAiKit.embeddingModel()</code> wraps <code>embed()</code> and
-        resolves the platform default honestly — Apple&apos;s{" "}
+        resolves the platform default honestly, Apple&apos;s{" "}
         <code>NLContextualEmbedding</code> on iOS (reported as{" "}
         <code>apple-nl-contextual</code>), EmbeddingGemma 300M on Android
         (reported as <code>embedding-gemma-300m</code>; needs the{" "}
         <code>androidEmbeddings</code> config-plugin flag plus a{" "}
-        <code>prepareEmbeddingModel()</code> download — see the{" "}
+        <code>prepareEmbeddingModel()</code> download, see the{" "}
         <a href="/guides/embeddings" className="text-accent hover:underline">
           Embeddings guide
         </a>
@@ -236,7 +236,7 @@ const { embeddings } = await embedMany({
         <p>
           When the active model reasons in <code>&lt;think&gt;</code> blocks
           (e.g. Qwen3), the provider strips them out of text and tool output and
-          emits them as spec <code>reasoning</code> parts — so{" "}
+          emits them as spec <code>reasoning</code> parts, so{" "}
           <code>generateText()</code>&apos;s <code>reasoning</code> field just
           works and JSON/tool parsing can&apos;t be derailed by reasoning text.
         </p>
@@ -256,29 +256,34 @@ const { embeddings } = await embedMany({
         </li>
         <li>
           <strong>Per-call sampling is ignored</strong> (with an{" "}
-          <code>unsupported</code> warning) — see{" "}
+          <code>unsupported</code> warning), see{" "}
           <a href="#models" className="text-accent hover:underline">
             Choosing a Model
           </a>
           .
         </li>
         <li>
-          <strong>Streaming buffers when tools or JSON output are requested</strong>{" "}
-          — a half-streamed tool-call envelope would surface as garbage text
+          <strong>Streaming buffers when tools or JSON output are requested</strong>:
+          a half-streamed tool-call envelope would surface as garbage text
           deltas, so those runs emit the parsed result in one piece. Plain text
           streams token-by-token.
         </li>
         <li>
-          <strong>No token usage numbers</strong> — on-device runtimes don&apos;t
+          <strong>No token usage numbers</strong>, on-device runtimes don&apos;t
           report them; all usage fields are <code>undefined</code>.
         </li>
         <li>
-          <strong>No image or file prompt parts</strong> — text only for now
-          (vision input is on the roadmap); they throw{" "}
-          <code>DEVICE_NOT_SUPPORTED</code>.
+          <strong>No image or file prompt parts</strong>, the language model is
+          text only; they throw <code>DEVICE_NOT_SUPPORTED</code>. For photos,
+          use the core{" "}
+          <a href="/guides/vision" className="text-accent hover:underline">
+            vision functions
+          </a>{" "}
+          (<code>removeBackground</code>, <code>labelImage</code>,{" "}
+          <code>recognizeText</code>), they have no AI SDK model type.
         </li>
         <li>
-          <strong>Errors are still typed</strong> — everything the provider throws
+          <strong>Errors are still typed</strong>, everything the provider throws
           is the same <code>ModelError</code> (with <code>.code</code>) as the
           core API.
         </li>
@@ -286,7 +291,7 @@ const { embeddings } = await embedMany({
 
       <Callout type="success" title="Mix and match">
         <p>
-          The provider and the core API drive the same engine — use{" "}
+          The provider and the core API drive the same engine, use{" "}
           <code>streamText()</code> for your chat screen and the core{" "}
           <code>generateObject()</code> where you want automatic schema repair, in
           the same app, against the same active model.

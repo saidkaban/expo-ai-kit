@@ -33,7 +33,7 @@ export default function EmbeddingsPage() {
       <p className="text-xl text-muted leading-relaxed">
         Turn text into vectors for semantic search, then retrieve the most
         relevant chunks of your own documents to ground the model&apos;s answers
-        — all on-device.
+, all on-device.
       </p>
 
       <BadgeGroup platforms={["ios", "android", "new"]} />
@@ -41,7 +41,7 @@ export default function EmbeddingsPage() {
       <h2 id="overview">Overview</h2>
       <p>
         Retrieval-augmented generation (RAG) lets a small on-device model answer
-        questions over data it was never trained on — your notes, your docs, your
+        questions over data it was never trained on, your notes, your docs, your
         app&apos;s content. You <em>embed</em> the text into vectors, store them,
         and at query time retrieve the chunks most similar to the question and
         feed them to <code>sendMessage()</code> or <code>generateText()</code>.
@@ -50,21 +50,21 @@ export default function EmbeddingsPage() {
       <p>expo-ai-kit gives you two pieces:</p>
       <ul>
         <li>
-          <code>embed()</code> — turns text into embedding vectors on{" "}
+          <code>embed()</code>, turns text into embedding vectors on{" "}
           <strong>both platforms</strong>: Apple&apos;s zero-download{" "}
           <code>NLContextualEmbedding</code> on iOS, and EmbeddingGemma 300M via
           MediaPipe TextEmbedder on Android (opt-in).
         </li>
         <li>
-          A pure-JS toolkit — <code>chunkText</code>,{" "}
-          <code>cosineSimilarity</code>, and <code>createVectorStore</code> —
+          A pure-JS toolkit, <code>chunkText</code>,{" "}
+          <code>cosineSimilarity</code>, and <code>createVectorStore</code>,
           that does the chunking and retrieval on <strong>both platforms</strong>
           , with any source of vectors.
         </li>
       </ul>
 
       <h2 id="platform-support">Platform Support</h2>
-      <p>One embedding backend per platform — with very different asset models:</p>
+      <p>One embedding backend per platform, with very different asset models:</p>
       <table>
         <thead>
           <tr>
@@ -98,7 +98,7 @@ export default function EmbeddingsPage() {
               selected via <code>language</code> (see below)
             </td>
             <td>
-              natively multilingual, single vector space —{" "}
+              natively multilingual, single vector space, {" "}
               <code>language</code> is accepted and <em>ignored</em>
             </td>
           </tr>
@@ -120,7 +120,7 @@ export default function EmbeddingsPage() {
         <p>
           <code>chunkText</code>, <code>cosineSimilarity</code>, and{" "}
           <code>createVectorStore</code> are pure JavaScript and work on{" "}
-          <strong>every platform</strong> — pair them with any embedding source
+          <strong>every platform</strong>, pair them with any embedding source
           (the built-in <code>embed()</code>, a cloud embedder, or your own
           native module). They only ever deal in plain <code>number[]</code>{" "}
           vectors.
@@ -129,7 +129,7 @@ export default function EmbeddingsPage() {
 
       <h2 id="android-setup">Android Setup (opt-in)</h2>
       <p>
-        The Android backend is <strong>off by default</strong> — zero bytes
+        The Android backend is <strong>off by default</strong>, zero bytes
         added to your APK, and <code>embed()</code> throws a typed{" "}
         <code>EMBEDDINGS_NOT_ENABLED</code> error explaining the flag. Enable it
         with the config plugin:
@@ -144,12 +144,12 @@ export default function EmbeddingsPage() {
       <Callout type="warning" title="Requires a new native build">
         <p>
           The flag adds the MediaPipe <code>tasks-text</code> Gradle dependency
-          at prebuild — rebuild your dev client or EAS build to pick it up (an
+          at prebuild, rebuild your dev client or EAS build to pick it up (an
           OTA update is not enough). Enabling adds ~25 MB to the APK (arm64);
           the ~184 MB model itself downloads at runtime via{" "}
-          <code>prepareEmbeddingModel()</code> and is stored per-app — unlike
+          <code>prepareEmbeddingModel()</code> and is stored per-app, unlike
           the iOS assets, it is Google-hosted, <em>not</em> OS-managed.
-          EmbeddingGemma ships under the Gemma Terms of Use — review them
+          EmbeddingGemma ships under the Gemma Terms of Use, review them
           before shipping.
         </p>
       </Callout>
@@ -168,15 +168,15 @@ const { embeddings, dimensions, model } = await embed([
   'Mount Fuji is in Japan.',
 ]);
 
-embeddings.length; // 2 — one vector per input
+embeddings.length; // 2, one vector per input
 dimensions;        // 512 on iOS (per script model), 768 on Android
-model;             // { id, revision } — see Model Identity below`}
+model;             // { id, revision }, see Model Identity below`}
       </CodeBlock>
       <Callout type="info" title="Not subject to INFERENCE_BUSY">
         <p>
           Embeddings don&apos;t use the text-generation KV-cache, so{" "}
           <code>embed()</code> is <em>not</em> gated by the single-flight
-          inference guard — you can embed while a generation is in flight. (On
+          inference guard, you can embed while a generation is in flight. (On
           Android, concurrent <code>embed()</code> calls queue behind a native
           mutex rather than failing.)
         </p>
@@ -185,8 +185,8 @@ model;             // { id, revision } — see Model Identity below`}
       <h2 id="tasks">Task Types</h2>
       <p>
         <code>options.task</code> says what the vectors are for. EmbeddingGemma
-        (Android) is task-conditioned — telling it the task measurably improves
-        retrieval — while iOS accepts the value as semantic intent only (vectors
+        (Android) is task-conditioned, telling it the task measurably improves
+        retrieval, while iOS accepts the value as semantic intent only (vectors
         are identical across tasks).
       </p>
       <table>
@@ -213,7 +213,7 @@ model;             // { id, revision } — see Model Identity below`}
             <td>
               <code>&apos;retrieval-document&apos;</code>
             </td>
-            <td>the corpus side — use when indexing chunks</td>
+            <td>the corpus side, use when indexing chunks</td>
           </tr>
         </tbody>
       </table>
@@ -221,10 +221,10 @@ model;             // { id, revision } — see Model Identity below`}
       <h2 id="languages">Languages (iOS)</h2>
       <p>
         <code>options.language</code> (BCP-47, default <code>&apos;en&apos;</code>)
-        selects which iOS script model to load — Latin, Cyrillic, or CJK — and
+        selects which iOS script model to load, Latin, Cyrillic, or CJK, and
         is passed through to the tokenizer. An unsupported language throws a
-        typed <code>LANGUAGE_NOT_SUPPORTED</code> error naming the language —
-        never a silent fall-back to the Latin model — and there is deliberately
+        typed <code>LANGUAGE_NOT_SUPPORTED</code> error naming the language,
+        never a silent fall-back to the Latin model, and there is deliberately
         no auto-detection (a mixed batch would silently mix vector spaces).
       </p>
       <CodeBlock language="typescript">
@@ -241,7 +241,7 @@ const languages = await getSupportedEmbeddingLanguages();`}
         Verified on a physical iOS 27 device, the catalog covers: bg, cs, da,
         de, en, es, fi, fr, hr, hu, id, it, ja, kk, ko, nb, nl, pl, pt, ro, ru,
         sk, sv, tr, uk, vi, zh-Hans, zh-Hant. Always prefer{" "}
-        <code>getSupportedEmbeddingLanguages()</code> at runtime — the list is
+        <code>getSupportedEmbeddingLanguages()</code> at runtime, the list is
         OS-managed and can differ per device/OS. On Android the option is
         accepted and ignored: EmbeddingGemma is natively multilingual with a
         single vector space, so there is nothing to select (and{" "}
@@ -256,23 +256,23 @@ const languages = await getSupportedEmbeddingLanguages();`}
           <strong>
             Vectors and persisted indexes are only comparable under identical
             model identity
-          </strong>{" "}
-          — never across platforms, and never across iOS script models (the
+          </strong>:
+          never across platforms, and never across iOS script models (the
           identity changes with <code>language</code>). Store it next to any
           persisted index and rebuild when it changes.
         </p>
       </Callout>
       <p>
         On iOS the identity is the resolved Apple model identifier and OS asset
-        revision. On Android it pins every artifact — the MediaPipe version,
+        revision. On Android it pins every artifact, the MediaPipe version,
         model SHA-256, dimensions, and prompt-protocol version (e.g.{" "}
-        <code>1.0.0-913b7a1edc7c-d768-tfc1</code>) — so it changes whenever any
+        <code>1.0.0-913b7a1edc7c-d768-tfc1</code>), so it changes whenever any
         of them does.
       </p>
 
       <h2 id="lifecycle">Model Lifecycle</h2>
       <p>
-        <code>embed()</code> <strong>never</strong> downloads anything — on
+        <code>embed()</code> <strong>never</strong> downloads anything, on
         Android it throws a typed <code>MODEL_NOT_DOWNLOADED</code> until you
         prepare the model explicitly:
       </p>
@@ -300,7 +300,7 @@ if (status !== 'downloaded') {
       <p>
         On iOS the same calls drive the OS-managed per-language asset flow:{" "}
         <code>prepareEmbeddingModel({"{ language: 'ru' }"})</code> prefetches the
-        Cyrillic model ahead of the first embed (no progress granularity — the
+        Cyrillic model ahead of the first embed (no progress granularity, the
         OS doesn&apos;t expose it).
       </p>
 
@@ -353,7 +353,7 @@ const chunks = chunkText(longDocument, {
       <p>
         Returns <code>[]</code> for empty input and a single chunk when the text
         already fits in <code>chunkSize</code>. Tune <code>chunkSize</code> to
-        your retrieval granularity — smaller chunks pinpoint facts; larger chunks
+        your retrieval granularity, smaller chunks pinpoint facts; larger chunks
         keep more context together.
       </p>
 
@@ -382,7 +382,7 @@ store.clear();`}
       </CodeBlock>
       <Callout type="info" title="Scale">
         <p>
-          The store does a linear scan per search — plenty fast for the
+          The store does a linear scan per search, plenty fast for the
           thousands-of-chunks scale typical of on-device RAG. Reach for a
           dedicated vector database only beyond that.
         </p>
@@ -390,7 +390,7 @@ store.clear();`}
 
       <h2 id="persistence">Persistence</h2>
       <p>
-        The store owns no I/O — persistence is yours. <code>toJSON()</code> hands
+        The store owns no I/O, persistence is yours. <code>toJSON()</code> hands
         you a plain-array snapshot to write anywhere (AsyncStorage, a file, SQLite);
         pass it back to <code>createVectorStore()</code> to rehydrate. Re-embedding
         on every launch would be slow and wasteful, so index once and persist.
@@ -410,7 +410,7 @@ const store = createVectorStore(saved ? JSON.parse(saved) : undefined);`}
       <h2 id="tips">Tips</h2>
       <ul>
         <li>
-          Embed chunks and the query with the <em>same</em> model — vectors from
+          Embed chunks and the query with the <em>same</em> model, vectors from
           different models aren&apos;t comparable (and a dimension mismatch throws
           from <code>cosineSimilarity</code>).
         </li>
@@ -419,7 +419,7 @@ const store = createVectorStore(saved ? JSON.parse(saved) : undefined);`}
           straight into the prompt after a search.
         </li>
         <li>
-          Use <code>topK</code> to bound how much context you inject — on-device
+          Use <code>topK</code> to bound how much context you inject, on-device
           models have small context windows, so 3–5 focused chunks usually beat
           stuffing in more.
         </li>
@@ -431,7 +431,7 @@ const store = createVectorStore(saved ? JSON.parse(saved) : undefined);`}
 
       <Callout type="success" title="Private by construction">
         <p>
-          Embedding, storage, retrieval, and generation all run on-device — no API
+          Embedding, storage, retrieval, and generation all run on-device, no API
           keys, no servers, and your documents never leave the phone.
         </p>
       </Callout>

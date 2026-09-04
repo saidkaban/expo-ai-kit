@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 
 export const siteConfig = {
   name: "expo-ai-kit",
-  title: "expo-ai-kit — On-device AI for Expo & React Native",
+  title: "expo-ai-kit, On-device AI for Expo & React Native",
   description:
-    "Run language models, structured output, tool calling, embeddings, and RAG locally in Expo and React Native apps.",
+    "Text generation, speech-to-text, vision (background removal, image labels, OCR), and embeddings running on-device in Expo and React Native apps.",
   url: "https://expo-ai-kit.dev",
   author: {
     name: "Said Kaban",
@@ -24,7 +24,7 @@ export function createPageMetadata(
     description,
     alternates: { canonical: path },
     openGraph: {
-      title: `${title} — ${siteConfig.name}`,
+      title: `${title}, ${siteConfig.name}`,
       description,
       url: path,
       type: "article",
@@ -32,7 +32,7 @@ export function createPageMetadata(
     },
     twitter: {
       card: "summary_large_image",
-      title: `${title} — ${siteConfig.name}`,
+      title: `${title}, ${siteConfig.name}`,
       description,
       images: ["/og.png"],
     },

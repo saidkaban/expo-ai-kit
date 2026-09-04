@@ -12,10 +12,12 @@ export const metadata: Metadata = {
 };
 
 const headings = [
-  { id: "why-expo-ai-kit", text: "Why expo-ai-kit", level: 2 },
-  { id: "model-paths", text: "Model paths", level: 2 },
-  { id: "quick-start", text: "Quick start", level: 2 },
+  { id: "one-import", text: "Everything in one import", level: 2 },
+  { id: "what-you-can-do", text: "What your app can do", level: 2 },
   { id: "capabilities", text: "Capabilities", level: 2 },
+  { id: "recipes", text: "Recipes", level: 2 },
+  { id: "why-expo-ai-kit", text: "Why expo-ai-kit", level: 2 },
+  { id: "quick-start", text: "Quick start", level: 2 },
   { id: "next-steps", text: "Next steps", level: 2 },
 ];
 
@@ -52,34 +54,113 @@ const liveBadges = [
   },
 ];
 
-const capabilityCards = [
+// Rows of the "what your app can do" table: the job, the function, what it
+// replaces, and the engine per platform. Same content as the README table.
+const useCases = [
   {
-    title: "Generate",
-    copy: "Stream text, preserve conversation context, and cancel work in progress.",
+    emoji: "💬",
+    job: "Chat with a local model, stream tokens",
+    call: "sendMessage / streamMessage",
+    insteadOf: "a hosted LLM API",
+    ios: "Apple Foundation Models",
+    android: "ML Kit Prompt API",
   },
   {
-    title: "Structure",
-    copy: "Turn model output into validated objects with JSON Schema repair loops.",
+    emoji: "🧾",
+    job: "Get a typed object back",
+    call: "generateObject",
+    insteadOf: "prompt hacks + JSON parsing",
+    ios: "″",
+    android: "″",
   },
   {
-    title: "Act",
-    copy: "Give local models typed tools and keep human approval in the loop.",
+    emoji: "🛠️",
+    job: "Let the model call your functions",
+    call: "generateText({ tools })",
+    insteadOf: "a function-calling API",
+    ios: "″",
+    android: "″",
   },
   {
-    title: "Retrieve",
-    copy: "Create embeddings and build private, on-device semantic search and RAG.",
+    emoji: "🎙️",
+    job: "Transcribe voice, live or from a file",
+    call: "streamTranscription / transcribe",
+    insteadOf: "a speech-to-text API",
+    ios: "SpeechAnalyzer",
+    android: "ML Kit Speech Recognition",
   },
   {
-    title: "Transcribe",
-    copy: "Turn speech into text — live from the microphone or from audio files.",
+    emoji: "✂️",
+    job: "Cut the subject out of a photo",
+    call: "removeBackground",
+    insteadOf: "a background-removal API",
+    ios: "Apple Vision",
+    android: "ML Kit Subject Segmentation",
   },
   {
-    title: "Switch",
-    copy: "Move between OS-native and downloadable models at runtime.",
+    emoji: "🏷️",
+    job: "Describe what is in a photo",
+    call: "labelImage",
+    insteadOf: "an image-tagging API",
+    ios: "Apple Vision",
+    android: "ML Kit Image Labeling",
   },
   {
-    title: "Integrate",
-    copy: "Use the same local engine through the Vercel AI SDK provider.",
+    emoji: "🔤",
+    job: "Read the text in a photo",
+    call: "recognizeText",
+    insteadOf: "an OCR API",
+    ios: "Apple Vision",
+    android: "ML Kit Text Recognition",
+  },
+  {
+    emoji: "🔎",
+    job: "Search by meaning, build RAG",
+    call: "embed + createVectorStore",
+    insteadOf: "an embeddings API + a vector DB",
+    ios: "NLContextualEmbedding",
+    android: "EmbeddingGemma",
+  },
+  {
+    emoji: "🧠",
+    job: "Run a Gemma, Qwen, or Phi model you choose",
+    call: "downloadModel + setModel",
+    insteadOf: "a model-hosting service",
+    ios: "LiteRT-LM",
+    android: "LiteRT-LM",
+  },
+];
+
+// One card per capability: what an app can do, then the functions behind it.
+// Same grouping as the sidebar and README; a new capability gets a new card.
+const capabilities = [
+  {
+    emoji: "💬",
+    title: "Text",
+    copy: "Chat and stream, get typed JSON back, let the model call your functions.",
+    api: "sendMessage · streamMessage · generateObject · generateText",
+    href: "/guides/text-generation",
+  },
+  {
+    emoji: "🎙️",
+    title: "Speech",
+    copy: "Live dictation with revising updates, or a transcript from an audio file.",
+    api: "streamTranscription · transcribe",
+    href: "/guides/speech",
+  },
+  {
+    emoji: "👁️",
+    title: "Vision",
+    copy: "Cut the subject out of a photo, label what is in it, read the text in it.",
+    api: "removeBackground · labelImage · recognizeText",
+    href: "/guides/vision",
+  },
+  {
+    emoji: "🔎",
+    title: "Embeddings",
+    copy: "Vectors for semantic search and on-device retrieval-augmented generation.",
+    api: "embed · chunkText · createVectorStore",
+    href: "/guides/embeddings",
   },
 ];
 
@@ -88,12 +169,13 @@ export default function Home() {
     <DocsLayout headings={headings}>
       <section className="docs-hero">
         <div className="docs-hero-glow" aria-hidden="true" />
-        <p className="docs-eyebrow">LOCAL AI · NATIVE SPEED · PRIVATE BY DEFAULT</p>
-        <h1>Build on-device AI into Expo apps.</h1>
+        <p className="docs-eyebrow">ON-DEVICE · iOS AND ANDROID · TYPESCRIPT</p>
+        <h1>On-device AI primitives for Expo apps.</h1>
         <p className="docs-hero-copy">
-          Text generation, speech-to-text, embeddings, and RAG on the models
-          your users&apos; phones already ship with — Apple Foundation Models,
-          ML Kit, SpeechAnalyzer — plus downloadable LiteRT-LM models when you
+          Text generation, speech-to-text, vision, and embeddings as plain
+          async functions, running on the models your users&apos; phones
+          already ship with (Apple Foundation Models, Apple Vision,
+          SpeechAnalyzer, ML Kit) plus downloadable LiteRT-LM models when you
           need more. No API keys, no per-token bill, no cloud round-trip.
         </p>
 
@@ -132,26 +214,155 @@ export default function Home() {
         </div>
       </section>
 
+      <h2 id="one-import">Everything in one import</h2>
+      <CodeBlock language="typescript" filename="app.ts">
+        {`import {
+  sendMessage, streamMessage, generateObject, generateText, // 💬 Text
+  transcribe, streamTranscription,                          // 🎙️ Speech
+  removeBackground, labelImage, recognizeText,              // 👁️ Vision
+  embed, chunkText, createVectorStore,                      // 🔎 Embeddings & RAG
+} from 'expo-ai-kit';`}
+      </CodeBlock>
+      <p>
+        Plain async functions, one package, both platforms. Every capability
+        follows the same three steps, <strong>check availability → prepare
+        once → use</strong>, and every failure is a <code>ModelError</code>{" "}
+        with a typed <code>.code</code>, never a fake success.
+      </p>
+
+      <h2 id="what-you-can-do">What your app can do</h2>
+      <div className="docs-table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Job</th>
+              <th>You call</th>
+              <th>Instead of</th>
+              <th>iOS</th>
+              <th>Android</th>
+            </tr>
+          </thead>
+          <tbody>
+            {useCases.map((row) => (
+              <tr key={row.job}>
+                <td>
+                  <span aria-hidden="true">{row.emoji} </span>
+                  {row.job}
+                </td>
+                <td>
+                  <code>{row.call}</code>
+                </td>
+                <td>{row.insteadOf}</td>
+                <td>{row.ios}</td>
+                <td>{row.android}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="capabilities">Capabilities</h2>
+      <div className="docs-capability-grid">
+        {capabilities.map((capability) => (
+          <Link key={capability.title} href={capability.href} className="docs-capability-card">
+            <h3>
+              <span aria-hidden="true">{capability.emoji} </span>
+              {capability.title}
+            </h3>
+            <p>{capability.copy}</p>
+            <code>{capability.api}</code>
+          </Link>
+        ))}
+      </div>
+      <p>
+        Text works with no configuration. Speech, vision (Android), and Android
+        embeddings are opt-in build flags, so apps that don&apos;t use them add
+        no size or permissions, see the{" "}
+        <Link href="/api#config-plugin" className="text-accent hover:underline">
+          config plugin
+        </Link>
+        .
+      </p>
+
+      <h2 id="recipes">Recipes: the capabilities compose</h2>
+      <p>
+        The primitives are designed to chain, and their concurrency rules never
+        collide (text and speech are single-flight; vision and embeddings are
+        not). Three patterns that fit in a screen of code:
+      </p>
+      <CodeBlock language="typescript" filename="voice-memo.ts">
+        {`// 🎙️ Speech → 💬 Text: a voice memo becomes a structured summary
+const { text } = await transcribe({ audio: { uri: memoUri } });
+const { object } = await generateObject<{ title: string; actionItems: string[] }>(
+  [{ role: 'user', content: \`Summarize this voice memo:\\n\${text}\` }],
+  {
+    type: 'object',
+    properties: { title: { type: 'string' }, actionItems: { type: 'array', items: { type: 'string' } } },
+    required: ['title', 'actionItems'],
+  }
+);`}
+      </CodeBlock>
+      <CodeBlock language="typescript" filename="receipt.ts">
+        {`// 👁️ Vision → 💬 Text: a photo of a receipt becomes typed data
+const { text } = await recognizeText({ uri: receipt.uri });
+const { object } = await generateObject<{ merchant: string; total: number; date: string }>(
+  [{ role: 'user', content: \`Extract the merchant, total, and date from this receipt:\\n\${text}\` }],
+  {
+    type: 'object',
+    properties: { merchant: { type: 'string' }, total: { type: 'number' }, date: { type: 'string' } },
+    required: ['merchant', 'total'],
+  }
+);`}
+      </CodeBlock>
+      <CodeBlock language="typescript" filename="photo-search.ts">
+        {`// 👁️ Vision → 🔎 Embeddings: search your photos by meaning
+const labels = await labelImage({ uri: photo.uri });
+const { embeddings: [vector] } = await embed([labels.map((l) => l.label).join(', ')], {
+  task: 'retrieval-document',
+});
+photoIndex.add(photo.id, vector, { uri: photo.uri });
+// later: embed the user's query with task 'retrieval-query' and photoIndex.search(queryVector)`}
+      </CodeBlock>
+      <p>
+        More complete patterns live on the{" "}
+        <Link href="/examples" className="text-accent hover:underline">
+          Examples
+        </Link>{" "}
+        page.
+      </p>
+
       <h2 id="why-expo-ai-kit">Why expo-ai-kit</h2>
       <p>
-        Most AI features don&apos;t need a server — phones ship with capable
+        Most AI features don&apos;t need a server, phones ship with capable
         models of their own now. expo-ai-kit is a small, typed API over the best
-        of them, so your app can generate text, transcribe speech, and search
-        its own data while offline, in private, and at no cost per request.
+        of them, so your app can chat, transcribe, see, and search its own data
+        while offline, in private, and at no cost per request.
       </p>
 
       <div className="docs-proof-grid">
         <div>
-          <strong>No inference account</strong>
-          <span>Install the package and run models without provisioning a backend.</span>
+          <strong>Same shape everywhere</strong>
+          <span>Check availability, prepare once, use. Failures are typed errors, never fake output.</span>
         </div>
         <div>
-          <strong>Cross-platform primitives</strong>
-          <span>One API for generation, tools, embeddings, RAG, and model lifecycle.</span>
+          <strong>Pay only for what you use</strong>
+          <span>Opt-in build flags for speech, vision, and Android embeddings; text works out of the box.</span>
         </div>
         <div>
           <strong>Zero runtime dependencies</strong>
           <span>A deliberately lean native module, not another application framework.</span>
+        </div>
+        <div>
+          <strong>Native models, no bundling</strong>
+          <span>OS-provided engines on both platforms; download open models only when you choose to.</span>
+        </div>
+        <div>
+          <strong>AI SDK compatible</strong>
+          <span><code>expo-ai-kit/ai</code> plugs the same engines into the Vercel AI SDK.</span>
+        </div>
+        <div>
+          <strong>Agent friendly</strong>
+          <span>Explicit lifecycles, typed errors, and an <a href={`${siteConfig.url}/llms.txt`}>llms.txt</a> your coding agent can read.</span>
         </div>
       </div>
 
@@ -163,37 +374,12 @@ export default function Home() {
         </p>
       </Callout>
 
-      <h2 id="model-paths">Choose the right model path</h2>
-      <div className="docs-model-grid">
-        <div>
-          <span className="docs-model-kicker">iOS 26+</span>
-          <h3>Apple Foundation Models</h3>
-          <p>Use Apple&apos;s OS-provided language model with no model bundled into your app.</p>
-        </div>
-        <div>
-          <span className="docs-model-kicker">Android API 26+</span>
-          <h3>ML Kit</h3>
-          <p>Prepare Google&apos;s OS-managed model on supported Android devices.</p>
-        </div>
-        <div>
-          <span className="docs-model-kicker">iOS + Android</span>
-          <h3>LiteRT-LM</h3>
-          <p>Download curated Gemma, Qwen, and Phi models—or register your own.</p>
-        </div>
-      </div>
-
-      <BadgeGroup platforms={["ios", "android"]} />
-
       <h2 id="quick-start">Quick start</h2>
       <CodeBlock language="bash" filename="Terminal">
         {`npx expo install expo-ai-kit`}
       </CodeBlock>
       <CodeBlock language="typescript" filename="App.tsx">
-        {`import {
-  isAvailable,
-  prepareBuiltInModel,
-  sendMessage,
-} from 'expo-ai-kit';
+        {`import { isAvailable, prepareBuiltInModel, sendMessage } from 'expo-ai-kit';
 
 if (!(await isAvailable())) {
   throw new Error('On-device AI is unavailable');
@@ -203,20 +389,17 @@ await prepareBuiltInModel();
 
 const { text } = await sendMessage([
   { role: 'user', content: 'Explain local AI in one sentence.' },
-]);
-
-console.log(text);`}
+]);`}
+      </CodeBlock>
+      <CodeBlock language="json" filename="app.json">
+        {`{
+  "expo": {
+    "plugins": [["expo-ai-kit", { "speech": true, "vision": true, "androidEmbeddings": true }]]
+  }
+}`}
       </CodeBlock>
 
-      <h2 id="capabilities">A practical local AI toolkit</h2>
-      <div className="docs-capability-grid">
-        {capabilityCards.map((capability) => (
-          <div key={capability.title}>
-            <h3>{capability.title}</h3>
-            <p>{capability.copy}</p>
-          </div>
-        ))}
-      </div>
+      <BadgeGroup platforms={["ios", "android"]} />
 
       <h2 id="next-steps">Go deeper</h2>
       <div className="docs-next-grid">
@@ -224,13 +407,17 @@ console.log(text);`}
           <strong>Installation and first run</strong>
           <span>Configure a native build and make your first request.</span>
         </Link>
-        <Link href="/guides/models">
-          <strong>Model management</strong>
-          <span>Compare OS models, open models, and custom LiteRT-LM files.</span>
+        <Link href="/guides/vision">
+          <strong>Vision</strong>
+          <span>Background removal, image labels, and OCR from one photo.</span>
         </Link>
         <Link href="/guides/speech">
           <strong>Speech-to-text</strong>
           <span>Transcribe the microphone live or audio files, on-device.</span>
+        </Link>
+        <Link href="/guides/models">
+          <strong>Models</strong>
+          <span>Compare OS models, open models, and custom LiteRT-LM files.</span>
         </Link>
         <Link href="/guides/vercel-ai-sdk">
           <strong>Vercel AI SDK</strong>

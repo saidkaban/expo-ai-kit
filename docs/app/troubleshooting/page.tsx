@@ -6,7 +6,7 @@ import { createPageMetadata } from "@/lib/site";
 
 export const metadata = createPageMetadata(
   "Troubleshooting",
-  "Diagnose expo-ai-kit setup, device support, model downloads, native builds, memory limits, and inference errors.",
+  "Diagnose expo-ai-kit setup, device support, opt-in feature flags, model downloads, vision and speech errors, native builds, and inference failures.",
   "/troubleshooting"
 );
 
@@ -23,10 +23,12 @@ const headings = [
     text: "AI not available",
     level: 3,
   },
-  { id: "fallback-responses", text: "Fallback responses", level: 3 },
+  { id: "older-ios", text: "Older iOS versions", level: 3 },
   { id: "android-specific", text: "Android Troubleshooting", level: 2 },
   { id: "device-not-supported", text: "DEVICE_NOT_SUPPORTED", level: 3 },
   { id: "model-not-downloaded", text: "MODEL_NOT_DOWNLOADED", level: 3 },
+  { id: "not-enabled", text: "*_NOT_ENABLED (feature flags)", level: 2 },
+  { id: "vision-errors", text: "Vision", level: 2 },
   { id: "debugging-tips", text: "Debugging Tips", level: 2 },
   { id: "getting-help", text: "Getting Help", level: 2 },
 ];
@@ -87,13 +89,15 @@ async function debugAvailability() {
         </p>
       </Callout>
 
-      <h3 id="fallback-responses">
-        <Badge platform="ios" /> Fallback responses
+      <h3 id="older-ios">
+        <Badge platform="ios" /> Older iOS versions
       </h3>
       <p>
-        On iOS versions below 26, the module returns a fallback message. This
-        allows you to develop and test your app on older devices while still
-        building the UI.
+        On iOS versions below 26 there is no built-in text model:{" "}
+        <code>isAvailable()</code> returns <code>false</code> and generation
+        throws a typed <code>DEVICE_NOT_SUPPORTED</code> error. Vision (iOS 17+
+        for background removal), embeddings (iOS 17+), and downloadable models
+        still work there, so you can design the UI around the missing built-in.
       </p>
 
       <p>To detect this situation:</p>
@@ -177,7 +181,7 @@ async function safeMessage(text: string) {
         the supported model still needs its first-use download. Await
         <code>prepareBuiltInModel()</code> before inference. On iOS, the same
         error is thrown for <code>apple-fm</code> while the OS is still preparing
-        the Apple Intelligence model assets — retry after the OS finishes.
+        the Apple Intelligence model assets, retry after the OS finishes.
       </p>
 
       <Callout type="info">
@@ -189,23 +193,97 @@ async function safeMessage(text: string) {
 
       <hr />
 
+      <h2 id="not-enabled">*_NOT_ENABLED (feature flags)</h2>
+      <p>
+        <code>SPEECH_NOT_ENABLED</code>, <code>VISION_NOT_ENABLED</code>, and{" "}
+        <code>EMBEDDINGS_NOT_ENABLED</code> mean the app was built without the
+        matching config-plugin flag. Add it to <code>app.json</code> and make a{" "}
+        <strong>new native build</strong>, a JS-only OTA update cannot enable
+        a feature:
+      </p>
+      <CodeBlock language="json" filename="app.json">
+        {`{
+  "expo": {
+    "plugins": [["expo-ai-kit", { "speech": true, "vision": true, "androidEmbeddings": true }]]
+  }
+}`}
+      </CodeBlock>
+      <p>
+        The availability calls report the same condition without throwing:{" "}
+        <code>getSpeechRecognitionAvailability()</code> and{" "}
+        <code>getVisionAvailability()</code> return{" "}
+        <code>{`{ status: 'unavailable', reason: 'not-enabled' }`}</code>.
+      </p>
+
+      <hr />
+
+      <h2 id="vision-errors">Vision</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Meaning</th>
+            <th>What to do</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>MODEL_NOT_DOWNLOADED</code></td>
+            <td>Android: the Google Play services model for segmentation or OCR is not installed.</td>
+            <td>Await <code>prepareVision({`{ features: [...] }`})</code> once; vision calls never download on their own.</td>
+          </tr>
+          <tr>
+            <td><code>NO_SUBJECT_FOUND</code></td>
+            <td><code>removeBackground()</code> found no foreground subject.</td>
+            <td>Treat as a normal outcome for landscapes, textures, or documents, show the original.</td>
+          </tr>
+          <tr>
+            <td><code>IMAGE_DECODE_FAILED</code></td>
+            <td>The <code>uri</code> could not be opened or decoded.</td>
+            <td>Pass a local <code>file://</code> URI or path (Android also accepts <code>content://</code>); remote URLs must be downloaded first.</td>
+          </tr>
+          <tr>
+            <td><code>DEVICE_NOT_SUPPORTED</code></td>
+            <td>Background removal below iOS 17; background removal and image labeling on the iOS Simulator; Android without Google Play services (segmentation, OCR).</td>
+            <td>Check <code>getVisionAvailability()</code> and hide the feature; test cutouts and labels on a physical iPhone (OCR works in the Simulator).</td>
+          </tr>
+          <tr>
+            <td><code>LANGUAGE_NOT_SUPPORTED</code></td>
+            <td>No on-device text-recognition model reads a requested language.</td>
+            <td>Pick from <code>getSupportedTextRecognitionLanguages()</code>, or omit <code>languages</code>.</td>
+          </tr>
+          <tr>
+            <td><code>DOWNLOAD_FAILED</code></td>
+            <td><code>prepareVision()</code> could not install a Play services model (offline, or Play services outdated).</td>
+            <td>Retry online; the install can take a minute or two on first use.</td>
+          </tr>
+          <tr>
+            <td><code>VISION_FAILED</code></td>
+            <td>The engine failed; the message carries the native reason.</td>
+            <td>Try a smaller <code>maxPixels</code> or a different image; report reproducible cases.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <hr />
+
       <h2 id="debugging-tips">Debugging Tips</h2>
 
       <ul>
         <li>
-          <strong>Test incrementally</strong> — Start with simple prompts before
+          <strong>Test incrementally</strong>, Start with simple prompts before
           complex multi-turn conversations.
         </li>
         <li>
-          <strong>Monitor memory</strong> — AI models use significant memory.
+          <strong>Monitor memory</strong>, AI models use significant memory.
           Watch for memory warnings in development.
         </li>
         <li>
-          <strong>Test on real devices</strong> — Simulators and emulators may
+          <strong>Test on real devices</strong>, Simulators and emulators may
           not fully support on-device AI features.
         </li>
         <li>
-          <strong>Check platform logs</strong> — Review Xcode console (iOS) or
+          <strong>Check platform logs</strong>, Review Xcode console (iOS) or
           Logcat (Android) for native errors.
         </li>
       </ul>

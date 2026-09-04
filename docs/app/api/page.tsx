@@ -6,26 +6,30 @@ import { createPageMetadata } from "@/lib/site";
 
 export const metadata = createPageMetadata(
   "API Reference",
-  "Complete expo-ai-kit API reference for generation, tools, embeddings, RAG, model management, types, and errors.",
+  "Complete expo-ai-kit API reference, grouped by capability: text generation, speech-to-text, vision, embeddings and RAG, models, the AI SDK provider, the config plugin, types, and errors.",
   "/api"
 );
 
 const headings = [
-  { id: "isavailable", text: "isAvailable()", level: 2 },
-  { id: "preparebuiltinmodel", text: "prepareBuiltInModel()", level: 2 },
-  { id: "sendmessage", text: "sendMessage()", level: 2 },
-  { id: "streammessage", text: "streamMessage()", level: 2 },
-  { id: "generateobject", text: "generateObject()", level: 2 },
-  { id: "generatetext", text: "generateText()", level: 2 },
-  { id: "embed", text: "embed()", level: 2 },
-  { id: "embedding-lifecycle", text: "Embedding model lifecycle", level: 2 },
-  { id: "speech-to-text", text: "Speech-to-Text", level: 2 },
-  { id: "ai-sdk-provider", text: "AI SDK Provider", level: 2 },
-  { id: "rag-toolkit", text: "RAG Toolkit", level: 2 },
-  { id: "chunktext", text: "chunkText()", level: 3 },
-  { id: "cosinesimilarity", text: "cosineSimilarity()", level: 3 },
-  { id: "createvectorstore", text: "createVectorStore()", level: 3 },
-  { id: "model-management", text: "Model Management", level: 2 },
+  { id: "text", text: "Text", level: 2 },
+  { id: "isavailable", text: "isAvailable()", level: 3 },
+  { id: "preparebuiltinmodel", text: "prepareBuiltInModel()", level: 3 },
+  { id: "sendmessage", text: "sendMessage()", level: 3 },
+  { id: "streammessage", text: "streamMessage()", level: 3 },
+  { id: "generateobject", text: "generateObject()", level: 3 },
+  { id: "generatetext", text: "generateText()", level: 3 },
+  { id: "stripthinking", text: "stripThinking()", level: 3 },
+  { id: "speech-to-text", text: "Speech", level: 2 },
+  { id: "vision", text: "Vision", level: 2 },
+  { id: "removebackground", text: "removeBackground()", level: 3 },
+  { id: "labelimage", text: "labelImage()", level: 3 },
+  { id: "recognizetext", text: "recognizeText()", level: 3 },
+  { id: "vision-lifecycle", text: "Vision lifecycle", level: 3 },
+  { id: "embeddings", text: "Embeddings & RAG", level: 2 },
+  { id: "embed", text: "embed()", level: 3 },
+  { id: "embedding-lifecycle", text: "Embedding model lifecycle", level: 3 },
+  { id: "rag-toolkit", text: "RAG Toolkit", level: 3 },
+  { id: "model-management", text: "Models", level: 2 },
   { id: "getbuiltinmodels", text: "getBuiltInModels()", level: 3 },
   { id: "getdownloadablemodels", text: "getDownloadableModels()", level: 3 },
   { id: "getdownloadedmodels", text: "getDownloadedModels()", level: 3 },
@@ -36,11 +40,9 @@ const headings = [
   { id: "setmodel", text: "setModel()", level: 3 },
   { id: "unloadmodel", text: "unloadModel()", level: 3 },
   { id: "getactivemodel", text: "getActiveModel()", level: 3 },
-  { id: "custom-models", text: "Custom Models", level: 2 },
-  { id: "registermodel", text: "registerModel()", level: 3 },
-  { id: "unregistermodel", text: "unregisterModel()", level: 3 },
-  { id: "getregisteredmodels", text: "getRegisteredModels()", level: 3 },
-  { id: "fetchmodelmetadata", text: "fetchModelMetadata()", level: 3 },
+  { id: "custom-models", text: "Custom Models", level: 3 },
+  { id: "ai-sdk-provider", text: "AI SDK Provider", level: 2 },
+  { id: "config-plugin", text: "Config Plugin", level: 2 },
   { id: "types", text: "Types", level: 2 },
   { id: "errors", text: "Errors", level: 2 },
 ];
@@ -50,8 +52,10 @@ export default function APIReferencePage() {
     <DocsLayout headings={headings}>
       <h1>API Reference</h1>
       <p className="text-xl text-muted leading-relaxed">
-        The complete public API of expo-ai-kit. Everything runs on-device, on
-        both iOS and Android.
+        The complete public API of expo-ai-kit, grouped by capability, Text,
+        Speech, Vision, Embeddings, then models, the AI SDK provider, the config
+        plugin, types, and errors. Everything runs on-device, on both iOS and
+        Android.
       </p>
 
       <BadgeGroup platforms={["ios", "android"]} />
@@ -59,12 +63,23 @@ export default function APIReferencePage() {
       <p>
         Messages everywhere use the same shape:{" "}
         <code>{`{ role: 'system' | 'user' | 'assistant'; content: string }`}</code>
-        . On-device models are stateless — pass the full conversation history on
+        . On-device models are stateless, pass the full conversation history on
         every call.
       </p>
 
       {/* ------------------------------------------------------------------ */}
-      <h2 id="isavailable">isAvailable()</h2>
+      <h2 id="text">Text</h2>
+      <p>
+        Generate and stream text with the OS model or a downloaded one, get
+        typed objects back, or let the model call your functions. Text needs no
+        configuration. See the{" "}
+        <a href="/guides/text-generation" className="text-accent hover:underline">
+          Text Generation guide
+        </a>
+        .
+      </p>
+
+      <h3 id="isavailable">isAvailable()</h3>
       <p>
         Check whether the current device supports its built-in on-device model.
         Returns <code>false</code> on unsupported platforms and devices. On
@@ -91,7 +106,7 @@ if (await isAvailable()) {
       </Callout>
 
       {/* ------------------------------------------------------------------ */}
-      <h2 id="preparebuiltinmodel">prepareBuiltInModel()</h2>
+      <h3 id="preparebuiltinmodel">prepareBuiltInModel()</h3>
       <p>
         Make the platform&apos;s built-in generation model ready. Android downloads
         the AICore-managed ML Kit model when needed. iOS validates Apple
@@ -116,7 +131,7 @@ await prepareBuiltInModel();`}
       </p>
 
       {/* ------------------------------------------------------------------ */}
-      <h2 id="sendmessage">sendMessage()</h2>
+      <h3 id="sendmessage">sendMessage()</h3>
       <p>Send a conversation and get a single response.</p>
       <CodeBlock language="typescript">
         {`function sendMessage(
@@ -139,7 +154,7 @@ const { text } = await sendMessage(
       <Callout type="info" title="Cancellation">
         <p>
           On-device, non-streaming generation can&apos;t always be interrupted
-          mid-decode — <code>signal</code> always unblocks the caller, but the
+          mid-decode, <code>signal</code> always unblocks the caller, but the
           model may keep running in the background (a new call throws{" "}
           <code>INFERENCE_BUSY</code> until it finishes). To truly interrupt, use{" "}
           <code>streamMessage().stop()</code>.
@@ -147,7 +162,7 @@ const { text } = await sendMessage(
       </Callout>
 
       {/* ------------------------------------------------------------------ */}
-      <h2 id="streammessage">streamMessage()</h2>
+      <h3 id="streammessage">streamMessage()</h3>
       <p>
         Stream a response token-by-token. Returns a handle with a{" "}
         <code>promise</code> that resolves with the final text and a{" "}
@@ -174,7 +189,7 @@ await promise; // resolves with { text }; call stop() to cancel early`}
       </CodeBlock>
 
       {/* ------------------------------------------------------------------ */}
-      <h2 id="generateobject">generateObject()</h2>
+      <h3 id="generateobject">generateObject()</h3>
       <p>
         Get a typed object validated against a JSON Schema. See the{" "}
         <a href="/guides/structured-output" className="text-accent hover:underline">
@@ -209,7 +224,7 @@ const { object } = await generateObject<{ title: string; minutes: number }>(
       </CodeBlock>
 
       {/* ------------------------------------------------------------------ */}
-      <h2 id="generatetext">generateText()</h2>
+      <h3 id="generatetext">generateText()</h3>
       <p>
         Generate text, optionally letting the model call tools you provide. See
         the{" "}
@@ -253,74 +268,21 @@ const { text } = await generateText(
       </CodeBlock>
 
       {/* ------------------------------------------------------------------ */}
-      <h2 id="embed">embed()</h2>
-      <BadgeGroup platforms={["ios", "android", "new"]} />
+      <h3 id="stripthinking">stripThinking()</h3>
       <p>
-        Turn text into embedding vectors for semantic search / RAG. See the{" "}
-        <a href="/guides/embeddings" className="text-accent hover:underline">
-          Embeddings &amp; RAG guide
-        </a>
-        . iOS (17+): Apple&apos;s zero-download <code>NLContextualEmbedding</code>{" "}
-        — <code>language</code> selects the script model. Android: EmbeddingGemma
-        300M via MediaPipe TextEmbedder — opt-in via the{" "}
-        <code>androidEmbeddings</code> config-plugin flag, model prepared with{" "}
-        <code>prepareEmbeddingModel()</code>; <code>embed()</code> itself never
-        downloads.
+        Pure helper that splits <code>&lt;think&gt;…&lt;/think&gt;</code>{" "}
+        reasoning (Qwen3-style models) from the answer. <code>generateObject</code>{" "}
+        and <code>generateText</code> apply it internally.
       </p>
       <CodeBlock language="typescript">
-        {`function embed(
-  texts: string[],
-  options?: {
-    task?: 'semantic-similarity' | 'retrieval-query' | 'retrieval-document';
-    language?: string; // BCP-47, default 'en' — selects the iOS script model; ignored on Android
-  },
-): Promise<EmbedResult>
-// { embeddings: number[][]; dimensions: number; model: { id: string; revision: string } }`}
-      </CodeBlock>
-      <CodeBlock language="typescript">
-        {`import { embed } from 'expo-ai-kit';
-
-const { embeddings, dimensions, model } = await embed(
-  ['hello world', 'goodbye'],
-  { task: 'retrieval-document' },
-);
-embeddings.length; // 2 — one vector per input, in order
-model;             // identity — indexes are only comparable under identical identity`}
+        {`function stripThinking(text: string): { text: string; reasoning: string }`}
       </CodeBlock>
 
       {/* ------------------------------------------------------------------ */}
-      <h2 id="embedding-lifecycle">Embedding model lifecycle</h2>
+      <h2 id="speech-to-text">Speech</h2>
       <BadgeGroup platforms={["ios", "android", "new"]} />
       <p>
-        Readiness and asset management for the embedding model.{" "}
-        <code>prepareEmbeddingModel()</code> is the <em>only</em> call that
-        downloads — on Android it fetches the ~184 MB EmbeddingGemma bundle
-        (SHA-256-verified, atomic install, fails closed on partial/corrupt
-        downloads); on iOS it prefetches the OS-managed assets for a language.
-        Cancel/delete are Android-side (safe no-ops on iOS).
-      </p>
-      <CodeBlock language="typescript">
-        {`function getEmbeddingModelStatus(options?: { language?: string }): Promise<{
-  status: 'not-downloaded' | 'downloading' | 'downloaded';
-  sizeBytes: number; // ~184 MB pinned on Android; 0 on iOS (OS-managed)
-  model: { id: string; revision: string };
-}>
-function prepareEmbeddingModel(options?: {
-  language?: string;
-  onProgress?: (progress: number) => void; // 0–1 (Android)
-}): Promise<void>
-function cancelEmbeddingModelDownload(): Promise<void>
-function deleteEmbeddingModel(): Promise<void>
-function getSupportedEmbeddingLanguages(): Promise<string[]> // iOS catalog; [] on Android
-function stripThinking(text: string): { text: string; reasoning: string }
-// pure helper — splits <think>…</think> reasoning (Qwen3-style models) from an answer`}
-      </CodeBlock>
-
-      {/* ------------------------------------------------------------------ */}
-      <h2 id="speech-to-text">Speech-to-Text</h2>
-      <BadgeGroup platforms={["ios", "android", "new"]} />
-      <p>
-        On-device transcription — live microphone streaming and audio-file
+        On-device transcription, live microphone streaming and audio-file
         transcripts. Opt-in via the config plugin&apos;s <code>speech</code>{" "}
         flag; runs its own single-flight (<code>SPEECH_BUSY</code>),
         independent of text generation. See the{" "}
@@ -362,51 +324,206 @@ function requestSpeechPermissionsAsync(): Promise<SpeechPermissionResponse>`}
       </CodeBlock>
 
       {/* ------------------------------------------------------------------ */}
-      <h2 id="ai-sdk-provider">AI SDK Provider</h2>
+      <h2 id="vision">Vision</h2>
       <BadgeGroup platforms={["ios", "android", "new"]} />
       <p>
-        A Vercel AI SDK provider (<code>LanguageModelV3</code>, AI SDK 6+) over
-        the on-device engine, exported from the <code>expo-ai-kit/ai</code>{" "}
-        subpath. See the{" "}
-        <a href="/guides/vercel-ai-sdk" className="text-accent hover:underline">
-          Vercel AI SDK guide
-        </a>{" "}
-        for setup (polyfills), examples, and the on-device caveats.
+        Background removal, image labels, and text recognition (OCR) with Apple
+        Vision on iOS and ML Kit on Android. Android is opt-in via the config
+        plugin&apos;s <code>vision</code> flag; iOS needs nothing. Independent of
+        the text and speech guards. Every call takes an image as{" "}
+        <code>{`{ uri }`}</code> (a <code>file://</code> URI or path). See the{" "}
+        <a href="/guides/vision" className="text-accent hover:underline">
+          Vision guide
+        </a>
+        .
+      </p>
+
+      <h3 id="removebackground">removeBackground()</h3>
+      <p>
+        Cut the subject out of a photo. The cutout is written to the app cache
+        and returned as a <code>file://</code> URI (PNG with transparency by
+        default), together with where the subject sits in the source image.
+        Coordinates are normalized (origin top-left, 0–1) unless named
+        <code>pixel…</code>.
       </p>
       <CodeBlock language="typescript">
-        {`import { expoAiKit, createExpoAiKit } from 'expo-ai-kit/ai';
-
-// LanguageModelV3 — pass to generateText / streamText / generateObject
-expoAiKit(modelId?: string, settings?: ExpoAiKitModelSettings): LanguageModelV3
-//   modelId: 'auto' (default — the active model) or any setModel() id
-//   settings: same shape as setModel() options; applied on activation
-
-// EmbeddingModelV3 over embed() — resolves the platform default
-// ('apple-nl-contextual' on iOS, 'embedding-gemma-300m' on Android)
-expoAiKit.embeddingModel(modelId?: string, settings?: { task?: EmbeddingTask; language?: string }): EmbeddingModelV3
-
-// Factory (a fresh provider instance)
-createExpoAiKit(): ExpoAiKitProvider`}
+        {`function removeBackground(
+  image: { uri: string },
+  options?: {
+    subject?: NormalizedPoint;   // keep only the subject under this point (default: all)
+    mask?: boolean;              // also write the grayscale mask PNG (default false)
+    trim?: boolean;              // crop to the subject (default true)
+    format?: 'png' | 'jpeg';     // default 'png'; JPEG flattens onto white
+    quality?: number;            // JPEG quality 0–1 (default 0.9)
+    maxPixels?: number;          // decode budget (default 6_000_000, max 25_000_000)
+  },
+): Promise<{
+  uri: string;
+  maskUri?: string;              // when mask: true
+  width: number; height: number;
+  sourceWidth: number; sourceHeight: number;
+  bounds: NormalizedRect; pixelBounds: PixelRect;
+  foregroundCoverage: number; centroid: NormalizedPoint;
+  instanceCount: number; trimOrigin: NormalizedPoint;
+}>`}
       </CodeBlock>
-      <CodeBlock language="typescript">
-        {`import { generateText } from 'ai';
-import { expoAiKit } from 'expo-ai-kit/ai';
+      <p>
+        iOS 17+ on a physical device; Android with Google Play services after{" "}
+        <code>prepareVision()</code>. Throws <code>NO_SUBJECT_FOUND</code> when
+        the image has no foreground subject.
+      </p>
 
-const { text } = await generateText({
-  model: expoAiKit(),
-  prompt: 'Capital of France?',
-});`}
+      <h3 id="labelimage">labelImage()</h3>
+      <p>
+        Ranked labels describing the image, highest confidence first. iOS
+        needs a physical device (the Simulator cannot run Vision&apos;s
+        classifier); Android&apos;s model is bundled with the app. Label
+        vocabularies differ per platform (Vision identifiers such as{" "}
+        <code>consumer_electronics</code>, ML Kit words such as{" "}
+        <code>Dog</code>).
+      </p>
+      <CodeBlock language="typescript">
+        {`function labelImage(
+  image: { uri: string },
+  options?: { maxResults?: number; minConfidence?: number }, // defaults 10 (0 = all), 0.5
+): Promise<{ label: string; confidence: number }[]>`}
+      </CodeBlock>
+
+      <h3 id="recognizetext">recognizeText()</h3>
+      <p>
+        Read the text in an image, with normalized bounds for every block and
+        line. <code>languages</code> selects Android&apos;s script models (Latin,
+        Chinese, Japanese, Korean, Devanagari); iOS auto-detects when omitted.
+        <code>recognitionLevel</code>, <code>usesLanguageCorrection</code>, and{" "}
+        <code>customWords</code> are iOS-only.
+      </p>
+      <CodeBlock language="typescript">
+        {`function recognizeText(
+  image: { uri: string },
+  options?: {
+    languages?: string[];                    // BCP-47, priority order
+    minTextHeight?: number;                  // fraction of image height, 0–1
+    recognitionLevel?: 'accurate' | 'fast';  // iOS
+    usesLanguageCorrection?: boolean;        // iOS, default true
+    customWords?: string[];                  // iOS
+  },
+): Promise<{
+  text: string;
+  blocks: {
+    text: string; bounds: NormalizedRect; language?: string; cornerPoints?: NormalizedPoint[];
+    lines: { text: string; bounds: NormalizedRect; confidence?: number; language?: string; cornerPoints?: NormalizedPoint[] }[];
+  }[];
+}>`}
+      </CodeBlock>
+
+      <h3 id="vision-lifecycle">Vision lifecycle</h3>
+      <p>
+        Per-feature availability and the one call that downloads. Android&apos;s
+        segmentation and OCR models are Google Play services modules installed
+        by <code>prepareVision()</code>; the label model is bundled; iOS ships
+        everything with the OS and resolves immediately.
+      </p>
+      <CodeBlock language="typescript">
+        {`function getVisionAvailability(): Promise<{
+  backgroundRemoval: VisionFeatureAvailability;
+  imageLabeling: VisionFeatureAvailability;
+  textRecognition: VisionFeatureAvailability;
+}>
+// VisionFeatureAvailability =
+//   | { status: 'available' }
+//   | { status: 'downloadable' | 'downloading' }
+//   | { status: 'unavailable'; reason: 'platform' | 'os-version' | 'device' | 'not-enabled' }
+
+function prepareVision(options?: {
+  features?: ('background-removal' | 'image-labeling' | 'text-recognition')[]; // default: all
+  languages?: string[];                      // OCR script models to fetch (Android)
+  onProgress?: (progress: number) => void;   // 0–1
+}): Promise<void>
+
+function getSupportedTextRecognitionLanguages(): Promise<string[]>`}
       </CodeBlock>
 
       {/* ------------------------------------------------------------------ */}
-      <h2 id="rag-toolkit">RAG Toolkit</h2>
+      <h2 id="embeddings">Embeddings &amp; RAG</h2>
+      <p>
+        Turn text into vectors for semantic search and retrieval-augmented
+        generation, then search them with dependency-free helpers. See the{" "}
+        <a href="/guides/embeddings" className="text-accent hover:underline">
+          Embeddings &amp; RAG guide
+        </a>
+        .
+      </p>
+
+      <h3 id="embed">embed()</h3>
+      <BadgeGroup platforms={["ios", "android", "new"]} />
+      <p>
+        Turn text into embedding vectors for semantic search / RAG. See the{" "}
+        <a href="/guides/embeddings" className="text-accent hover:underline">
+          Embeddings &amp; RAG guide
+        </a>
+        . iOS (17+): Apple&apos;s zero-download <code>NLContextualEmbedding</code>:
+        <code>language</code> selects the script model. Android: EmbeddingGemma
+        300M via MediaPipe TextEmbedder, opt-in via the{" "}
+        <code>androidEmbeddings</code> config-plugin flag, model prepared with{" "}
+        <code>prepareEmbeddingModel()</code>; <code>embed()</code> itself never
+        downloads.
+      </p>
+      <CodeBlock language="typescript">
+        {`function embed(
+  texts: string[],
+  options?: {
+    task?: 'semantic-similarity' | 'retrieval-query' | 'retrieval-document';
+    language?: string; // BCP-47, default 'en', selects the iOS script model; ignored on Android
+  },
+): Promise<EmbedResult>
+// { embeddings: number[][]; dimensions: number; model: { id: string; revision: string } }`}
+      </CodeBlock>
+      <CodeBlock language="typescript">
+        {`import { embed } from 'expo-ai-kit';
+
+const { embeddings, dimensions, model } = await embed(
+  ['hello world', 'goodbye'],
+  { task: 'retrieval-document' },
+);
+embeddings.length; // 2, one vector per input, in order
+model;             // identity, indexes are only comparable under identical identity`}
+      </CodeBlock>
+
+      {/* ------------------------------------------------------------------ */}
+      <h3 id="embedding-lifecycle">Embedding model lifecycle</h3>
+      <BadgeGroup platforms={["ios", "android", "new"]} />
+      <p>
+        Readiness and asset management for the embedding model.{" "}
+        <code>prepareEmbeddingModel()</code> is the <em>only</em> call that
+        downloads, on Android it fetches the ~184 MB EmbeddingGemma bundle
+        (SHA-256-verified, atomic install, fails closed on partial/corrupt
+        downloads); on iOS it prefetches the OS-managed assets for a language.
+        Cancel/delete are Android-side (safe no-ops on iOS).
+      </p>
+      <CodeBlock language="typescript">
+        {`function getEmbeddingModelStatus(options?: { language?: string }): Promise<{
+  status: 'not-downloaded' | 'downloading' | 'downloaded';
+  sizeBytes: number; // ~184 MB pinned on Android; 0 on iOS (OS-managed)
+  model: { id: string; revision: string };
+}>
+function prepareEmbeddingModel(options?: {
+  language?: string;
+  onProgress?: (progress: number) => void; // 0–1 (Android)
+}): Promise<void>
+function cancelEmbeddingModelDownload(): Promise<void>
+function deleteEmbeddingModel(): Promise<void>
+function getSupportedEmbeddingLanguages(): Promise<string[]> // iOS catalog; [] on Android`}
+      </CodeBlock>
+
+      {/* ------------------------------------------------------------------ */}
+      <h3 id="rag-toolkit">RAG Toolkit</h3>
       <BadgeGroup platforms={["ios", "android"]} />
       <p>
         Pure-JS helpers for retrieval. They work on every platform with any source
         of vectors, since they only deal in plain <code>number[]</code>.
       </p>
 
-      <h3 id="chunktext">chunkText()</h3>
+      <h4 id="chunktext">chunkText()</h4>
       <p>
         Split a document into overlapping, sentence-aware chunks sized for
         embedding.
@@ -418,7 +535,7 @@ const { text } = await generateText({
 ): string[]`}
       </CodeBlock>
 
-      <h3 id="cosinesimilarity">cosineSimilarity()</h3>
+      <h4 id="cosinesimilarity">cosineSimilarity()</h4>
       <p>
         Magnitude-invariant relevance score in <code>[-1, 1]</code>. Throws on a
         length mismatch.
@@ -427,7 +544,7 @@ const { text } = await generateText({
         {`function cosineSimilarity(a: number[], b: number[]): number`}
       </CodeBlock>
 
-      <h3 id="createvectorstore">createVectorStore()</h3>
+      <h4 id="createvectorstore">createVectorStore()</h4>
       <p>
         A lightweight in-memory vector store. Add records, then{" "}
         <code>search()</code> by a query vector for the top-k most similar.
@@ -454,7 +571,7 @@ const hits = store.search(queryVector, { topK: 4 });
       </CodeBlock>
 
       {/* ------------------------------------------------------------------ */}
-      <h2 id="model-management">Model Management</h2>
+      <h2 id="model-management">Models</h2>
       <p>
         Switch between the OS built-in models and downloadable ones. See the{" "}
         <a href="/guides/models" className="text-accent hover:underline">
@@ -526,7 +643,7 @@ const hits = store.search(queryVector, { topK: 4 });
 
       <h3 id="setmodel">setModel()</h3>
       <p>
-        Activate a model for inference — the sole gatekeeper of model validity.
+        Activate a model for inference, the sole gatekeeper of model validity.
         For downloadable models this loads weights into memory; only one is
         loaded at a time.
       </p>
@@ -551,7 +668,7 @@ const hits = store.search(queryVector, { topK: 4 });
       </CodeBlock>
 
       {/* ------------------------------------------------------------------ */}
-      <h2 id="custom-models">Custom Models</h2>
+      <h3 id="custom-models">Custom Models</h3>
       <p>
         Register any LiteRT-LM model at runtime. See{" "}
         <a href="/guides/models#bring-your-own-model" className="text-accent hover:underline">
@@ -560,7 +677,7 @@ const hits = store.search(queryVector, { topK: 4 });
         .
       </p>
 
-      <h3 id="registermodel">registerModel()</h3>
+      <h4 id="registermodel">registerModel()</h4>
       <p>
         Add a custom downloadable model. Validates the entry and rejects ids that
         collide with a built-in (curated or native) model.
@@ -569,7 +686,7 @@ const hits = store.search(queryVector, { topK: 4 });
         {`function registerModel(entry: ModelRegistryEntry): void`}
       </CodeBlock>
 
-      <h3 id="unregistermodel">unregisterModel()</h3>
+      <h4 id="unregistermodel">unregisterModel()</h4>
       <p>
         Remove a custom model (returns <code>true</code> if one was removed).
         Does not delete any downloaded file.
@@ -578,13 +695,13 @@ const hits = store.search(queryVector, { topK: 4 });
         {`function unregisterModel(modelId: string): boolean`}
       </CodeBlock>
 
-      <h3 id="getregisteredmodels">getRegisteredModels()</h3>
+      <h4 id="getregisteredmodels">getRegisteredModels()</h4>
       <p>All custom models registered this session.</p>
       <CodeBlock language="typescript">
         {`function getRegisteredModels(): ModelRegistryEntry[]`}
       </CodeBlock>
 
-      <h3 id="fetchmodelmetadata">fetchModelMetadata()</h3>
+      <h4 id="fetchmodelmetadata">fetchModelMetadata()</h4>
       <p>
         Look up a model file&apos;s <code>sha256</code> and{" "}
         <code>sizeBytes</code> from a HuggingFace resolve URL, to fill in a{" "}
@@ -604,6 +721,92 @@ const hits = store.search(queryVector, { topK: 4 });
       </Callout>
 
       {/* ------------------------------------------------------------------ */}
+      <h2 id="ai-sdk-provider">AI SDK Provider</h2>
+      <BadgeGroup platforms={["ios", "android", "new"]} />
+      <p>
+        A Vercel AI SDK provider (<code>LanguageModelV3</code>, AI SDK 6+) over
+        the on-device engine, exported from the <code>expo-ai-kit/ai</code>{" "}
+        subpath. See the{" "}
+        <a href="/guides/vercel-ai-sdk" className="text-accent hover:underline">
+          Vercel AI SDK guide
+        </a>{" "}
+        for setup (polyfills), examples, and the on-device caveats.
+      </p>
+      <CodeBlock language="typescript">
+        {`import { expoAiKit, createExpoAiKit } from 'expo-ai-kit/ai';
+
+// LanguageModelV3, pass to generateText / streamText / generateObject
+expoAiKit(modelId?: string, settings?: ExpoAiKitModelSettings): LanguageModelV3
+//   modelId: 'auto' (default, the active model) or any setModel() id
+//   settings: same shape as setModel() options; applied on activation
+
+// EmbeddingModelV3 over embed(), resolves the platform default
+// ('apple-nl-contextual' on iOS, 'embedding-gemma-300m' on Android)
+expoAiKit.embeddingModel(modelId?: string, settings?: { task?: EmbeddingTask; language?: string }): EmbeddingModelV3
+
+// Factory (a fresh provider instance)
+createExpoAiKit(): ExpoAiKitProvider`}
+      </CodeBlock>
+      <CodeBlock language="typescript">
+        {`import { generateText } from 'ai';
+import { expoAiKit } from 'expo-ai-kit/ai';
+
+const { text } = await generateText({
+  model: expoAiKit(),
+  prompt: 'Capital of France?',
+});`}
+      </CodeBlock>
+
+      {/* ------------------------------------------------------------------ */}
+      <h2 id="config-plugin">Config Plugin</h2>
+      <p>
+        Text works with no configuration. Speech, vision (Android), and Android
+        embeddings are opt-in build flags so apps that don&apos;t use them pay
+        nothing in size or permissions. Turning a flag on requires a new native
+        build (dev client / EAS, not an OTA update); without it the matching
+        APIs throw a typed <code>*_NOT_ENABLED</code> error.
+      </p>
+      <CodeBlock language="json" filename="app.json">
+        {`{
+  "expo": {
+    "plugins": [
+      ["expo-ai-kit", {
+        "speech": true,             // or { "microphonePermission": "…" }
+        "vision": true,
+        "androidEmbeddings": true
+      }]
+    ]
+  }
+}`}
+      </CodeBlock>
+      <table>
+        <thead>
+          <tr>
+            <th>Flag</th>
+            <th>Unlocks</th>
+            <th>What it adds</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>speech</code></td>
+            <td><code>transcribe</code>, <code>streamTranscription</code>, speech lifecycle</td>
+            <td>Android ML Kit speech backend + <code>RECORD_AUDIO</code>; iOS <code>NSMicrophoneUsageDescription</code></td>
+          </tr>
+          <tr>
+            <td><code>vision</code></td>
+            <td>Android <code>removeBackground</code>, <code>labelImage</code>, <code>recognizeText</code></td>
+            <td>ML Kit vision clients + bundled label model (no permissions). iOS needs no flag.</td>
+          </tr>
+          <tr>
+            <td><code>androidEmbeddings</code></td>
+            <td>Android <code>embed</code> and the embedding lifecycle</td>
+            <td>MediaPipe TextEmbedder (~25 MB APK); the ~184 MB model downloads at runtime</td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* ------------------------------------------------------------------ */}
       <h2 id="types">Types</h2>
       <CodeBlock language="typescript">
         {`type LLMRole = 'system' | 'user' | 'assistant';
@@ -617,7 +820,7 @@ type LLMStreamEvent = {
   sessionId: string; token: string; accumulatedText: string; isDone: boolean;
 };
 
-// Sampling — applied at setModel(), best-effort per backend
+// Sampling, applied at setModel(), best-effort per backend
 type InferenceBackend = 'auto' | 'gpu' | 'cpu';
 type GenerationConfig = {
   temperature?: number; topK?: number; topP?: number; seed?: number; maxTokens?: number;
@@ -685,6 +888,49 @@ type VectorStore<M = unknown> = {
   toJSON(): VectorRecord<M>[];
 };
 
+// Vision
+type VisionImageSource = { uri: string };
+type NormalizedRect = { x: number; y: number; width: number; height: number }; // origin top-left, 0–1
+type NormalizedPoint = { x: number; y: number };
+type PixelRect = { x: number; y: number; width: number; height: number };
+type VisionFeature = 'background-removal' | 'image-labeling' | 'text-recognition';
+type VisionFeatureAvailability =
+  | { status: 'available' }
+  | { status: 'downloadable' | 'downloading' }
+  | { status: 'unavailable'; reason: 'platform' | 'os-version' | 'device' | 'not-enabled' };
+type VisionAvailability = {
+  backgroundRemoval: VisionFeatureAvailability;
+  imageLabeling: VisionFeatureAvailability;
+  textRecognition: VisionFeatureAvailability;
+};
+type PrepareVisionOptions = {
+  features?: VisionFeature[]; languages?: string[]; onProgress?: (progress: number) => void;
+};
+type RemoveBackgroundOptions = {
+  subject?: NormalizedPoint; mask?: boolean;
+  trim?: boolean; format?: 'png' | 'jpeg'; quality?: number; maxPixels?: number;
+};
+type RemoveBackgroundResult = {
+  uri: string; maskUri?: string; width: number; height: number; sourceWidth: number; sourceHeight: number;
+  bounds: NormalizedRect; pixelBounds: PixelRect; foregroundCoverage: number;
+  centroid: NormalizedPoint; instanceCount: number; trimOrigin: NormalizedPoint;
+};
+type LabelImageOptions = { maxResults?: number; minConfidence?: number };
+type ImageLabel = { label: string; confidence: number };
+type RecognizeTextOptions = {
+  languages?: string[]; recognitionLevel?: 'accurate' | 'fast';
+  usesLanguageCorrection?: boolean; customWords?: string[]; minTextHeight?: number;
+};
+type RecognizedTextLine = {
+  text: string; bounds: NormalizedRect; confidence?: number; language?: string;
+  cornerPoints?: NormalizedPoint[];
+};
+type RecognizedTextBlock = {
+  text: string; bounds: NormalizedRect; lines: RecognizedTextLine[]; language?: string;
+  cornerPoints?: NormalizedPoint[];
+};
+type RecognizeTextResult = { text: string; blocks: RecognizedTextBlock[] };
+
 // Models
 type BuiltInModel = {
   id: string; name: string; available: boolean;
@@ -732,23 +978,32 @@ try {
         <code>INFERENCE_BUSY</code>, <code>INFERENCE_CANCELLED</code>,{" "}
         <code>MODEL_LOAD_FAILED</code>, <code>DEVICE_NOT_SUPPORTED</code>,{" "}
         <code>EMBEDDINGS_NOT_ENABLED</code>, <code>LANGUAGE_NOT_SUPPORTED</code>,{" "}
-        <code>UNKNOWN</code>.
+        <code>SPEECH_BUSY</code>, <code>SPEECH_NOT_ENABLED</code>,{" "}
+        <code>MIC_PERMISSION_DENIED</code>, <code>AUDIO_DECODE_FAILED</code>,{" "}
+        <code>TRANSCRIPTION_FAILED</code>, <code>VISION_NOT_ENABLED</code>,{" "}
+        <code>IMAGE_DECODE_FAILED</code>, <code>NO_SUBJECT_FOUND</code>,{" "}
+        <code>VISION_FAILED</code>, <code>UNKNOWN</code>.
       </p>
       <p>
-        The two embedding-specific codes: <code>EMBEDDINGS_NOT_ENABLED</code> —
-        Android was built without the <code>androidEmbeddings</code>{" "}
-        config-plugin flag (enabling requires a new native build);{" "}
-        <code>LANGUAGE_NOT_SUPPORTED</code> — no iOS embedding model supports
-        the requested language (the message names it; there is never a silent
-        fall-back to the Latin model).
+        The <code>*_NOT_ENABLED</code> codes mean the Android app was built
+        without the matching config-plugin flag (<code>androidEmbeddings</code>,{" "}
+        <code>speech</code>, <code>vision</code>), enabling one requires a new
+        native build. <code>LANGUAGE_NOT_SUPPORTED</code> means no on-device
+        model handles the requested language for embeddings, speech, or text
+        recognition (the message names it; there is never a silent fall-back).
+        Vision adds <code>IMAGE_DECODE_FAILED</code> (unreadable input),{" "}
+        <code>NO_SUBJECT_FOUND</code> (nothing to cut out), and{" "}
+        <code>VISION_FAILED</code> (engine failure).
       </p>
       <Callout type="info" title="Single-flight inference">
         <p>
           Only one generation runs at a time. A concurrent{" "}
           <code>sendMessage</code> / <code>streamMessage</code> /{" "}
           <code>generateObject</code> / <code>generateText</code> rejects with{" "}
-          <code>INFERENCE_BUSY</code> — wait for the active one, or{" "}
-          <code>stop()</code> the active stream first.
+          <code>INFERENCE_BUSY</code>, wait for the active one, or{" "}
+          <code>stop()</code> the active stream first. Speech has its own guard
+          (<code>SPEECH_BUSY</code>); vision and embeddings have none, so they
+          run alongside either.
         </p>
       </Callout>
     </DocsLayout>

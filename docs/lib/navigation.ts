@@ -10,6 +10,9 @@ export interface NavSection {
   items: NavItem[];
 }
 
+// The sidebar mirrors the library's capabilities (Text, Speech, Vision,
+// Embeddings today), followed by the cross-cutting model, platform, and
+// integration guides. A new capability gets its own group here.
 export const navigation: NavSection[] = [
   {
     title: "Introduction",
@@ -27,17 +30,12 @@ export const navigation: NavSection[] = [
     ],
   },
   {
-    title: "Guides",
+    title: "Text",
     items: [
       {
-        title: "Vercel AI SDK",
-        href: "/guides/vercel-ai-sdk",
-        description: "Use the AI SDK with on-device language and embedding models",
-      },
-      {
-        title: "Platform Support",
-        href: "/guides/platform-support",
-        description: "Compare iOS and Android requirements and capabilities",
+        title: "Text Generation",
+        href: "/guides/text-generation",
+        description: "Generate and stream text with the on-device model",
       },
       {
         title: "Multi-turn Conversations",
@@ -54,25 +52,60 @@ export const navigation: NavSection[] = [
         href: "/guides/tool-calling",
         description: "Let on-device models call functions in your app",
       },
+    ],
+  },
+  {
+    title: "Speech",
+    items: [
       {
         title: "Speech-to-Text",
         href: "/guides/speech",
         description: "Transcribe live speech and audio files on-device",
       },
+    ],
+  },
+  {
+    title: "Vision",
+    items: [
+      {
+        title: "Background Removal, Labels & OCR",
+        href: "/guides/vision",
+        description: "Cut out subjects, label images, and read text on-device",
+      },
+    ],
+  },
+  {
+    title: "Embeddings",
+    items: [
       {
         title: "Embeddings & RAG",
         href: "/guides/embeddings",
         description: "Build semantic search and retrieval-augmented generation",
       },
+    ],
+  },
+  {
+    title: "Models & Platforms",
+    items: [
       {
         title: "Models",
         href: "/guides/models",
         description: "Use OS models, download open models, or bring your own",
       },
       {
+        title: "Platform Support",
+        href: "/guides/platform-support",
+        description: "Compare iOS and Android requirements and capabilities",
+      },
+      {
         title: "Android Setup",
         href: "/guides/android-setup",
-        description: "Configure ML Kit and optional Android embeddings",
+        description: "Configure ML Kit and the optional Android features",
+      },
+      {
+        title: "Vercel AI SDK",
+        href: "/guides/vercel-ai-sdk",
+        description: "Use the AI SDK with on-device language, embedding, and speech models",
       },
       {
         title: "Migration",
@@ -85,49 +118,29 @@ export const navigation: NavSection[] = [
     title: "API Reference",
     items: [
       {
-        title: "isAvailable()",
-        href: "/api#isavailable",
-        description: "Check whether the current device supports on-device AI",
+        title: "Text",
+        href: "/api#text",
+        description: "isAvailable, prepareBuiltInModel, sendMessage, streamMessage, generateObject, generateText",
       },
       {
-        title: "prepareBuiltInModel()",
-        href: "/api#preparebuiltinmodel",
-        description: "Prepare Android ML Kit or validate Apple Foundation Models",
-      },
-      {
-        title: "sendMessage()",
-        href: "/api#sendmessage",
-        description: "Generate one response from a conversation",
-      },
-      {
-        title: "streamMessage()",
-        href: "/api#streammessage",
-        description: "Stream tokens with progress and cancellation",
-      },
-      {
-        title: "generateObject()",
-        href: "/api#generateobject",
-        description: "Generate and validate a typed object",
-      },
-      {
-        title: "generateText()",
-        href: "/api#generatetext",
-        description: "Generate text with optional tool calling",
-      },
-      {
-        title: "embed()",
-        href: "/api#embed",
-        description: "Create vectors for semantic search and RAG",
-      },
-      {
-        title: "Embedding lifecycle",
-        href: "/api#embedding-lifecycle",
-        description: "Prepare and manage embedding model assets",
-      },
-      {
-        title: "Speech-to-Text",
+        title: "Speech",
         href: "/api#speech-to-text",
         description: "transcribe(), streamTranscription(), and the speech lifecycle",
+      },
+      {
+        title: "Vision",
+        href: "/api#vision",
+        description: "removeBackground(), labelImage(), recognizeText(), and the vision lifecycle",
+      },
+      {
+        title: "Embeddings",
+        href: "/api#embeddings",
+        description: "embed(), the embedding lifecycle, and the RAG toolkit",
+      },
+      {
+        title: "Models",
+        href: "/api#model-management",
+        description: "Discover, download, activate, remove, and register models",
       },
       {
         title: "AI SDK Provider",
@@ -135,19 +148,9 @@ export const navigation: NavSection[] = [
         description: "Use expo-ai-kit through the Vercel AI SDK",
       },
       {
-        title: "RAG Toolkit",
-        href: "/api#rag-toolkit",
-        description: "Chunk text, compare vectors, and search an in-memory store",
-      },
-      {
-        title: "Model Management",
-        href: "/api#model-management",
-        description: "Discover, download, activate, and remove models",
-      },
-      {
-        title: "Custom Models",
-        href: "/api#custom-models",
-        description: "Register compatible custom LiteRT-LM models",
+        title: "Config Plugin",
+        href: "/api#config-plugin",
+        description: "Opt-in flags: speech, vision, androidEmbeddings",
       },
       {
         title: "Types",

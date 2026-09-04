@@ -15,6 +15,7 @@ const headings = [
   { id: "prerequisites", text: "Prerequisites", level: 2 },
   { id: "installation", text: "Installation", level: 2 },
   { id: "android-configuration", text: "Android Configuration", level: 2 },
+  { id: "optional-features", text: "Optional Features", level: 2 },
   { id: "basic-usage", text: "Basic Usage", level: 2 },
   { id: "simple-prompt", text: "Simple Prompt", level: 3 },
   { id: "with-system-prompt", text: "With Custom System Prompt", level: 3 },
@@ -40,7 +41,8 @@ export default function GetStartedPage() {
       <ul>
         <li>Expo SDK 54+</li>
         <li>
-          <strong>iOS:</strong> iOS 26.0+ (full support), iOS 15.1+ (limited)
+          <strong>iOS:</strong> iOS 15.1+ (library minimum); iOS 26+ for the
+          built-in text model; iOS 17+ for background removal and embeddings
         </li>
         <li>
           <strong>Android:</strong> API 26+,{" "}
@@ -112,6 +114,28 @@ export default function GetStartedPage() {
 }`}
       </CodeBlock>
 
+      <h2 id="optional-features">Optional Features</h2>
+      <p>
+        Text generation works out of the box. Speech, vision (Android), and
+        Android embeddings are opt-in flags, so apps that don&apos;t use them
+        add no size or permissions. Turn on what you need and make a new native
+        build:
+      </p>
+      <CodeBlock language="json" filename="app.json">
+        {`{
+  "expo": {
+    "plugins": [["expo-ai-kit", { "speech": true, "vision": true, "androidEmbeddings": true }]]
+  }
+}`}
+      </CodeBlock>
+      <p>
+        See the{" "}
+        <Link href="/api#config-plugin" className="text-accent hover:underline">
+          config plugin reference
+        </Link>{" "}
+        for what each flag adds.
+      </p>
+
       <h2 id="basic-usage">Basic Usage</h2>
 
       <h3 id="simple-prompt">Simple Prompt</h3>
@@ -170,7 +194,7 @@ console.log(response.text);`}
 
       <h3 id="multi-turn-conversations">Multi-turn Conversations</h3>
       <p>
-        On-device models are stateless — keep an array of messages and pass the
+        On-device models are stateless, keep an array of messages and pass the
         full history on each call:
       </p>
 
@@ -184,7 +208,7 @@ const messages: LLMMessage[] = [
 const first = await sendMessage(messages);
 messages.push({ role: 'assistant', content: first.text });
 
-// Add the next turn — the full history gives the model context
+// Add the next turn, the full history gives the model context
 messages.push({ role: 'user', content: 'What is my name?' });
 const second = await sendMessage(messages);
 // second.text -> "Your name is Alice."`}
@@ -192,7 +216,7 @@ const second = await sendMessage(messages);
 
       <Callout type="info">
         <p>
-          You own the history array — append each turn and pass it back. See the{" "}
+          You own the history array, append each turn and pass it back. See the{" "}
           <a href="/guides/multi-turn" className="text-accent hover:underline">
             Multi-turn guide
           </a>{" "}
@@ -247,8 +271,8 @@ await promise;`}
             className="text-accent hover:underline"
           >
             Structured Output
-          </Link>{" "}
-          — Get typed objects back with a JSON Schema
+          </Link>:
+          Get typed objects back with a JSON Schema
         </li>
         <li>
           <Link
@@ -256,26 +280,44 @@ await promise;`}
             className="text-accent hover:underline"
           >
             Tool Calling
-          </Link>{" "}
-          — Let the model call your functions
+          </Link>:
+          Let the model call your functions
+        </li>
+        <li>
+          <Link href="/guides/speech" className="text-accent hover:underline">
+            Speech-to-Text
+          </Link>:
+          Transcribe the microphone or audio files on-device
+        </li>
+        <li>
+          <Link href="/guides/vision" className="text-accent hover:underline">
+            Vision
+          </Link>:
+          Remove backgrounds, label images, and read text in photos
+        </li>
+        <li>
+          <Link href="/guides/embeddings" className="text-accent hover:underline">
+            Embeddings &amp; RAG
+          </Link>:
+          Semantic search over your own data
         </li>
         <li>
           <Link href="/guides/models" className="text-accent hover:underline">
             Models
-          </Link>{" "}
-          — Download open models or bring your own
+          </Link>:
+          Download open models or bring your own
         </li>
         <li>
           <Link href="/api" className="text-accent hover:underline">
             API Reference
-          </Link>{" "}
-          — Explore all available methods and options
+          </Link>:
+          Explore all available methods and options
         </li>
         <li>
           <Link href="/examples" className="text-accent hover:underline">
             Examples
-          </Link>{" "}
-          — See complete code examples
+          </Link>:
+          See complete code examples
         </li>
       </ul>
     </DocsLayout>

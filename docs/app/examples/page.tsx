@@ -6,7 +6,7 @@ import { createPageMetadata } from "@/lib/site";
 
 export const metadata = createPageMetadata(
   "Examples",
-  "Production-oriented expo-ai-kit examples for chat, streaming, structured output, tool calling, model switching, and errors.",
+  "Production-oriented expo-ai-kit examples for chat, streaming, structured output, tool calling, speech-to-text, vision, recipes that chain capabilities, model switching, and errors.",
   "/examples"
 );
 
@@ -15,6 +15,10 @@ const headings = [
   { id: "structured-output", text: "Structured Output", level: 2 },
   { id: "tool-calling", text: "Tool Calling", level: 2 },
   { id: "streaming-with-cancel", text: "Streaming with Cancel Button", level: 2 },
+  { id: "speech-to-text", text: "Push-to-Talk Transcription", level: 2 },
+  { id: "vision", text: "Photo Cutout, Labels & OCR", level: 2 },
+  { id: "voice-memo-summary", text: "Voice Memo → Summary", level: 2 },
+  { id: "receipt-scanner", text: "Receipt Scanner", level: 2 },
   { id: "downloadable-model", text: "Download & Switch Models", level: 2 },
   { id: "error-handling", text: "Error Handling", level: 2 },
 ];
@@ -192,7 +196,7 @@ const { text, toolCalls } = await generateText(
 );
 
 console.log(toolCalls); // [{ toolName: 'getWeather', args: { city: 'Paris' } }]
-console.log(text);      // "Yes — it's 11°C and overcast, bring a jacket."`}
+console.log(text);      // "Yes, it's 11°C and overcast, bring a jacket."`}
       </CodeBlock>
 
       <hr />
@@ -240,6 +244,177 @@ function ChatWithStreaming() {
       )}
     </View>
   );
+}`}
+      </CodeBlock>
+
+      <hr />
+
+      <h2 id="speech-to-text">Push-to-Talk Transcription</h2>
+      <p>
+        Hold a button to dictate; the transcript revises as the engine hears
+        more. Requires the <code>speech</code> config-plugin flag. See the{" "}
+        <a href="/guides/speech" className="text-accent hover:underline">
+          Speech guide
+        </a>
+        .
+      </p>
+      <CodeBlock language="typescript" filename="PushToTalk.tsx">
+        {`import { useRef, useState } from 'react';
+import { Pressable, Text } from 'react-native';
+import {
+  getSpeechRecognitionAvailability,
+  prepareSpeechRecognition,
+  requestSpeechPermissionsAsync,
+  streamTranscription,
+  type TranscriptionHandle,
+} from 'expo-ai-kit';
+
+export function PushToTalk() {
+  const [text, setText] = useState('');
+  const handle = useRef<TranscriptionHandle | null>(null);
+
+  const start = async () => {
+    const availability = await getSpeechRecognitionAvailability();
+    if (availability.status === 'downloadable') await prepareSpeechRecognition();
+    if (!(await requestSpeechPermissionsAsync()).granted) return;
+    handle.current = streamTranscription((update) => setText(update.text));
+  };
+
+  const stop = () => handle.current?.stop();
+
+  return (
+    <Pressable onPressIn={start} onPressOut={stop}>
+      <Text>{text || 'Hold to talk'}</Text>
+    </Pressable>
+  );
+}`}
+      </CodeBlock>
+
+      <hr />
+
+      <h2 id="vision">Photo Cutout, Labels &amp; OCR</h2>
+      <p>
+        Pick a photo, then run all three vision features on it. Requires the{" "}
+        <code>vision</code> flag on Android. See the{" "}
+        <a href="/guides/vision" className="text-accent hover:underline">
+          Vision guide
+        </a>
+        .
+      </p>
+      <CodeBlock language="typescript" filename="PhotoInspector.tsx" showLineNumbers>
+        {`import * as ImagePicker from 'expo-image-picker';
+import { useState } from 'react';
+import { Button, Image, Text, View } from 'react-native';
+import {
+  getVisionAvailability,
+  labelImage,
+  prepareVision,
+  recognizeText,
+  removeBackground,
+  ModelError,
+} from 'expo-ai-kit';
+
+export function PhotoInspector() {
+  const [cutoutUri, setCutoutUri] = useState<string | null>(null);
+  const [summary, setSummary] = useState('');
+
+  const inspect = async () => {
+    const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'] });
+    if (picked.canceled) return;
+    const image = { uri: picked.assets[0].uri };
+
+    // Android downloads its Play services models once; iOS resolves immediately.
+    const availability = await getVisionAvailability();
+    if (availability.backgroundRemoval.status === 'downloadable') {
+      await prepareVision({ features: ['background-removal', 'text-recognition'] });
+    }
+
+    const [labels, { text }] = await Promise.all([
+      labelImage(image, { maxResults: 3 }),
+      recognizeText(image),
+    ]);
+    setSummary(\`\${labels.map((l) => l.label).join(', ')}\n\${text}\`);
+
+    try {
+      const cutout = await removeBackground(image);
+      setCutoutUri(cutout.uri); // PNG with a transparent background, in the app cache
+    } catch (e) {
+      if (e instanceof ModelError && e.code === 'NO_SUBJECT_FOUND') {
+        setCutoutUri(null); // a landscape or document, nothing to cut out
+      } else {
+        throw e;
+      }
+    }
+  };
+
+  return (
+    <View>
+      <Button title="Pick a photo" onPress={inspect} />
+      {cutoutUri && <Image source={{ uri: cutoutUri }} style={{ width: 200, height: 200 }} resizeMode="contain" />}
+      <Text>{summary}</Text>
+    </View>
+  );
+}`}
+      </CodeBlock>
+
+      <hr />
+
+      <h2 id="voice-memo-summary">Voice Memo → Summary</h2>
+      <p>
+        Speech feeds Text: transcribe a recording, then ask the model for a
+        typed summary. The two capabilities have separate guards, so the chain
+        never trips <code>INFERENCE_BUSY</code>.
+      </p>
+      <CodeBlock language="typescript" filename="summarizeMemo.ts">
+        {`import { generateObject, transcribe } from 'expo-ai-kit';
+
+type Summary = { title: string; actionItems: string[] };
+
+export async function summarizeMemo(uri: string): Promise<Summary> {
+  const { text } = await transcribe({ audio: { uri } });
+  const { object } = await generateObject<Summary>(
+    [{ role: 'user', content: \`Summarize this voice memo. Keep action items short.\\n\\n\${text}\` }],
+    {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        actionItems: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['title', 'actionItems'],
+    }
+  );
+  return object;
+}`}
+      </CodeBlock>
+
+      <hr />
+
+      <h2 id="receipt-scanner">Receipt Scanner</h2>
+      <p>
+        Vision feeds Text: read the receipt with OCR, then extract typed fields.
+        On Android, call <code>prepareVision({`{ features: ['text-recognition'] }`})</code>{" "}
+        once first.
+      </p>
+      <CodeBlock language="typescript" filename="scanReceipt.ts">
+        {`import { generateObject, recognizeText } from 'expo-ai-kit';
+
+type Receipt = { merchant: string; total: number; date?: string };
+
+export async function scanReceipt(uri: string): Promise<Receipt> {
+  const { text } = await recognizeText({ uri });
+  const { object } = await generateObject<Receipt>(
+    [{ role: 'user', content: \`Extract the merchant, total, and date from this receipt:\\n\\n\${text}\` }],
+    {
+      type: 'object',
+      properties: {
+        merchant: { type: 'string' },
+        total: { type: 'number' },
+        date: { type: 'string' },
+      },
+      required: ['merchant', 'total'],
+    }
+  );
+  return object;
 }`}
       </CodeBlock>
 
