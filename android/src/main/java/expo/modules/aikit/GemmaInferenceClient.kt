@@ -41,7 +41,7 @@ class GemmaInferenceClient(private val context: Context) {
   // Sampling config for the session, fixed at load. Kept so each inference call
   // can build a FRESH conversation: the JS layer passes the full history every
   // call (stateless-model contract), so reusing one native conversation would
-  // feed the model its own history twice — and a second turn on the same
+  // feed the model its own history twice, and a second turn on the same
   // conversation trips LiteRT-LM 0.10.0's chat-template engine on some models
   // (qwen3: "string has no method named strip").
   private var convConfig: ConversationConfig = ConversationConfig()
@@ -60,7 +60,7 @@ class GemmaInferenceClient(private val context: Context) {
    * Fail fast on ABIs where LiteRT-LM's native backend is known to crash.
    *
    * litertlm-android ships an x86_64 liblitertlm_jni.so, but the x86_64 backend
-   * is unvalidated upstream and SIGSEGVs on emulators — at engine init and
+   * is unvalidated upstream and SIGSEGVs on emulators, at engine init and
    * during inference (google-ai-edge/LiteRT-LM #2799, #2159; still open as of
    * 0.15.0). A SIGSEGV kills the whole app process and no Kotlin try/catch can
    * contain it, so the only safe behavior is a typed error before any Engine
@@ -73,7 +73,7 @@ class GemmaInferenceClient(private val context: Context) {
     if (primaryAbi == "x86_64" || primaryAbi == "x86") {
       throw RuntimeException(
         "DEVICE_NOT_SUPPORTED:$modelId:Downloadable models are not supported on $primaryAbi Android " +
-        "(typically an emulator on an Intel/AMD host) — LiteRT-LM's native x86 backend crashes the app. " +
+        "(typically an emulator on an Intel/AMD host), LiteRT-LM's native x86 backend crashes the app. " +
         "Use a physical device or an arm64 emulator image."
       )
     }
@@ -110,7 +110,7 @@ class GemmaInferenceClient(private val context: Context) {
 
     // Soft memory check. LiteRT-LM memory-maps model weights so actual RSS
     // is much lower than file size. We log a warning but always attempt the
-    // load — Engine.initialize() may still succeed. If it truly OOMs, Android's
+    // load, Engine.initialize() may still succeed. If it truly OOMs, Android's
     // lmkd kills the process (uncatchable signal 9), but that's better than
     // blocking devices that could have worked.
     val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
@@ -253,7 +253,7 @@ class GemmaInferenceClient(private val context: Context) {
             object : MessageCallback {
               override fun onMessage(message: Message) {
                 // LiteRT-LM may deliver accumulated text or delta tokens
-                // (observed: deltas on-device) — detect which, exactly like
+                // (observed: deltas on-device), detect which, exactly like
                 // generateTextStream, so the final text isn't just the last chunk.
                 val messageText = message.toString()
                 if (messageText.startsWith(previousText) && messageText.length >= previousText.length) {
@@ -276,7 +276,7 @@ class GemmaInferenceClient(private val context: Context) {
         }
       }
     } catch (e: kotlinx.coroutines.CancellationException) {
-      // Cooperative cancellation — propagate, don't mask as an inference failure.
+      // Cooperative cancellation, propagate, don't mask as an inference failure.
       throw e
     } catch (e: OutOfMemoryError) {
       throw RuntimeException("INFERENCE_OOM:${loadedModelId ?: "unknown"}:Out of memory during inference")
@@ -318,13 +318,13 @@ class GemmaInferenceClient(private val context: Context) {
                 // what we've seen before.
                 val token: String
                 if (messageText.startsWith(previousText) && messageText.length >= previousText.length) {
-                  // Accumulated text — extract delta
+                  // Accumulated text, extract delta
                   token = messageText.substring(previousText.length)
                   previousText = messageText
                   accumulatedBuilder.clear()
                   accumulatedBuilder.append(messageText)
                 } else {
-                  // Delta token — accumulate ourselves
+                  // Delta token, accumulate ourselves
                   token = messageText
                   accumulatedBuilder.append(messageText)
                   previousText = accumulatedBuilder.toString()
@@ -347,7 +347,7 @@ class GemmaInferenceClient(private val context: Context) {
         }
       }
     } catch (e: kotlinx.coroutines.CancellationException) {
-      // Cooperative cancellation — propagate, don't mask as an inference failure.
+      // Cooperative cancellation, propagate, don't mask as an inference failure.
       throw e
     } catch (e: OutOfMemoryError) {
       throw RuntimeException("INFERENCE_OOM:${loadedModelId ?: "unknown"}:Out of memory during inference")

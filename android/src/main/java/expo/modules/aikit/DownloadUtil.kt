@@ -10,7 +10,7 @@ import java.net.URL
 import java.security.MessageDigest
 
 /**
- * Shared file-download internals for model artifacts — used by both the
+ * Shared file-download internals for model artifacts, used by both the
  * generation-model store (GemmaInferenceClient) and the embedding asset
  * (EmbeddingAssetManager): manual cross-host redirect following, streaming
  * download to a temp file, SHA-256 verification, and atomic rename into place.
@@ -20,7 +20,7 @@ internal object DownloadUtil {
   /**
    * Download [url] into [targetFile] via [tempFile]: stream to the temp file,
    * verify [sha256] (when non-empty), then atomically rename into place. A
-   * partial or corrupt download always fails closed — the temp file is deleted
+   * partial or corrupt download always fails closed, the temp file is deleted
    * and the target is never touched.
    *
    * Throws RuntimeException with the standard "CODE:modelId:reason" contract:
@@ -93,7 +93,7 @@ internal object DownloadUtil {
    *
    * HttpURLConnection follows redirects by default but only within the same host.
    * HuggingFace LFS redirects from huggingface.co to cdn-lfs-us-1.huggingface.co,
-   * which is a cross-host redirect that HttpURLConnection silently does NOT follow —
+   * which is a cross-host redirect that HttpURLConnection silently does NOT follow,
    * it returns the 302 response as-is (or on some Android versions, returns a small
    * HTML/error body instead of the actual file). This caused downloaded model files
    * to contain garbage instead of the real model weights.

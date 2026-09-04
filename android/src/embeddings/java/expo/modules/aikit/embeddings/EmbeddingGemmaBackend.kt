@@ -11,7 +11,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * EmbeddingGemma 300M via MediaPipe TextEmbedder — 768 dimensions, max
+ * EmbeddingGemma 300M via MediaPipe TextEmbedder, 768 dimensions, max
  * sequence 512 tokens (longer inputs are truncated by the tokenizer), CPU.
  *
  * This file lives in the OPTIONAL src/embeddings source set: it is compiled
@@ -20,7 +20,7 @@ import kotlinx.coroutines.withContext
  * instantiated by reflection from ExpoAiKitModule, which is why nothing in the
  * main source set may import it directly.
  *
- * EmbeddingGemma is natively multilingual with a single vector space — there is
+ * EmbeddingGemma is natively multilingual with a single vector space, there is
  * no per-language model to select, which is why Android accepts and ignores the
  * embed() `language` option.
  */
@@ -28,7 +28,7 @@ class EmbeddingGemmaBackend(private val context: Context) : EmbeddingBackend {
 
   // TextEmbedder is not documented as safe for concurrent use, so load, embed,
   // and close are serialized behind this mutex. Concurrent embed() calls queue
-  // here rather than failing — embeddings stay outside the generation
+  // here rather than failing, embeddings stay outside the generation
   // INFERENCE_BUSY guard. Batches embed sequentially: order in == order out.
   private val mutex = Mutex()
   private var embedder: TextEmbedder? = null
@@ -41,7 +41,7 @@ class EmbeddingGemmaBackend(private val context: Context) : EmbeddingBackend {
         val formatContext = formatContextFor(task)
         texts.map { text ->
           if (text.isEmpty()) {
-            // No tokens — zero vector, matching iOS, so output stays aligned
+            // No tokens, zero vector, matching iOS, so output stays aligned
             // with input (callers index embeddings[i] by texts[i]).
             List(EmbeddingAssetManager.EMBEDDING_DIMENSIONS) { 0.0 }
           } else {
@@ -118,8 +118,8 @@ class EmbeddingGemmaBackend(private val context: Context) : EmbeddingBackend {
   /**
    * EmbeddingTask → (EmbeddingType, TextRole), per EmbeddingGemma's prompt
    * templates: QUERY roles render "task: <name> | query: <text>", the DOCUMENT
-   * role renders "title: none | text: <text>" (no title — by design). This
-   * mapping is the 'tfc1' formatContextProtocol pinned in src/models.ts —
+   * role renders "title: none | text: <text>" (no title, by design). This
+   * mapping is the 'tfc1' formatContextProtocol pinned in src/models.ts,
    * changing it changes the vectors, so bump the protocol tag if you touch it.
    */
   private fun formatContextFor(task: String): TextEmbedder.TextFormatContext {

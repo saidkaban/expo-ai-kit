@@ -3,8 +3,8 @@
 //
 // Like structured.ts and tools.ts, this module is deliberately free of any
 // native-module import so its logic can be unit-tested in plain Node. These are
-// the "sharp primitives" for RAG — chunking, similarity, and a lightweight
-// in-memory vector store — that pair with embed() (index.ts) to retrieve context
+// the "sharp primitives" for RAG, chunking, similarity, and a lightweight
+// in-memory vector store, that pair with embed() (index.ts) to retrieve context
 // before a sendMessage/generateText call.
 //
 // They work on every platform and with ANY source of embedding vectors (the
@@ -16,10 +16,10 @@
 /**
  * Cosine similarity between two equal-length vectors, in the range [-1, 1]
  * (1 = identical direction, 0 = orthogonal). This is the standard relevance
- * score for embedding retrieval — magnitude-invariant, so vectors need not be
+ * score for embedding retrieval, magnitude-invariant, so vectors need not be
  * pre-normalized.
  *
- * @throws if the vectors are different lengths (a dimension mismatch — usually a
+ * @throws if the vectors are different lengths (a dimension mismatch, usually a
  *   sign the vectors came from different embedding models).
  */
 export function cosineSimilarity(a: number[], b: number[]): number {
@@ -104,7 +104,7 @@ export function chunkText(text: string, options: ChunkOptions = {}): string[] {
 
   for (const segment of segments) {
     // A segment that alone exceeds chunkSize: flush what we have, then hard-split
-    // it into overlapping character windows. Don't seed `current` afterwards —
+    // it into overlapping character windows. Don't seed `current` afterwards,
     // the windows already carry their own overlap.
     if (segment.length > chunkSize) {
       flush();
@@ -134,7 +134,7 @@ export type VectorRecord<M = unknown> = {
   id: string;
   /** The embedding vector. */
   vector: number[];
-  /** Anything you want to carry alongside — typically the chunk text, a source URL, etc. */
+  /** Anything you want to carry alongside, typically the chunk text, a source URL, etc. */
   metadata?: M;
 };
 
@@ -176,7 +176,7 @@ export type VectorStore<M = unknown> = {
   search(query: number[], options?: VectorSearchOptions): VectorSearchResult<M>[];
   /**
    * A plain-array snapshot of every record. Persist it (e.g. to AsyncStorage or a
-   * file) and rehydrate later with `createVectorStore(snapshot)` — the store
+   * file) and rehydrate later with `createVectorStore(snapshot)`, the store
    * deliberately owns no I/O, so persistence stays yours.
    */
   toJSON(): VectorRecord<M>[];
@@ -186,7 +186,7 @@ export type VectorStore<M = unknown> = {
  * Create an in-memory {@link VectorStore}, optionally seeded from a snapshot
  * previously produced by {@link VectorStore.toJSON}.
  *
- * It's intentionally minimal — a linear scan over the records on each `search`.
+ * It's intentionally minimal, a linear scan over the records on each `search`.
  * That's more than fast enough for the thousands-of-chunks scale typical of
  * on-device RAG; reach for a real vector DB only past that.
  *

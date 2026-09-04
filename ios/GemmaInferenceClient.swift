@@ -10,7 +10,7 @@ actor GemmaInferenceClient {
   // Sampling config for the session, fixed at load. Kept so each inference call
   // can build a FRESH conversation: the JS layer passes the full history every
   // call (stateless-model contract), so reusing one native conversation would
-  // feed the model its own history twice — and a second turn on the same
+  // feed the model its own history twice, and a second turn on the same
   // conversation trips LiteRT-LM's chat-template engine on some models
   // (qwen3: "string has no method named strip").
   private var conversationConfig: ConversationConfig?
@@ -109,7 +109,7 @@ actor GemmaInferenceClient {
     }
   }
 
-  /// Replace the current conversation with a fresh one for a single call — see
+  /// Replace the current conversation with a fresh one for a single call, see
   /// `conversationConfig` for why inference never reuses one across calls.
   /// (Reassigning releases the previous conversation's native handle.)
   private func freshConversation() async throws -> Conversation {
@@ -173,7 +173,7 @@ actor GemmaInferenceClient {
   /// startStreaming in ExpoAiKitModule.swift.
   ///
   /// LiteRT-LM may deliver each Message chunk as either an accumulated string
-  /// or a delta — mirror Android's detection logic to handle both safely.
+  /// or a delta, mirror Android's detection logic to handle both safely.
   func generateTextStream(
     prompt: String,
     systemPrompt: String,
@@ -196,19 +196,19 @@ actor GemmaInferenceClient {
         let chunkText = chunk.toString
         let token: String
         if chunkText.hasPrefix(previousText) && chunkText.count >= previousText.count {
-          // Accumulated text — extract delta
+          // Accumulated text, extract delta
           token = String(chunkText.dropFirst(previousText.count))
           previousText = chunkText
           accumulated = chunkText
         } else {
-          // Delta token — accumulate ourselves
+          // Delta token, accumulate ourselves
           token = chunkText
           accumulated += chunkText
           previousText = accumulated
         }
         onChunk(token, accumulated, false)
       }
-      // Always emit a terminal chunk — including on cooperative cancellation —
+      // Always emit a terminal chunk, including on cooperative cancellation,
       // so the JS stream settles instead of hanging.
       onChunk("", accumulated, true)
     } catch is CancellationError {

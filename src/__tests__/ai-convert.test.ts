@@ -9,7 +9,7 @@ import {
 } from '../ai/convert';
 import { ModelError } from '../types';
 
-// Minimal call options builder — the fields convertCallOptions reads.
+// Minimal call options builder, the fields convertCallOptions reads.
 function call(overrides: Partial<LanguageModelV3CallOptions>): LanguageModelV3CallOptions {
   return { prompt: [], ...overrides } as LanguageModelV3CallOptions;
 }

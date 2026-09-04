@@ -46,7 +46,7 @@ export function buildToolInstruction(tools: ToolSet): string {
  *
  * - `tool`: a well-formed call to a known tool (args still need schema validation).
  * - `unknown-tool`: looked like a tool call but the name isn't in the tool set.
- * - `text`: no tool call — treat the response as the final answer.
+ * - `text`: no tool call, treat the response as the final answer.
  */
 export type ParsedToolCall =
   | { kind: 'tool'; toolName: string; args: unknown }
@@ -96,7 +96,7 @@ export function buildToolArgsRepair(toolName: string, errors: string[]): string 
     `The arguments for "${toolName}" did not match its schema: ${detail}. ` +
     'Respond again with ONLY the corrected {"tool": "' +
     toolName +
-    '", "arguments": { ... }} JSON — no prose, no markdown code fences.'
+    '", "arguments": { ... }} JSON, no prose, no markdown code fences.'
   );
 }
 

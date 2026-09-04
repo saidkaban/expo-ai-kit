@@ -1,12 +1,12 @@
 /**
- * Pure handling of thinking-model output — no native imports (unit-tested).
+ * Pure handling of thinking-model output, no native imports (unit-tested).
  *
  * Reasoning models (Qwen3, DeepSeek-R1 style) emit their chain of thought in
  * `<think>…</think>` blocks before the actual answer. That text is
  * model-internal: surfacing it as the answer is confusing UX, and worse, a
  * think block can contain JSON- or tool-envelope-looking text that derails
  * generateObject/generateText parsing. The orchestrated paths (generateObject,
- * generateText, the AI SDK provider) strip it via this helper — the raw
+ * generateText, the AI SDK provider) strip it via this helper, the raw
  * sendMessage/streamMessage primitives stay raw, and callers can apply
  * {@link stripThinking} themselves.
  */
@@ -25,7 +25,7 @@ const UNCLOSED_THINK_RE = /<think>([\s\S]*)$/;
 /**
  * Split model output into the visible answer and its `<think>…</think>`
  * reasoning. Handles multiple blocks and an unclosed trailing `<think>` (a
- * truncated generation that never finished reasoning — everything after the
+ * truncated generation that never finished reasoning, everything after the
  * tag is reasoning and the answer is whatever preceded it).
  */
 export function stripThinking(raw: string): StripThinkingResult {

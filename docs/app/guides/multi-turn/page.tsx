@@ -30,20 +30,20 @@ export default function MultiTurnPage() {
 
       <h2 id="overview">Overview</h2>
       <p>
-        On-device models are <strong>stateless</strong> — they don&apos;t
+        On-device models are <strong>stateless</strong>, they don&apos;t
         remember previous calls. You hold the conversation history in an array
         and pass the full history on every request. The model uses it to produce
         context-aware responses.
       </p>
       <ul>
         <li>
-          <strong>Messages</strong> — the running history you pass to the AI
+          <strong>Messages</strong>, the running history you pass to the AI
         </li>
         <li>
-          <strong>System prompt</strong> — instructions that define behavior
+          <strong>System prompt</strong>, instructions that define behavior
         </li>
         <li>
-          <strong>Context</strong> — the model sees every message you send
+          <strong>Context</strong>, the model sees every message you send
         </li>
       </ul>
 
@@ -64,7 +64,7 @@ const r1 = await sendMessage(messages);
 messages.push({ role: 'assistant', content: r1.text });
 // AI: "Nice to meet you, Alex!"
 
-// Second turn — the AI has context from the array
+// Second turn, the AI has context from the array
 messages.push({ role: 'user', content: 'What is my name?' });
 const r2 = await sendMessage(messages);
 messages.push({ role: 'assistant', content: r2.text });
@@ -84,7 +84,7 @@ messages.push({ role: 'assistant', content: r2.text });
         two ways:
       </p>
 
-      <h4>Option 1 — the systemPrompt option</h4>
+      <h4>Option 1, the systemPrompt option</h4>
       <CodeBlock language="typescript">
         {`const response = await sendMessage(
   [{ role: 'user', content: 'Tell me a joke' }],
@@ -92,7 +92,7 @@ messages.push({ role: 'assistant', content: r2.text });
 );`}
       </CodeBlock>
 
-      <h4>Option 2 — a system message in the array</h4>
+      <h4>Option 2, a system message in the array</h4>
       <CodeBlock language="typescript">
         {`const response = await sendMessage([
   { role: 'system', content: 'You are a comedian who specializes in dad jokes.' },
@@ -158,24 +158,24 @@ const response = await sendMessage(trim(messages), { systemPrompt });`}
 
       <h4>2. Send messages sequentially</h4>
       <p>
-        Only one generation runs at a time — a concurrent call rejects with{" "}
+        Only one generation runs at a time, a concurrent call rejects with{" "}
         <code>INFERENCE_BUSY</code>. Wait for each response before sending the
         next.
       </p>
       <CodeBlock language="typescript">
-        {`// ❌ Bad — concurrent calls reject with INFERENCE_BUSY
+        {`// ❌ Bad, concurrent calls reject with INFERENCE_BUSY
 await Promise.all([
   sendMessage([{ role: 'user', content: 'Question 1' }]),
   sendMessage([{ role: 'user', content: 'Question 2' }]),
 ]);
 
-// ✅ Good — await each in turn
+// ✅ Good, await each in turn
 const r1 = await sendMessage([{ role: 'user', content: 'Question 1' }]);`}
       </CodeBlock>
 
       <h4>3. Always include the full history</h4>
       <p>
-        For context-aware replies, pass the complete conversation — not just the
+        For context-aware replies, pass the complete conversation, not just the
         latest message.
       </p>
       <CodeBlock language="typescript">

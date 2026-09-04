@@ -25,14 +25,14 @@ export function buildSchemaInstruction(schema: JSONSchema): string {
 /** Follow-up prompt when the model returned something that could not be parsed as JSON. */
 export const REPAIR_INVALID_JSON =
   'Your previous response was not valid JSON. Respond again with ONLY a single valid ' +
-  'JSON value that conforms to the schema — no prose, no markdown code fences.';
+  'JSON value that conforms to the schema, no prose, no markdown code fences.';
 
 /** Follow-up prompt when the model returned valid JSON that violated the schema. */
 export function buildSchemaRepair(errors: string[]): string {
   const detail = errors.slice(0, 8).join('; ');
   return (
     `Your previous JSON did not match the schema: ${detail}. ` +
-    'Respond again with ONLY the corrected JSON value — no prose, no markdown code fences.'
+    'Respond again with ONLY the corrected JSON value, no prose, no markdown code fences.'
   );
 }
 
@@ -125,7 +125,7 @@ export function validateAgainstSchema(value: unknown, schema: JSONSchema): strin
 function validateInto(value: unknown, schema: JSONSchema, path: string, errors: string[]): void {
   if (!schema || typeof schema !== 'object') return;
 
-  // enum is authoritative — when present, the value must be one of its members.
+  // enum is authoritative, when present, the value must be one of its members.
   if (Array.isArray(schema.enum)) {
     if (!schema.enum.some((e) => jsonEqual(e, value))) {
       errors.push(`${path} must be one of ${JSON.stringify(schema.enum)}`);

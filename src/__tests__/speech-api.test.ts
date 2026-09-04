@@ -1,6 +1,6 @@
 /**
  * Behavior tests for transcribe/streamTranscription with the native module
- * mocked — the speech single-flight guard, typed platform guards, native-error
+ * mocked, the speech single-flight guard, typed platform guards, native-error
  * normalization, and the onTranscriptionUpdate error channel.
  */
 
@@ -140,7 +140,7 @@ describe('transcribe', () => {
     expect(native.stopTranscription).toHaveBeenCalled();
 
     // The single-flight flag is held until the NATIVE call settles (the engine
-    // may still be running after an abort) — settle it so it releases.
+    // may still be running after an abort), settle it so it releases.
     rejectNative(new Error('INFERENCE_CANCELLED:mlkit-speech:stopped'));
     await new Promise((resolve) => setTimeout(resolve, 0));
   });

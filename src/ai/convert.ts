@@ -16,7 +16,7 @@ import { ModelError, type JSONSchema, type LLMMessage, type ToolSet } from '../t
 //
 // Like structured.ts and tools.ts, this module imports no native module so its
 // logic can be unit-tested in plain Node. It maps the AI SDK's LanguageModelV3
-// call options onto our LLMMessage[] protocol — reusing the exact same tool
+// call options onto our LLMMessage[] protocol, reusing the exact same tool
 // instruction / tool-call envelope as generateText() and the same JSON-Schema
 // instruction / extraction as generateObject(), so a model behaves identically
 // whether it's driven through the AI SDK or through the core API.
@@ -55,7 +55,7 @@ export type ConvertedCall = {
   messages: LLMMessage[];
   /** Names of function tools offered to the model ([] when none / toolChoice 'none'). */
   toolNames: string[];
-  /** True when responseFormat is JSON — output should be extracted as JSON. */
+  /** True when responseFormat is JSON, output should be extracted as JSON. */
   jsonMode: boolean;
   /** Spec warnings for settings we cannot honor on-device. */
   warnings: SharedV3Warning[];
@@ -79,14 +79,14 @@ const FIXED_AT_SETMODEL = [
  *
  * - System messages are merged into one leading system message, with the tool
  *   instruction (tools.ts) and/or JSON-Schema instruction (structured.ts)
- *   appended — the same prompt protocol as generateText / generateObject.
+ *   appended, the same prompt protocol as generateText / generateObject.
  * - Assistant tool-call parts are re-rendered as the `{"tool", "arguments"}`
  *   envelope and tool results as formatToolResult() text, so multi-step AI SDK
  *   conversations round-trip through the exact format the model was taught.
  * - Per-call sampling settings can't be honored (fixed at setModel) and are
  *   reported as spec warnings instead of being silently dropped.
  *
- * @throws {ModelError} DEVICE_NOT_SUPPORTED on file/image prompt parts —
+ * @throws {ModelError} DEVICE_NOT_SUPPORTED on file/image prompt parts,
  *   on-device text models have no media input (vision is on the roadmap).
  */
 export function convertCallOptions(options: LanguageModelV3CallOptions): ConvertedCall {
@@ -130,14 +130,14 @@ export function convertCallOptions(options: LanguageModelV3CallOptions): Convert
     warnings.push({
       type: 'compatibility',
       feature: "toolChoice: 'required'",
-      details: 'Enforced via a prompt nudge — on-device models have no constrained decoding yet.',
+      details: 'Enforced via a prompt nudge, on-device models have no constrained decoding yet.',
     });
   } else if (toolNames.length > 0 && toolChoice.type === 'tool') {
     toolInstruction += `\n- For this request you MUST call the tool "${toolChoice.toolName}".`;
     warnings.push({
       type: 'compatibility',
       feature: `toolChoice: { type: 'tool' }`,
-      details: 'Enforced via a prompt nudge — on-device models have no constrained decoding yet.',
+      details: 'Enforced via a prompt nudge, on-device models have no constrained decoding yet.',
     });
   }
 
@@ -155,7 +155,7 @@ export function convertCallOptions(options: LanguageModelV3CallOptions): Convert
       jsonMode = true;
       schemaInstruction = options.responseFormat.schema
         ? buildSchemaInstruction(toLocalSchema(options.responseFormat.schema))
-        : 'Respond with ONLY a valid JSON value — no prose, no markdown code fences.';
+        : 'Respond with ONLY a valid JSON value, no prose, no markdown code fences.';
     }
   }
 
@@ -231,10 +231,10 @@ export type ExtractedOutput =
 
 /**
  * Interpret raw model output for the AI SDK: split off `<think>` reasoning
- * (thinking models — surfaced as a spec reasoning part, and excluded from
+ * (thinking models, surfaced as a spec reasoning part, and excluded from
  * parsing so it can't derail the envelope/JSON), then detect a tool-call
  * envelope when tools were offered (reusing parseToolCall) or extract/clean the
- * JSON value in json mode (reusing extractJson). Single-shot — the repair
+ * JSON value in json mode (reusing extractJson). Single-shot, the repair
  * loops live in the core generateText/generateObject, not in the provider.
  */
 export function extractOutput(
@@ -302,7 +302,7 @@ function unsupportedPart(type: string): ModelError {
   return new ModelError(
     'DEVICE_NOT_SUPPORTED',
     '',
-    `expo-ai-kit AI SDK provider: "${type}" prompt parts are not supported — ` +
+    `expo-ai-kit AI SDK provider: "${type}" prompt parts are not supported, ` +
       'on-device models take text only (vision input is on the roadmap).'
   );
 }

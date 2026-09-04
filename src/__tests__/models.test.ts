@@ -30,7 +30,7 @@ function validEntry(overrides: Partial<ModelRegistryEntry> = {}): ModelRegistryE
   };
 }
 
-// Custom models live in module state — keep tests isolated.
+// Custom models live in module state, keep tests isolated.
 afterEach(() => {
   for (const m of getRegisteredModels()) unregisterModel(m.id);
 });

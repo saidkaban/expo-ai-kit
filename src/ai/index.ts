@@ -24,11 +24,11 @@ import {
 } from './convert';
 
 // ---------------------------------------------------------------------------
-// Vercel AI SDK provider for expo-ai-kit — `import { expoAiKit } from 'expo-ai-kit/ai'`.
+// Vercel AI SDK provider for expo-ai-kit, `import { expoAiKit } from 'expo-ai-kit/ai'`.
 //
 // Implements the LanguageModelV3 spec (AI SDK 6; also accepted by AI SDK 7),
 // wrapping the same core sendMessage/streamMessage/embed calls as the rest of
-// the library — the single-flight INFERENCE_BUSY guard, stateless-model
+// the library, the single-flight INFERENCE_BUSY guard, stateless-model
 // semantics, and typed ModelError contract all apply unchanged.
 //
 // Zero-dependency by construction: everything imported from '@ai-sdk/provider'
@@ -39,7 +39,7 @@ import {
 const PROVIDER = 'expo-ai-kit';
 
 /**
- * Sentinel model id meaning "whatever model is currently active" — the OS
+ * Sentinel model id meaning "whatever model is currently active", the OS
  * built-in by default, or whatever the app last activated via setModel().
  * The provider never switches models for this id.
  */
@@ -50,12 +50,12 @@ export const APPLE_EMBEDDING_MODEL_ID = 'apple-nl-contextual';
 
 /**
  * Model id for the Android embedding backend (EmbeddingGemma 300M via MediaPipe
- * TextEmbedder — opt-in via the `androidEmbeddings` config-plugin flag).
+ * TextEmbedder, opt-in via the `androidEmbeddings` config-plugin flag).
  */
 export const ANDROID_EMBEDDING_MODEL_ID = ANDROID_EMBEDDING_MODEL.id;
 
 /**
- * @deprecated The embedding model is now platform-specific — this constant only
+ * @deprecated The embedding model is now platform-specific, this constant only
  * names the iOS one. Use {@link APPLE_EMBEDDING_MODEL_ID} /
  * {@link ANDROID_EMBEDDING_MODEL_ID}, or omit the id to get the platform default.
  */
@@ -71,7 +71,7 @@ export const ANDROID_SPEECH_MODEL_ID = 'mlkit-speech';
  * Per-instance embedding settings. `task` says what the vectors are for
  * (mapped onto EmbeddingGemma's prompt protocol on Android; semantic intent
  * only on iOS) and `language` selects the iOS script model (BCP-47; ignored on
- * Android — EmbeddingGemma is natively multilingual). Both can be overridden
+ * Android, EmbeddingGemma is natively multilingual). Both can be overridden
  * per call via `providerOptions['expo-ai-kit']`.
  */
 export type ExpoAiKitEmbeddingSettings = {
@@ -82,7 +82,7 @@ export type ExpoAiKitEmbeddingSettings = {
 /**
  * Per-instance model settings, applied when this instance activates its model
  * (same shape as {@link setModel}'s options). If the model is already active,
- * it is NOT reloaded — on-device model loads are expensive, so sampling config
+ * it is NOT reloaded, on-device model loads are expensive, so sampling config
  * effectively belongs to whoever activated the model first.
  */
 export type ExpoAiKitModelSettings = SetModelOptions;
@@ -98,7 +98,7 @@ export interface ExpoAiKitProvider {
    */
   languageModel(modelId?: string, settings?: ExpoAiKitModelSettings): LanguageModelV3;
   /**
-   * An EmbeddingModelV3 over embed(). Omit `modelId` for the platform default —
+   * An EmbeddingModelV3 over embed(). Omit `modelId` for the platform default,
    * Apple NLContextualEmbedding on iOS, EmbeddingGemma 300M on Android (opt-in
    * via the `androidEmbeddings` config-plugin flag). The instance's `modelId`
    * reports the resolved platform-specific model truthfully.
@@ -107,7 +107,7 @@ export interface ExpoAiKitProvider {
   /** @deprecated Spec alias for {@link ExpoAiKitProvider.embeddingModel}. */
   textEmbeddingModel(modelId?: string, settings?: ExpoAiKitEmbeddingSettings): EmbeddingModelV3;
   /**
-   * A TranscriptionModelV3 over transcribe() — on-device speech-to-text for
+   * A TranscriptionModelV3 over transcribe(), on-device speech-to-text for
    * the AI SDK's `transcribe()` call. Omit `modelId` for the platform engine
    * ('apple-speech' on iOS 26+, 'mlkit-speech' on Android 12+). Requires the
    * `speech` config-plugin flag. Pass a locale via
@@ -138,15 +138,15 @@ export interface ExpoAiKitProvider {
  * ```
  *
  * On-device caveats (all documented in the guide):
- * - One generation at a time — concurrent calls reject with INFERENCE_BUSY.
+ * - One generation at a time, concurrent calls reject with INFERENCE_BUSY.
  * - Per-call sampling (temperature, topK, …) is reported as an unsupported-
  *   setting warning; sampling is fixed when the model is activated.
  * - Tool calling and JSON output ride the same prompt protocol as
- *   generateText()/generateObject() — single-shot here, since the AI SDK owns
+ *   generateText()/generateObject(), single-shot here, since the AI SDK owns
  *   the loop. Streaming buffers when tools/JSON are requested (the envelope
  *   must be parsed whole, not surfaced as text deltas).
  * - embeddingModel() resolves per platform: Apple NLContextualEmbedding on iOS,
- *   EmbeddingGemma 300M on Android (opt-in — the `androidEmbeddings` config-
+ *   EmbeddingGemma 300M on Android (opt-in, the `androidEmbeddings` config-
  *   plugin flag plus a prepareEmbeddingModel() download; otherwise it throws a
  *   typed error). Pass { task } for retrieval-quality Android vectors.
  */
@@ -169,7 +169,7 @@ export function createExpoAiKit(): ExpoAiKitProvider {
       throw new ModelError(
         'MODEL_NOT_FOUND',
         resolved,
-        `expo-ai-kit has one embedding model per platform — "${APPLE_EMBEDDING_MODEL_ID}" on iOS ` +
+        `expo-ai-kit has one embedding model per platform, "${APPLE_EMBEDDING_MODEL_ID}" on iOS ` +
           `(Apple NLContextualEmbedding), "${ANDROID_EMBEDDING_MODEL_ID}" on Android (EmbeddingGemma). ` +
           "Omit the id to use the current platform's model."
       );
@@ -186,7 +186,7 @@ export function createExpoAiKit(): ExpoAiKitProvider {
       throw new ModelError(
         'MODEL_NOT_FOUND',
         resolved,
-        `expo-ai-kit has one speech engine per platform — "${APPLE_SPEECH_MODEL_ID}" on iOS ` +
+        `expo-ai-kit has one speech engine per platform, "${APPLE_SPEECH_MODEL_ID}" on iOS ` +
           `(SpeechAnalyzer), "${ANDROID_SPEECH_MODEL_ID}" on Android (ML Kit). ` +
           "Omit the id to use the current platform's engine."
       );
@@ -223,7 +223,7 @@ function createLanguageModel(modelId: string, settings?: ExpoAiKitModelSettings)
       try {
         return getActiveModel();
       } catch {
-        return AUTO_MODEL_ID; // native module unavailable (e.g. web) — let the call itself fail
+        return AUTO_MODEL_ID; // native module unavailable (e.g. web), let the call itself fail
       }
     }
     let active: string | undefined;
@@ -242,7 +242,7 @@ function createLanguageModel(modelId: string, settings?: ExpoAiKitModelSettings)
     specificationVersion: 'v3',
     provider: PROVIDER,
     modelId,
-    supportedUrls: {}, // no URLs are consumed natively — text-only models
+    supportedUrls: {}, // no URLs are consumed natively, text-only models
 
     async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
       const call = convertCallOptions(options);
@@ -284,7 +284,7 @@ function createLanguageModel(modelId: string, settings?: ExpoAiKitModelSettings)
       if (typeof ReadableStream === 'undefined') {
         throw new Error(
           'expo-ai-kit/ai: streaming needs a ReadableStream polyfill in React Native ' +
-            '(e.g. web-streams-polyfill) — the AI SDK requires the same polyfills. See the docs.'
+            '(e.g. web-streams-polyfill), the AI SDK requires the same polyfills. See the docs.'
         );
       }
 
@@ -292,8 +292,8 @@ function createLanguageModel(modelId: string, settings?: ExpoAiKitModelSettings)
       const activeModelId = await ensureModel();
       const abortSignal = options.abortSignal;
 
-      // Tool calling / JSON mode: the envelope must be parsed as a whole — a
-      // half-streamed `{"tool": …` would surface as garbage text deltas — so
+      // Tool calling / JSON mode: the envelope must be parsed as a whole, a
+      // half-streamed `{"tool": …` would surface as garbage text deltas, so
       // those runs buffer and emit the parsed result in one go.
       if (call.toolNames.length > 0 || call.jsonMode) {
         const stream = new ReadableStream<LanguageModelV3StreamPart>({
@@ -445,7 +445,7 @@ function createEmbeddingModel(
       if (task == null && !warnedNoTask && typeof __DEV__ !== 'undefined' && __DEV__) {
         warnedNoTask = true;
         console.warn(
-          'expo-ai-kit/ai: embedding without an explicit task — defaulting to ' +
+          'expo-ai-kit/ai: embedding without an explicit task, defaulting to ' +
             "'semantic-similarity'. For RAG on Android (EmbeddingGemma), pass " +
             "{ task: 'retrieval-document' } when indexing and { task: 'retrieval-query' } " +
             'for queries (embeddingModel settings or providerOptions["expo-ai-kit"]).'

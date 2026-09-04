@@ -80,7 +80,7 @@ class MlKitSpeechBackend(private val context: Context) : SpeechBackend {
     if (!granted) {
       fail(
         "MIC_PERMISSION_DENIED",
-        "Microphone permission is required — the ML Kit speech engine checks RECORD_AUDIO " +
+        "Microphone permission is required, the ML Kit speech engine checks RECORD_AUDIO " +
           "even for file input. Call requestSpeechPermissionsAsync() first"
       )
     }
@@ -345,7 +345,7 @@ class MlKitSpeechBackend(private val context: Context) : SpeechBackend {
       } catch (e: Throwable) {
         val message = e.message ?: e.toString()
         // A throw from the callback itself (e.g. the event emitter) must not
-        // escape this coroutine — that would be an app-level crash.
+        // escape this coroutine, that would be an app-level crash.
         safely {
           if (Regex("^[A-Z][A-Z_]*:").containsMatchIn(message)) {
             onError(message)

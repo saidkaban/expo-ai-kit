@@ -36,7 +36,7 @@ export type ModelRegistryEntry = {
   /** Platforms this model can run on */
   supportedPlatforms: ('ios' | 'android')[];
   /**
-   * License the model weights are distributed under — an SPDX identifier
+   * License the model weights are distributed under, an SPDX identifier
    * (e.g. 'Apache-2.0', 'MIT') or a family name for non-OSI terms (e.g. 'Gemma',
    * 'Llama-3.2'). Surfaced on {@link DownloadableModel} so app developers can
    * check their obligations before shipping a model to users.
@@ -65,7 +65,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     // Conservative limit for 4GB RAM devices.
     // TODO: Benchmark during Phase 2 testing.
     contextWindow: 8_000,
-    minRamBytes: 2_000_000_000, // 2GB — LiteRT-LM memory-maps weights, actual RSS ~1.5GB
+    minRamBytes: 2_000_000_000, // 2GB, LiteRT-LM memory-maps weights, actual RSS ~1.5GB
     supportedPlatforms: ['ios', 'android'],
     license: 'Gemma',
   },
@@ -79,13 +79,13 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     sha256: '0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0',
     sizeBytes: 3_659_530_240, // 3.66GB (exact, HF LFS)
     contextWindow: 16_000,
-    minRamBytes: 3_000_000_000, // 3GB — LiteRT-LM memory-maps weights
+    minRamBytes: 3_000_000_000, // 3GB, LiteRT-LM memory-maps weights
     supportedPlatforms: ['ios', 'android'],
     license: 'Gemma',
   },
-  // --- Qwen3 (Apache-2.0) — official litert-community builds. A size ladder
+  // --- Qwen3 (Apache-2.0), official litert-community builds. A size ladder
   // from a sub-GB model that runs anywhere up to a 4B that rivals Gemma E4B.
-  // preferredBackend 'cpu': Qwen3's GPU path is broken in LiteRT-LM 0.10.0 —
+  // preferredBackend 'cpu': Qwen3's GPU path is broken in LiteRT-LM 0.10.0,
   // device-verified as a native SIGSEGV on Android (Mali) and degenerate "!!!"
   // output on iOS (A19) with GPU/auto, while CPU generates correctly on both. ---
   {
@@ -99,7 +99,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     sizeBytes: 497_664_000, // 475MB (exact, HF LFS)
     // The int4 build ships a 2048-token KV. TODO: benchmark on device.
     contextWindow: 2_048,
-    minRamBytes: 1_000_000_000, // 1GB — tiny; runs on virtually any modern device
+    minRamBytes: 1_000_000_000, // 1GB, tiny; runs on virtually any modern device
     supportedPlatforms: ['ios', 'android'],
     license: 'Apache-2.0',
     preferredBackend: 'cpu',
@@ -131,12 +131,12 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     sizeBytes: 2_659_057_664, // 2.66GB (exact, HF LFS)
     // Conservative default (not marked in the filename). TODO: benchmark on device.
     contextWindow: 4_096,
-    minRamBytes: 3_000_000_000, // 3GB — 4B params need more headroom than the similarly-sized E2B
+    minRamBytes: 3_000_000_000, // 3GB, 4B params need more headroom than the similarly-sized E2B
     supportedPlatforms: ['ios', 'android'],
     license: 'Apache-2.0',
     preferredBackend: 'cpu',
   },
-  // --- Phi-4 Mini (MIT) — strong reasoning; q8 build, the heaviest downloadable. ---
+  // --- Phi-4 Mini (MIT), strong reasoning; q8 build, the heaviest downloadable. ---
   {
     id: 'phi-4-mini',
     name: 'Phi-4 Mini',
@@ -147,7 +147,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     sha256: '7764d4deb53800578307be33039476b38a6c370fff71bedb3c0552563e23ab02',
     sizeBytes: 3_910_090_752, // 3.91GB (exact, HF LFS)
     contextWindow: 4_096, // ekv4096 build
-    minRamBytes: 4_000_000_000, // 4GB — q8 weights, heaviest downloadable
+    minRamBytes: 4_000_000_000, // 4GB, q8 weights, heaviest downloadable
     supportedPlatforms: ['ios', 'android'],
     license: 'MIT',
   },
@@ -157,7 +157,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
 // Android embedding model asset (EmbeddingGemma via MediaPipe TextEmbedder).
 //
 // This is deliberately NOT a MODEL_REGISTRY entry: it is an embedding asset,
-// not a generation model — setModel() cannot activate it and it never appears
+// not a generation model, setModel() cannot activate it and it never appears
 // in getDownloadableModels(). Its lifecycle is prepareEmbeddingModel() /
 // getEmbeddingModelStatus() / cancelEmbeddingModelDownload() /
 // deleteEmbeddingModel(); embed() itself NEVER triggers a download.
@@ -168,13 +168,13 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
 // com.google.mediapipe:tasks-text dependency in android/build.gradle, and
 // `formatContextProtocol` names the prompt-template contract TextEmbedder
 // applies for EmbeddingTask values. The composed `revision` therefore changes
-// whenever ANY pinned artifact changes — which is exactly the signal to rebuild
+// whenever ANY pinned artifact changes, which is exactly the signal to rebuild
 // persisted vector indexes (see EmbeddingModelIdentity).
 // ---------------------------------------------------------------------------
 
 /** Pinned facts about the Android embedding model asset. */
 export type AndroidEmbeddingModelAsset = {
-  /** Asset id (reserved — rejected by registerModel, refused by setModel). */
+  /** Asset id (reserved, rejected by registerModel, refused by setModel). */
   id: string;
   /** Human-readable name. */
   name: string;
@@ -184,7 +184,7 @@ export type AndroidEmbeddingModelAsset = {
   sha256: string;
   /** Exact bundle size in bytes (~184 MB). */
   sizeBytes: number;
-  /** Output dimensionality — vectors always have exactly this many values. */
+  /** Output dimensionality, vectors always have exactly this many values. */
   dimensions: number;
   /** Maximum input sequence length in tokens; longer inputs are truncated. */
   maxSequenceLength: number;
@@ -194,7 +194,7 @@ export type AndroidEmbeddingModelAsset = {
   formatContextProtocol: string;
   /**
    * License the weights are distributed under. EmbeddingGemma ships under the
-   * Gemma Terms of Use — Google-hosted anonymous download does not void the
+   * Gemma Terms of Use, Google-hosted anonymous download does not void the
    * terms for end users; review them before shipping.
    */
   license: string;
@@ -216,7 +216,7 @@ export const ANDROID_EMBEDDING_MODEL: AndroidEmbeddingModelAsset = {
 
 /**
  * Compose the Android embedding revision string from its pinned artifacts.
- * Pure — unit-tested to change when any input pin changes.
+ * Pure, unit-tested to change when any input pin changes.
  */
 export function composeAndroidEmbeddingRevision(
   asset: Pick<
@@ -228,11 +228,11 @@ export function composeAndroidEmbeddingRevision(
 }
 
 // ---------------------------------------------------------------------------
-// Custom (developer-registered) models — "bring your own model".
+// Custom (developer-registered) models, "bring your own model".
 //
 // The built-in MODEL_REGISTRY above is curated: each entry's SHA256 is pinned by
 // a maintainer who verified the bytes. registerModel() lets app developers add
-// any LiteRT-LM model under the same contract — they supply the metadata
+// any LiteRT-LM model under the same contract, they supply the metadata
 // (including the SHA256), so the integrity check still holds end-to-end. Custom
 // entries live in memory only; call registerModel() at startup on every launch
 // (the downloaded file on disk persists and is keyed by id, so status survives
@@ -251,7 +251,7 @@ const SHA256_RE = /^[a-f0-9]{64}$/i;
 
 /**
  * Validate a model entry, returning a list of human-readable problems
- * (empty ⇒ valid). Pure — used by {@link registerModel} and unit-tested.
+ * (empty ⇒ valid). Pure, used by {@link registerModel} and unit-tested.
  */
 export function validateModelEntry(entry: ModelRegistryEntry): string[] {
   const errors: string[] = [];
@@ -297,7 +297,7 @@ export function validateModelEntry(entry: ModelRegistryEntry): string[] {
  *
  * After registering, the id works with `downloadModel` / `setModel` /
  * `getDownloadableModels` exactly like a built-in. The download is integrity-
- * checked against the `sha256` you provide — pin a value you trust (see
+ * checked against the `sha256` you provide, pin a value you trust (see
  * {@link fetchModelMetadata}). Throws if the entry is invalid or the id
  * collides with a built-in (curated or native) model.
  *
@@ -315,7 +315,7 @@ export function validateModelEntry(entry: ModelRegistryEntry): string[] {
 export function registerModel(entry: ModelRegistryEntry): void {
   const errors = validateModelEntry(entry);
   if (errors.length > 0) {
-    throw new Error(`registerModel: invalid model entry — ${errors.join('; ')}`);
+    throw new Error(`registerModel: invalid model entry, ${errors.join('; ')}`);
   }
   if (RESERVED_MODEL_IDS.has(entry.id) || MODEL_REGISTRY.some((m) => m.id === entry.id)) {
     throw new Error(`registerModel: "${entry.id}" is a reserved model id; choose a different id`);
@@ -326,7 +326,7 @@ export function registerModel(entry: ModelRegistryEntry): void {
 
 /**
  * Remove a previously {@link registerModel}'d custom model.
- * Returns true if one was removed. Does not delete any downloaded file —
+ * Returns true if one was removed. Does not delete any downloaded file,
  * use `deleteModel` for that. No-op for built-in models.
  */
 export function unregisterModel(modelId: string): boolean {
@@ -353,7 +353,7 @@ export function getRegistryEntry(modelId: string): ModelRegistryEntry | undefine
 
 /**
  * Parse a HuggingFace "resolve" download URL into its parts.
- * Returns null if the URL isn't a HuggingFace resolve URL. Pure — unit-tested.
+ * Returns null if the URL isn't a HuggingFace resolve URL. Pure, unit-tested.
  *
  * e.g. https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/model.litertlm
  *   → { repo: 'litert-community/Qwen3-0.6B', revision: 'main', path: 'model.litertlm' }
@@ -373,7 +373,7 @@ export function parseHuggingFaceUrl(
  * in a {@link registerModel} entry without computing them by hand.
  *
  * Trust note: this reads the hash from the same host you'll download from, so it
- * only guards against download corruption — NOT a maliciously changed upstream
+ * only guards against download corruption, NOT a maliciously changed upstream
  * repo. For a real supply-chain guarantee, run this once at dev time and PIN the
  * returned `sha256` in your source, exactly like the built-in registry.
  *
@@ -415,7 +415,7 @@ export async function fetchModelMetadata(
   const sizeBytes = file.lfs?.size ?? file.size;
   if (!sha256 || !sizeBytes) {
     throw new Error(
-      `fetchModelMetadata: "${path}" has no LFS hash/size — is it the actual model weight file?`
+      `fetchModelMetadata: "${path}" has no LFS hash/size, is it the actual model weight file?`
     );
   }
   return { sha256, sizeBytes };

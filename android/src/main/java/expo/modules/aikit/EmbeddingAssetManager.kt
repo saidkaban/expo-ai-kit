@@ -11,11 +11,11 @@ import java.io.File
  *
  * Deliberately separate from the generation-model store: the asset lives in
  * files/embeddings (not files/models), so it is invisible to setModel() and
- * getDownloadableModels() — it is an embedding asset, not a generation model.
+ * getDownloadableModels(), it is an embedding asset, not a generation model.
  * The URL and SHA-256 are pinned in JS (src/models.ts, ANDROID_EMBEDDING_MODEL)
  * and passed in, matching the downloadModel(url, sha256) convention.
  *
- * No MediaPipe imports — this class is always compiled. Only the TextEmbedder
+ * No MediaPipe imports, this class is always compiled. Only the TextEmbedder
  * wrapper behind [EmbeddingBackend] is gated by the androidEmbeddings
  * config-plugin flag.
  *
@@ -44,7 +44,7 @@ class EmbeddingAssetManager(private val context: Context) {
   private fun tempFile(): File = File(assetsDir(), "$EMBEDDING_MODEL_ID.task.tmp")
 
   /**
-   * True only for a fully verified, atomically installed asset — a .tmp from a
+   * True only for a fully verified, atomically installed asset, a .tmp from a
    * partial or cancelled download never counts (fails closed).
    */
   fun isDownloaded(): Boolean = modelFile().exists()

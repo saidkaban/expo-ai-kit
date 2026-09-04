@@ -94,7 +94,7 @@ describe('ANDROID_EMBEDDING_MODEL', () => {
     expect(ANDROID_EMBEDDING_MODEL.license).toBe('Gemma');
   });
 
-  it('is not a generation model — absent from the downloadable registry', () => {
+  it('is not a generation model, absent from the downloadable registry', () => {
     expect(getRegistryEntry(ANDROID_EMBEDDING_MODEL.id)).toBeUndefined();
   });
 });

@@ -6,7 +6,7 @@ import { createPageMetadata } from "@/lib/site";
 
 export const metadata = createPageMetadata(
   "Speech-to-Text",
-  "Transcribe live microphone speech and audio files on-device with Apple SpeechAnalyzer and ML Kit — no cloud, no API keys.",
+  "Transcribe live microphone speech and audio files on-device with Apple SpeechAnalyzer and ML Kit, no cloud, no API keys.",
   "/guides/speech"
 );
 
@@ -27,7 +27,7 @@ export default function SpeechPage() {
     <DocsLayout headings={headings}>
       <h1>Speech-to-Text</h1>
       <p className="text-xl text-muted leading-relaxed">
-        Turn speech into text without sending audio anywhere — live from the
+        Turn speech into text without sending audio anywhere, live from the
         microphone or from a recorded file.
       </p>
 
@@ -44,15 +44,15 @@ export default function SpeechPage() {
       </p>
       <ul>
         <li>
-          <code>streamTranscription()</code> — live microphone transcription
+          <code>streamTranscription()</code>, live microphone transcription
           with updates that revise as the engine hears more
         </li>
         <li>
-          <code>transcribe()</code> — a complete transcript from an audio file
+          <code>transcribe()</code>, a complete transcript from an audio file
           (WAV, M4A, MP3, …)
         </li>
         <li>
-          Explicit availability, model preparation, locales, and typed errors —
+          Explicit availability, model preparation, locales, and typed errors,
           the same lifecycle style as the rest of the library
         </li>
       </ul>
@@ -61,7 +61,7 @@ export default function SpeechPage() {
       <p>
         Speech is off by default because it adds microphone permissions to your
         app. Turn it on in your app config and make a new native build (dev
-        client or EAS — not an OTA update):
+        client or EAS, not an OTA update):
       </p>
       <CodeBlock language="json" filename="app.json">
         {`{
@@ -93,8 +93,8 @@ export default function SpeechPage() {
 } from 'expo-ai-kit';
 
 const availability = await getSpeechRecognitionAvailability({ locale: 'en-US' });
-// { status: 'available' } — ready now
-// { status: 'downloadable' | 'downloading' } — supported, model not ready yet
+// { status: 'available' }, ready now
+// { status: 'downloadable' | 'downloading' }, supported, model not ready yet
 // { status: 'unavailable', reason: 'platform' | 'os-version' | 'device' | 'locale' | 'not-enabled' }
 
 if (availability.status === 'downloadable') {
@@ -123,7 +123,7 @@ if (!permission.granted) return;
 
 const { promise, stop } = streamTranscription(
   (update) => setText(update.text),   // full transcript so far
-  { locale: 'en-US' }                 // optional — defaults to the device locale
+  { locale: 'en-US' }                 // optional, defaults to the device locale
 );
 
 // When the user releases the button:
@@ -132,7 +132,7 @@ const { text } = await promise;`}
       </CodeBlock>
       <p>
         One speech session runs at a time; a second call rejects with{" "}
-        <code>SPEECH_BUSY</code>. Speech never blocks text generation — a voice
+        <code>SPEECH_BUSY</code>. Speech never blocks text generation, a voice
         pipeline like <em>listen → send to the model → answer</em> works
         without tripping <code>INFERENCE_BUSY</code>.
       </p>
@@ -155,7 +155,7 @@ result.language;         // the locale the engine used`}
       <Callout type="info" title="Android transcribes at real-time rate">
         <p>
           The Android engine ingests audio at playback speed, so a 60-second
-          file takes about a minute — right for voice notes and dictation,
+          file takes about a minute, right for voice notes and dictation,
           wrong for podcast-length audio. iOS is faster than real time and
           returns timestamped segments. Android also requires the microphone
           permission even for file input (an engine requirement).
@@ -178,7 +178,7 @@ const locales = await getSupportedSpeechLocales();
 
       <h2 id="ai-sdk">AI SDK</h2>
       <p>
-        The provider exposes the same engine as an AI SDK transcription model —
+        The provider exposes the same engine as an AI SDK transcription model,
         the first cross-platform on-device one:
       </p>
       <CodeBlock language="typescript">
@@ -195,13 +195,13 @@ const result = await transcribe({
       <h2 id="platform-notes">Platform notes</h2>
       <ul>
         <li>
-          <strong>iOS (26+):</strong> SpeechAnalyzer — batch is faster than
+          <strong>iOS (26+):</strong> SpeechAnalyzer, batch is faster than
           real time with native timestamped segments; file transcription needs
           no permission at all. Model assets are OS-managed and shared across
           apps, so they add nothing to your app size.
         </li>
         <li>
-          <strong>Android (12+):</strong> ML Kit GenAI Speech Recognition —
+          <strong>Android (12+):</strong> ML Kit GenAI Speech Recognition,
           text-only results at real-time rate; Gemini Nano quality on devices
           that support it, automatically.
         </li>
@@ -209,7 +209,7 @@ const result = await transcribe({
           On devices below these OS versions,{" "}
           <code>getSpeechRecognitionAvailability()</code> reports{" "}
           <code>{`{ status: 'unavailable', reason: 'os-version' }`}</code> and
-          the calls throw typed errors — nothing fails silently.
+          the calls throw typed errors, nothing fails silently.
         </li>
       </ul>
 

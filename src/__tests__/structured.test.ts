@@ -27,7 +27,7 @@ describe('extractJson', () => {
   });
 
   it('slices an object out of surrounding prose', () => {
-    const text = 'Sure! The result is {"name":"Ada","age":36} — let me know.';
+    const text = 'Sure! The result is {"name":"Ada","age":36}, let me know.';
     expect(extractJson(text)).toEqual({ ok: true, value: { name: 'Ada', age: 36 } });
   });
 

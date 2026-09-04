@@ -1,5 +1,5 @@
 /**
- * Pure speech-to-text logic — no native imports (unit-tested).
+ * Pure speech-to-text logic, no native imports (unit-tested).
  *
  * Locale registries, option validation, and live-transcript assembly. The
  * native layers stay thin: they forward raw engine output (volatile/partial

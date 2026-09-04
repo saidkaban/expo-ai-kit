@@ -27,7 +27,7 @@ export default function ToolCallingPage() {
     <DocsLayout headings={headings}>
       <h1>Tool Calling</h1>
       <p className="text-xl text-muted leading-relaxed">
-        Let the model call functions you provide — fetch data, take actions —
+        Let the model call functions you provide, fetch data, take actions,
         and use the results to answer, all on-device with{" "}
         <code>generateText()</code>.
       </p>
@@ -42,7 +42,7 @@ export default function ToolCallingPage() {
         </Link>{" "}
         gives you JSON as the final answer, tool calling is a loop: the model
         <em> proposes</em> a function call, your code runs it, the result is fed
-        back, and the model continues — until it produces a plain-text answer.
+        back, and the model continues, until it produces a plain-text answer.
         This is how you connect an on-device model to live data (weather, a
         database, search) or actions.
       </p>
@@ -93,13 +93,13 @@ const { text } = await generateText(
   },
 );
 
-console.log(text); // "Bring a jacket and an umbrella — it's 12°C and raining."`}
+console.log(text); // "Bring a jacket and an umbrella, it's 12°C and raining."`}
       </CodeBlock>
 
       <h2 id="the-result">The Result</h2>
       <p>
         <code>generateText()</code> returns the final{" "}
-        <code>text</code> plus a full trace — every <code>step</code>, all{" "}
+        <code>text</code> plus a full trace, every <code>step</code>, all{" "}
         <code>toolCalls</code> and <code>toolResults</code>, and a{" "}
         <code>finishReason</code>.
       </p>
@@ -115,9 +115,9 @@ res.finishReason; // 'stop' | 'tool-calls' | 'max-steps'`}
       </CodeBlock>
 
       <ul>
-        <li><code>&apos;stop&apos;</code> — the model produced a final text answer.</li>
-        <li><code>&apos;tool-calls&apos;</code> — stopped because a tool has no <code>execute</code> (see below).</li>
-        <li><code>&apos;max-steps&apos;</code> — hit the <code>maxSteps</code> cap while still calling tools; raise it.</li>
+        <li><code>&apos;stop&apos;</code>, the model produced a final text answer.</li>
+        <li><code>&apos;tool-calls&apos;</code>, stopped because a tool has no <code>execute</code> (see below).</li>
+        <li><code>&apos;max-steps&apos;</code>, hit the <code>maxSteps</code> cap while still calling tools; raise it.</li>
       </ul>
 
       <h2 id="human-in-the-loop">Human in the Loop</h2>
@@ -133,7 +133,7 @@ res.finishReason; // 'stop' | 'tool-calls' | 'max-steps'`}
     deleteAccount: {
       description: 'Permanently delete the user account.',
       parameters: { type: 'object', properties: { userId: { type: 'string' } }, required: ['userId'] },
-      // no execute — we want to confirm first
+      // no execute, we want to confirm first
     },
   },
 });
@@ -181,9 +181,9 @@ try {
       <h2 id="tips">Tips</h2>
       <ul>
         <li>Set <code>maxSteps</code> high enough for the model to call tools <em>and</em> then answer (a typical task is 2 steps).</li>
-        <li>Return small, plain results from <code>execute</code> — strings or shallow objects the model can read easily.</li>
+        <li>Return small, plain results from <code>execute</code>, strings or shallow objects the model can read easily.</li>
         <li>With no <code>tools</code>, <code>generateText()</code> is just a single text generation.</li>
-        <li>Validate again inside <code>execute</code> for anything destructive — schema validation guards shape, not intent.</li>
+        <li>Validate again inside <code>execute</code> for anything destructive, schema validation guards shape, not intent.</li>
       </ul>
 
       <Callout type="success" title="Stable by design">

@@ -27,7 +27,7 @@ export default function ModelsPage() {
       <h1>Models</h1>
       <p className="text-xl text-muted leading-relaxed">
         Use OS-managed models, download open models at runtime, or
-        register your own — all behind one API.
+        register your own, all behind one API.
       </p>
 
       <BadgeGroup platforms={["ios", "android"]} />
@@ -35,7 +35,7 @@ export default function ModelsPage() {
       <h2 id="overview">Overview</h2>
       <p>
         expo-ai-kit runs two kinds of model. <strong>Built-in</strong> models are
-        provided and maintained by the OS — Apple Foundation Models on iOS and
+        provided and maintained by the OS, Apple Foundation Models on iOS and
         ML Kit on Android. Android may prepare its model on first use, but it is
         not bundled into your app. <strong>Downloadable</strong> models (Gemma, Qwen,
         Phi) are fetched at runtime via LiteRT-LM and run on both platforms. You
@@ -69,7 +69,7 @@ export default function ModelsPage() {
       <h2 id="the-catalog">The Catalog</h2>
       <p>
         The built-in registry ships a size ladder across three families. Each
-        entry carries a <code>license</code> — check it before shipping a model
+        entry carries a <code>license</code>, check it before shipping a model
         to your users.
       </p>
       <table>
@@ -96,11 +96,11 @@ export default function ModelsPage() {
           Registry entries can pin a <code>preferredBackend</code> that{" "}
           <code>setModel()</code> uses when you don&apos;t pass one. The Qwen3
           entries pin <code>&apos;cpu&apos;</code>: their GPU path is broken in
-          the current LiteRT-LM runtime (device-verified — a native crash on
+          the current LiteRT-LM runtime (device-verified, a native crash on
           Android and degenerate output on iOS), while CPU generates correctly
           on both platforms. An explicit{" "}
           <code>setModel(id, {"{ backend }"})</code> always wins. Qwen3 is also
-          a thinking model — see <code>stripThinking()</code> if you call the
+          a thinking model, see <code>stripThinking()</code> if you call the
           raw <code>sendMessage()</code> (the orchestrated APIs and the AI SDK
           provider already handle its <code>&lt;think&gt;</code> blocks).
         </p>
@@ -109,9 +109,9 @@ export default function ModelsPage() {
       <h2 id="download-and-switch">Download &amp; Switch</h2>
       <p>
         Download a model (with progress), then activate it with{" "}
-        <code>setModel()</code>. After that, every inference call —{" "}
+        <code>setModel()</code>. After that, every inference call, {" "}
         <code>sendMessage</code>, <code>streamMessage</code>,{" "}
-        <code>generateObject</code>, <code>generateText</code> — uses it.{" "}
+        <code>generateObject</code>, <code>generateText</code>, uses it.{" "}
         <code>unloadModel()</code> reverts to the OS built-in.
       </p>
 
@@ -131,7 +131,7 @@ await unloadModel(); // back to the OS model`}
       <Callout type="info" title="Sampling is set at activation">
         <p>
           Generation options (<code>temperature</code>, <code>topK</code>, …) are
-          fixed when you call <code>setModel()</code>, not per request —
+          fixed when you call <code>setModel()</code>, not per request,
           LiteRT-LM builds the sampler when the model session is created.
         </p>
       </Callout>
@@ -160,11 +160,11 @@ if (best) await downloadModel(best.id);`}
         Each downloadable model reports a <code>status</code>:
       </p>
       <ul>
-        <li><code>not-downloaded</code> — no file on disk</li>
-        <li><code>downloading</code> — fetch in progress</li>
-        <li><code>downloaded</code> — on disk but not loaded; survives app restarts</li>
-        <li><code>loading</code> — being loaded into memory</li>
-        <li><code>ready</code> — loaded and ready for inference</li>
+        <li><code>not-downloaded</code>, no file on disk</li>
+        <li><code>downloading</code>, fetch in progress</li>
+        <li><code>downloaded</code>, on disk but not loaded; survives app restarts</li>
+        <li><code>loading</code>, being loaded into memory</li>
+        <li><code>ready</code>, loaded and ready for inference</li>
       </ul>
       <p>
         Downloads are integrity-checked with SHA-256. Use
@@ -175,7 +175,7 @@ if (best) await downloadModel(best.id);`}
 
       <h2 id="bring-your-own-model">Bring Your Own Model</h2>
       <p>
-        Not limited to the built-in list — register any LiteRT-LM model at
+        Not limited to the built-in list, register any LiteRT-LM model at
         runtime with <code>registerModel()</code>. Once registered, the id works
         with <code>downloadModel</code> / <code>setModel</code> /{" "}
         <code>getDownloadableModels</code> exactly like a built-in, and the
@@ -207,7 +207,7 @@ await setModel('qwen3-4b-custom');`}
 
       <Callout type="warning" title="Re-register on each launch">
         <p>
-          Custom models live in memory — call <code>registerModel()</code> at
+          Custom models live in memory, call <code>registerModel()</code> at
           startup every launch. The downloaded file persists on disk (keyed by
           id), so a model&apos;s <code>downloaded</code> status survives restarts
           once you re-register it. Curated and native ids are reserved;{" "}
@@ -233,7 +233,7 @@ const { sha256, sizeBytes } = await fetchModelMetadata(
       <Callout type="info" title="Trust note">
         <p>
           It reads the hash from the same host you download from, so it only
-          guards against transit corruption — not a maliciously changed upstream
+          guards against transit corruption, not a maliciously changed upstream
           repo. For a real supply-chain guarantee, run it once at dev time and{" "}
           <strong>pin</strong> the returned <code>sha256</code> in your source,
           exactly like the built-in registry does.

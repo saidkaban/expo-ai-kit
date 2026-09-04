@@ -1,5 +1,5 @@
 /**
- * Pure helpers for embed() — language-tag normalization and task validation.
+ * Pure helpers for embed(), language-tag normalization and task validation.
  *
  * Like structured.ts / tools.ts / rag.ts, this module imports no native module,
  * so it is unit-testable in plain Node. The actual language → model resolution
@@ -26,13 +26,13 @@ const SUBTAG_RE = /^[a-zA-Z0-9]{1,8}$/;
 /**
  * Canonicalize a BCP-47 language tag: `_` separators become `-`, the primary
  * language subtag is lowercased, a 4-letter script subtag is Titlecased, and a
- * 2-letter (or 3-digit) region subtag is uppercased — `"EN_us"` → `"en-US"`,
+ * 2-letter (or 3-digit) region subtag is uppercased, `"EN_us"` → `"en-US"`,
  * `"zh-hans"` → `"zh-Hans"`. Later subtags (variants/extensions) are passed
  * through lowercased.
  *
  * Throws a plain `Error` when the tag is not even shaped like BCP-47 (empty,
  * non-string, or a primary subtag that isn't 2–3 letters). Whether a language
- * is actually *supported* is decided natively — iOS throws a typed
+ * is actually *supported* is decided natively, iOS throws a typed
  * LANGUAGE_NOT_SUPPORTED ModelError naming the rejected language.
  */
 export function normalizeLanguageTag(tag: string): string {

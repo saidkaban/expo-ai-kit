@@ -10,7 +10,7 @@ import Speech
 /// "apple-speech". The module gates every call behind #available(iOS 26).
 @available(iOS 26.0, *)
 final class SpeechRecognitionClient {
-  // Live-session state (one session at a time — the JS layer enforces the
+  // Live-session state (one session at a time, the JS layer enforces the
   // speech single-flight, so these are simple optionals).
   private var liveAnalyzer: SpeechAnalyzer?
   private var liveTranscriber: SpeechTranscriber?
@@ -116,7 +116,7 @@ final class SpeechRecognitionClient {
   }
 
   /// Throw MODEL_NOT_DOWNLOADED when the locale's OS-managed assets are not
-  /// installed yet — matching the documented availability lifecycle.
+  /// installed yet, matching the documented availability lifecycle.
   private func requireInstalledLocale(_ locale: Locale) async throws {
     let installed = await SpeechTranscriber.installedLocales
     let localeId = locale.identifier(.bcp47).lowercased()
@@ -305,7 +305,7 @@ final class SpeechRecognitionClient {
         }
         onEnd()
       } catch is CancellationError {
-        // Torn down by a failed start — the module surfaces the typed error;
+        // Torn down by a failed start, the module surfaces the typed error;
         // emitting onEnd here would settle the JS stream as a success first.
       } catch {
         onError("TRANSCRIPTION_FAILED:apple-speech:\(error.localizedDescription)")

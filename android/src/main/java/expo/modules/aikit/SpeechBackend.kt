@@ -4,12 +4,12 @@ package expo.modules.aikit
  * Contract between the always-compiled module and the optional ML Kit speech
  * backend (android/src/speech, compiled only when the `speech` config-plugin
  * flag adds the genai-speech-recognition dependency at prebuild). The
- * implementation is looked up by reflection — see ExpoAiKitModule.speechBackend
- * — so this main source set never references ML Kit speech classes.
+ * implementation is looked up by reflection, see ExpoAiKitModule.speechBackend
+ *, so this main source set never references ML Kit speech classes.
  *
  * All failures use the "CODE:modelId:reason" contract with modelId
  * "mlkit-speech". Locale strings are BCP-47 ('' = device locale); locale
- * SUPPORT is answered by the JS registry (the engine has no enumeration API) —
+ * SUPPORT is answered by the JS registry (the engine has no enumeration API),
  * the backend only reports device status and the active mode.
  */
 interface SpeechBackend {
