@@ -37,7 +37,14 @@
         "expo-ai-kit",
         {
           "androidEmbeddings": true,
-          "speech": true
+          "speech": true,
+          "vision": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to pick a photo to test on-device vision."
         }
       ]
     ]
