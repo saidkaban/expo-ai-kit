@@ -12,6 +12,7 @@ export const metadata: Metadata = {
 };
 
 const headings = [
+  { id: "see-it", text: "See it", level: 2 },
   { id: "one-import", text: "Everything in one import", level: 2 },
   { id: "what-you-can-do", text: "What your app can do", level: 2 },
   { id: "capabilities", text: "Capabilities", level: 2 },
@@ -52,6 +53,14 @@ const liveBadges = [
     alt: "MIT license",
     width: 92,
   },
+];
+
+// Demo clips (docs/public/demos/*.mp4), one per capability, in capability order.
+const demos = [
+  { file: "text", emoji: "💬", call: "streamMessage", alt: "Tokens streaming from an on-device model" },
+  { file: "speech", emoji: "🎙️", call: "streamTranscription", alt: "A live transcript revising as it listens" },
+  { file: "vision", emoji: "👁️", call: "removeBackground · labelImage", alt: "Tap a subject, get a transparent cutout, labels, and a mask" },
+  { file: "embeddings", emoji: "🔎", call: "embed · createVectorStore", alt: "Notes ranked by meaning" },
 ];
 
 // Rows of the "what your app can do" table: the job, the function, what it
@@ -213,6 +222,23 @@ export default function Home() {
           ))}
         </div>
       </section>
+
+      <h2 id="see-it">See it</h2>
+      <p>
+        Real outputs captured on a Galaxy A16, replayed with their original
+        timing. Each clip is one call.
+      </p>
+      <div className="docs-demo-grid">
+        {demos.map((demo) => (
+          <figure key={demo.file}>
+            <video src={`/demos/${demo.file}.mp4`} autoPlay loop muted playsInline aria-label={demo.alt} />
+            <figcaption>
+              <span aria-hidden="true">{demo.emoji} </span>
+              <code>{demo.call}</code>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
 
       <h2 id="one-import">Everything in one import</h2>
       <CodeBlock language="typescript" filename="app.ts">

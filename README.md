@@ -24,6 +24,22 @@ Phones already ship with capable AI models. expo-ai-kit is one small, typed API 
 them, so your app can chat, transcribe, see, and search on the device: offline, private, and with
 no per-request bill. One package, both platforms.
 
+## See it
+
+Real outputs captured on a Galaxy A16, replayed with their original timing. Each clip is one
+call from the API below.
+
+<table>
+  <tr>
+    <td align="center"><img src="https://raw.githubusercontent.com/saidkaban/expo-ai-kit/main/docs/public/demos/text.gif" width="380" alt="streamMessage: tokens streaming from an on-device model" /><br /><sub>💬 <code>streamMessage</code></sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/saidkaban/expo-ai-kit/main/docs/public/demos/speech.gif" width="380" alt="streamTranscription: a live transcript revising as it listens" /><br /><sub>🎙️ <code>streamTranscription</code></sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://raw.githubusercontent.com/saidkaban/expo-ai-kit/main/docs/public/demos/vision.gif" width="380" alt="removeBackground: tap a subject, get a transparent cutout, labels, and a mask" /><br /><sub>👁️ <code>removeBackground</code> · <code>labelImage</code></sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/saidkaban/expo-ai-kit/main/docs/public/demos/embeddings.gif" width="380" alt="embed + createVectorStore: notes ranked by meaning" /><br /><sub>🔎 <code>embed</code> · <code>createVectorStore</code></sub></td>
+  </tr>
+</table>
+
 ## Everything in one import
 
 ```ts

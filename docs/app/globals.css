@@ -388,6 +388,40 @@ code {
   font-size: 1.05rem;
 }
 
+/* Demo clips on the landing page: one phone-card video per capability. */
+.docs-demo-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin: 1.4rem 0 1.8rem;
+}
+
+.docs-demo-grid figure {
+  margin: 0;
+}
+
+.docs-demo-grid video {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.85rem;
+  border: 1px solid var(--border);
+  background: #111827;
+}
+
+.docs-demo-grid figcaption {
+  margin-top: 0.45rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+@media (max-width: 767px) {
+  .docs-demo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* Wide tables scroll inside their own box so the page never scrolls sideways. */
 .docs-table-scroll {
   overflow-x: auto;
