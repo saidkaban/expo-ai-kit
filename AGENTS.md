@@ -1,21 +1,24 @@
-# expo-ai-kit — agent guide
+# expo-ai-kit, agent guide
 
 This file contains repository-specific working rules. Public API usage belongs in `README.md`,
 release history in `CHANGELOG.md`, and implementation details in source comments and tests. Do not
 duplicate those records here.
 
-`expo-ai-kit` provides on-device AI for Expo and React Native — text generation, speech-to-text,
-and embeddings — across Apple Foundation Models, Apple SpeechAnalyzer, ML Kit (Prompt API and GenAI
-Speech Recognition), and downloadable or custom LiteRT-LM models on iOS and Android.
+`expo-ai-kit` provides on-device AI for Expo and React Native as a set of capabilities, currently
+text generation, speech-to-text, vision (background removal, image labels, OCR), and embeddings,
+across Apple Foundation Models, Apple SpeechAnalyzer, Apple Vision, ML Kit (Prompt API, GenAI Speech
+Recognition, Vision), and downloadable or custom LiteRT-LM models on iOS and Android. Developer-facing
+material (README, docs site, npm metadata, `llms.txt`) presents the capabilities in that order and
+never hard-codes their count; a new capability gets its own group in each of those places.
 
 ## Build, test, and publish
 
-- `npm run build` — compile `src/` to `build/`.
-- `npm test` — run Jest tests. Pure TypeScript logic is tested directly; behavior that reaches the
+- `npm run build`, compile `src/` to `build/`.
+- `npm test`, run Jest tests. Pure TypeScript logic is tested directly; behavior that reaches the
   native module is tested with `jest.mock('../ExpoAiKitModule')` and a mocked `react-native`
   (see `src/__tests__/inference.test.ts`). Real native behavior is verified by CI platform builds
   and on-device gates.
-- `npm run lint` — run ESLint using the flat config in `eslint.config.js`.
+- `npm run lint`, run ESLint using the flat config in `eslint.config.js`.
 - CI routes by changed path: `docs/`-only changes run the docs checks; other changes run Node tests and
   the Android/Kotlin and iOS/Swift builds; mixed changes run both. Native changes are not verified by
   the Node job alone.
@@ -28,8 +31,8 @@ Speech Recognition), and downloadable or custom LiteRT-LM models on iOS and Andr
 
 ## Architecture contracts
 
-These describe the current public architecture, not immutable doctrine. Change one deliberately—with
-the corresponding API decision, implementation, tests, and documentation—rather than bypassing it as
+These describe the current public architecture, not immutable doctrine. Change one deliberately, with
+the corresponding API decision, implementation, tests, and documentation, rather than bypassing it as
 a side effect of unrelated work.
 
 - **Zero runtime dependencies.** Keep `package.json#dependencies` empty. Development and optional peer
@@ -57,6 +60,14 @@ a side effect of unrelated work.
   the generation guard. Native layers forward raw engine updates (with an `error` event channel); the
   JS layer assembles transcripts. Android's engine ingests non-mic audio at real-time rate by
   contract and requires `RECORD_AUDIO` even for file input.
+- **Vision is opt-in on Android and independent.** The config plugin's `vision` flag compiles the
+  Android ML Kit vision backend (reflection-resolved, like embeddings and speech) and adds no
+  permissions; without it, Android vision APIs throw `VISION_NOT_ENABLED` and availability reports
+  `not-enabled`. iOS always compiles the Vision client. `prepareVision()` is the only vision call
+  that downloads (Google Play services models); `removeBackground`/`recognizeText` throw
+  `MODEL_NOT_DOWNLOADED` instead of downloading. Vision never holds the generation or speech
+  guards. Cutouts are written to the app cache and returned as `file://` URIs, pixel buffers do
+  not cross the bridge. Coordinates in results are normalized (origin top-left, 0–1).
 - **The AI SDK provider preserves core behavior.** `src/ai/` must stay a thin adapter over the public
   inference and embedding primitives. Imports from `@ai-sdk/provider` must remain type-only so the
   zero-runtime-dependency contract holds.
@@ -69,17 +80,20 @@ preference is not a ban on a well-designed stateful-session primitive.
 
 ## Code map
 
-- `src/index.ts` — public API, native calls, model lifecycle, error normalization, and generation guard.
-- `src/types.ts` — public types and backend capability contracts.
+- `src/index.ts`, public API, native calls, model lifecycle, error normalization, and generation guard.
+- `src/types.ts`, public types and backend capability contracts.
 - `src/structured.ts`, `src/tools.ts`, `src/rag.ts`, `src/embedding.ts`, `src/errors.ts`,
-  `src/speech.ts`, and `src/thinking.ts` — pure logic with Jest coverage.
-- `src/ai/` — Vercel AI SDK adapter; `ai.js` and `ai.d.ts` are its package-root shims.
-- `src/models.ts` — downloadable/custom model registry and Android embedding-model pins.
-- `app.plugin.js` — Expo config plugin: opt-in Android embeddings and opt-in speech (permissions +
-  conditional native source sets).
-- `ios/` and `android/` — native backends and model/asset lifecycle code; speech lives in
-  `ios/SpeechRecognitionClient.swift` and the conditionally compiled `android/src/speech/`.
-- `example/` — tracked development and CI fixture, not part of the published package.
+  `src/speech.ts`, `src/vision.ts`, and `src/thinking.ts`, pure logic with Jest coverage.
+- `src/ai/`, Vercel AI SDK adapter; `ai.js` and `ai.d.ts` are its package-root shims.
+- `src/models.ts`, downloadable/custom model registry and Android embedding-model pins.
+- `app.plugin.js`, Expo config plugin: opt-in Android embeddings, opt-in speech (permissions +
+  conditional native source set), and opt-in Android vision (conditional native source set).
+- `ios/` and `android/`, native backends and model/asset lifecycle code; speech lives in
+  `ios/SpeechRecognitionClient.swift` and the conditionally compiled `android/src/speech/`; vision in
+  `ios/VisionClient.swift` and the conditionally compiled `android/src/vision/`.
+- `docs/`, the Next.js documentation site (`docs/lib/navigation.ts` is the sidebar and search
+  index, grouped by capability). `docs/public/llms.txt` is the agent-facing summary.
+- `example/`, tracked development and CI fixture, not part of the published package.
 
 ## Change checklist
 
@@ -95,7 +109,7 @@ preference is not a ban on a well-designed stateful-session primitive.
 
 Keep exactly one roadmap item active. Do not start or add a later item while it is active.
 
-- **Next:** _(none — awaiting the maintainer's next item)_
+- **Next:** _(none, awaiting the maintainer's next item)_
 
 When the item is complete, clear the `Next` value, report completion, and ask the maintainer for exactly
 one next item. Do not retain completed items or release history in this section.

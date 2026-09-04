@@ -11,6 +11,9 @@ import {
   LLMStreamEvent,
   ModelDownloadProgressEvent,
   ModelStateChangeEvent,
+  ImageLabel,
+  RecognizeTextResult,
+  RemoveBackgroundResult,
   SpeechPermissionResponse,
   TranscriptionNativeEvent,
   TranscriptionSegment,
@@ -48,10 +51,10 @@ export interface ExpoAiKitNativeModule {
   // Cancels either a streaming session or a sendMessage session by id.
   stopStreaming(sessionId: string): Promise<void>;
 
-  // Embeddings. iOS: Apple NLContextualEmbedding — `language` selects the
+  // Embeddings. iOS: Apple NLContextualEmbedding, `language` selects the
   // script model, `task` is accepted as semantic intent only, and the result
   // carries the resolved Apple model identity. Android: EmbeddingGemma via
-  // MediaPipe TextEmbedder — `task` maps onto TextFormatContext, `language` is
+  // MediaPipe TextEmbedder, `task` maps onto TextFormatContext, `language` is
   // ignored (natively multilingual), no `model` in the native result (the JS
   // layer attaches the pinned identity). Web never reaches native (JS guard).
   embed(
@@ -65,7 +68,7 @@ export interface ExpoAiKitNativeModule {
   }>;
 
   // Embedding model asset lifecycle. iOS returns the full state (identity is
-  // native — it varies with `language`); Android returns just the status
+  // native, it varies with `language`); Android returns just the status
   // string and the JS layer attaches the pinned size/identity.
   getEmbeddingModelStatus(
     language: string
@@ -75,16 +78,16 @@ export interface ExpoAiKitNativeModule {
   prepareEmbeddingModel(url: string, sha256: string, language: string): Promise<void>;
   // Cancels the in-flight Android embedding download (no-op on iOS/none in flight).
   cancelEmbeddingModelDownload(): Promise<void>;
-  // Deletes the Android embedding asset from disk (no-op on iOS — OS-managed).
+  // Deletes the Android embedding asset from disk (no-op on iOS, OS-managed).
   deleteEmbeddingModel(): Promise<void>;
   // iOS: union of languages across the NLContextualEmbedding catalog. Only
-  // called on iOS — the JS layer answers [] elsewhere.
+  // called on iOS, the JS layer answers [] elsewhere.
   getSupportedEmbeddingLanguages(): Promise<string[]>;
 
   // Model discovery
   getBuiltInModels(): BuiltInModel[];
   // Async: iOS reads actor-isolated state (so it bridges as a Promise); Android
-  // returns synchronously. Callers must await — see getDownloadableModels.
+  // returns synchronously. Callers must await, see getDownloadableModels.
   getDownloadableModelStatus(modelId: string): Promise<DownloadableModelStatus>;
   getDeviceRamBytes(): number;
 
@@ -110,7 +113,7 @@ export interface ExpoAiKitNativeModule {
   deleteModel(modelId: string): Promise<void>;
 
   // Speech-to-text (opt-in via the config plugin's `speech` flag).
-  // Absent optionals travel as '' — the natives resolve '' locale to the
+  // Absent optionals travel as '', the natives resolve '' locale to the
   // device locale. Availability `mode` is Android-only ('basic' | 'advanced');
   // the JS layer combines it with the pure locale registries in speech.ts.
   getSpeechAvailability(
@@ -140,6 +143,50 @@ export interface ExpoAiKitNativeModule {
   // Live mic transcription; raw engine updates arrive on onTranscriptionUpdate.
   startTranscription(locale: string, sessionId: string): Promise<void>;
   stopTranscription(sessionId: string): Promise<void>;
+
+  // Vision (Apple Vision on iOS; ML Kit on Android behind the config plugin's
+  // `vision` flag). Independent of the generation and speech guards. Cutouts
+  // are written to the app cache and returned as file:// URIs, no pixel data
+  // crosses the bridge. All failures use the "CODE:modelId:reason" contract
+  // with modelId 'apple-vision' / 'mlkit-vision'.
+  //
+  // Per-feature availability. Android reports `not-enabled` for every feature
+  // when built without the flag, and `downloadable` for features whose Google
+  // Play services model is not installed yet.
+  getVisionAvailability(): Promise<Record<string, { status: string; reason?: string } | undefined>>;
+  // Downloads the Play services models for `features` (Android); `languages`
+  // picks the text-recognition script models. iOS validates and resolves.
+  // Progress arrives on onDownloadProgress with modelId 'mlkit-vision'.
+  prepareVision(features: string[], languages: string[]): Promise<void>;
+  // iOS: Vision's supported recognition languages. Android returns [] (the JS
+  // registry in vision.ts answers).
+  getSupportedTextRecognitionLanguagesNative(): Promise<string[]>;
+  // Subject cutout. `format` is 'png' | 'jpeg'; `quality` 0..1 (JPEG only).
+  // `subjectX`/`subjectY` (normalized, -1 = unset) keep only the subject under
+  // that point; `includeMask` also writes the grayscale mask PNG (`maskUri`).
+  removeBackground(
+    uri: string,
+    trim: boolean,
+    format: string,
+    quality: number,
+    maxPixels: number,
+    subjectX: number,
+    subjectY: number,
+    includeMask: boolean
+  ): Promise<RemoveBackgroundResult>;
+  // Image labels sorted by confidence; maxResults 0 = all above minConfidence.
+  labelImage(uri: string, maxResults: number, minConfidence: number): Promise<ImageLabel[]>;
+  // OCR. `languages` are normalized BCP-47 tags ([] = auto / Latin);
+  // recognitionLevel, usesLanguageCorrection, and customWords are iOS-only;
+  // minTextHeight 0 = unset.
+  recognizeText(
+    uri: string,
+    languages: string[],
+    recognitionLevel: string,
+    usesLanguageCorrection: boolean,
+    customWords: string[],
+    minTextHeight: number
+  ): Promise<RecognizeTextResult>;
 
   // Event subscription
   addListener<K extends keyof ExpoAiKitModuleEvents>(

@@ -29,7 +29,7 @@ class ExpoAiKitModule : Module() {
     GemmaInferenceClient(appContext.reactContext ?: throw RuntimeException("React context not available"))
   }
 
-  // Embedding asset lifecycle (download/status/delete). Always available — it
+  // Embedding asset lifecycle (download/status/delete). Always available, it
   // has no MediaPipe dependency; only the inference backend below is optional.
   private val embeddingAssets by lazy {
     EmbeddingAssetManager(appContext.reactContext ?: throw RuntimeException("React context not available"))
@@ -70,11 +70,35 @@ class ExpoAiKitModule : Module() {
     }
   }
 
+  // Optional ML Kit vision backend. Present only when the app was prebuilt
+  // with ["expo-ai-kit", { "vision": true }], which compiles android/src/vision
+  // and adds the ML Kit vision dependencies. Resolved by reflection so this
+  // module compiles without ML Kit vision on the classpath.
+  private val visionBackend: VisionBackend? by lazy {
+    try {
+      Class.forName("expo.modules.aikit.vision.MlKitVisionBackend")
+        .getDeclaredConstructor(Context::class.java)
+        .newInstance(appContext.reactContext ?: throw RuntimeException("React context not available"))
+        as VisionBackend
+    } catch (e: ReflectiveOperationException) {
+      null
+    } catch (e: LinkageError) {
+      null
+    }
+  }
+
+  private fun requireVisionBackend(): VisionBackend =
+    visionBackend ?: throw RuntimeException(
+      "VISION_NOT_ENABLED:mlkit-vision:" +
+        "Vision is opt-in. Add [\"expo-ai-kit\", { \"vision\": true }] to your app config plugins " +
+        "and make a new native build (dev client / EAS, not OTA)."
+    )
+
   private fun requireSpeechBackend(): SpeechBackend =
     speechBackend ?: throw RuntimeException(
       "SPEECH_NOT_ENABLED:mlkit-speech:" +
         "Speech is opt-in. Add [\"expo-ai-kit\", { \"speech\": true }] to your app config plugins " +
-        "and make a new native build (dev client / EAS — not OTA)."
+        "and make a new native build (dev client / EAS, not OTA)."
     )
 
   // SupervisorJob is load-bearing: with a plain Job, one failed transcription
@@ -88,7 +112,7 @@ class ExpoAiKitModule : Module() {
     embeddingBackend ?: throw RuntimeException(
       "EMBEDDINGS_NOT_ENABLED:${EmbeddingAssetManager.EMBEDDING_MODEL_ID}:" +
         "Android embeddings are opt-in. Add [\"expo-ai-kit\", { \"androidEmbeddings\": true }] to your " +
-        "app config plugins and make a new native build (dev client / EAS — not OTA). " +
+        "app config plugins and make a new native build (dev client / EAS, not OTA). " +
         "Enabling adds ~25 MB to the APK; the ~184 MB EmbeddingGemma model then downloads via prepareEmbeddingModel()."
     )
 
@@ -155,7 +179,7 @@ class ExpoAiKitModule : Module() {
           } + "\nASSISTANT:"
         promptClient.generateText(conversationPrompt, systemPrompt)
       } else {
-        // Gemma/LiteRT-LM: pass raw content — the Conversation API handles
+        // Gemma/LiteRT-LM: pass raw content, the Conversation API handles
         // turn formatting internally. Adding "USER:"/"ASSISTANT:" markers
         // causes double-formatting and garbled output.
         val conversationPrompt = nonSystemMessages
@@ -205,7 +229,7 @@ class ExpoAiKitModule : Module() {
               } + "\nASSISTANT:"
             promptClient.generateTextStream(conversationPrompt, systemPrompt, streamCallback)
           } else {
-            // Gemma/LiteRT-LM: pass raw content — Conversation API handles turn formatting
+            // Gemma/LiteRT-LM: pass raw content, Conversation API handles turn formatting
             val conversationPrompt = nonSystemMessages
               .joinToString("\n") { msg ->
                 msg["content"] as? String ?: ""
@@ -216,7 +240,7 @@ class ExpoAiKitModule : Module() {
           // User stop() has already settled the JS side (this event is ignored),
           // but a cancellation from anywhere else (e.g. the Play-services task
           // under ML Kit) would otherwise leave the stream hanging and the
-          // single-flight guard locked — always emit terminal done, like iOS.
+          // single-flight guard locked, always emit terminal done, like iOS.
           sendEvent("onStreamToken", mapOf(
             "sessionId" to sessionId,
             "token" to "",
@@ -248,32 +272,32 @@ class ExpoAiKitModule : Module() {
     AsyncFunction("stopStreaming") { sessionId: String ->
       activeStreamJobs[sessionId]?.cancel()
       activeStreamJobs.remove(sessionId)
-      // Last expression must be Unit — a Job? return would fail JS-value
+      // Last expression must be Unit, a Job? return would fail JS-value
       // conversion and reject the promise (see startStreaming).
       Unit
     }
 
     // ==================================================================
-    // Embeddings (EmbeddingGemma via MediaPipe TextEmbedder — opt-in)
+    // Embeddings (EmbeddingGemma via MediaPipe TextEmbedder, opt-in)
     // ==================================================================
     // The inference backend is compiled in only when the app enables the
     // config-plugin flag ["expo-ai-kit", { "androidEmbeddings": true }];
     // otherwise the functions below throw EMBEDDINGS_NOT_ENABLED (except
     // cancel/delete, which stay lenient so an app that later disables the flag
-    // can still reclaim the ~184 MB asset). embed() NEVER triggers a download —
+    // can still reclaim the ~184 MB asset). embed() NEVER triggers a download,
     // the asset is managed exclusively by prepare/cancel/delete. Deliberately
     // outside the generation path: not routed through setModel(), not guarded
     // by INFERENCE_BUSY (the backend serializes internally instead).
 
     AsyncFunction("embed") Coroutine { texts: List<String>, task: String, language: String ->
       // `language` is accepted and ignored: EmbeddingGemma is natively
-      // multilingual with a single vector space — there is nothing to select.
+      // multilingual with a single vector space, there is nothing to select.
       val backend = requireEmbeddingBackend()
       if (!embeddingAssets.isDownloaded()) {
         throw RuntimeException(
           "MODEL_NOT_DOWNLOADED:${EmbeddingAssetManager.EMBEDDING_MODEL_ID}:" +
             "The EmbeddingGemma model (~184 MB) is not on this device. " +
-            "Call prepareEmbeddingModel() first — embed() never downloads."
+            "Call prepareEmbeddingModel() first, embed() never downloads."
         )
       }
       val embeddings = backend.embed(embeddingAssets.modelFile().absolutePath, texts, task)
@@ -530,7 +554,7 @@ class ExpoAiKitModule : Module() {
     }
 
     // ==================================================================
-    // Speech-to-text (ML Kit GenAI Speech Recognition — opt-in)
+    // Speech-to-text (ML Kit GenAI Speech Recognition, opt-in)
     // ==================================================================
     // Compiled only with ["expo-ai-kit", { "speech": true }]; without the flag
     // the backend is null and calls throw SPEECH_NOT_ENABLED. Independent of
@@ -574,7 +598,7 @@ class ExpoAiKitModule : Module() {
       val unused = mediaType // Android decodes by content (MediaExtractor sniffs)
       val backend = requireSpeechBackend()
       // file:// URIs can carry percent-escapes (expo-audio recordings do);
-      // Uri.parse().path decodes them — a raw prefix-strip would not.
+      // Uri.parse().path decodes them, a raw prefix-strip would not.
       val path = when {
         uri.isEmpty() -> null
         uri.startsWith("file://") -> android.net.Uri.parse(uri).path ?: uri.removePrefix("file://")
@@ -632,8 +656,67 @@ class ExpoAiKitModule : Module() {
         activeLiveSpeechSessionId = null
         speechBackend?.stopLive()
       }
-      // Last expression must be Unit — see startStreaming.
+      // Last expression must be Unit, see startStreaming.
       Unit
+    }
+
+    // ==================================================================
+    // Vision (ML Kit, opt-in)
+    // ==================================================================
+    // Compiled only with ["expo-ai-kit", { "vision": true }]; without the flag
+    // the backend is null, availability reports 'not-enabled', and the other
+    // calls throw VISION_NOT_ENABLED. Independent of the generation and speech
+    // guards. prepareVision() is the only call that downloads (Google Play
+    // services modules); the analysis calls throw MODEL_NOT_DOWNLOADED instead.
+
+    AsyncFunction("getVisionAvailability") Coroutine { ->
+      val backend = visionBackend
+      if (backend == null) {
+        val notEnabled = mapOf("status" to "unavailable", "reason" to "not-enabled")
+        return@Coroutine mapOf(
+          "backgroundRemoval" to notEnabled,
+          "imageLabeling" to notEnabled,
+          "textRecognition" to notEnabled
+        )
+      }
+      backend.availability()
+    }
+
+    AsyncFunction("prepareVision") Coroutine { features: List<String>, languages: List<String> ->
+      requireVisionBackend().prepare(features, languages) { progress ->
+        sendEvent("onDownloadProgress", mapOf(
+          "modelId" to "mlkit-vision",
+          "progress" to progress
+        ))
+      }
+    }
+
+    AsyncFunction("getSupportedTextRecognitionLanguagesNative") Coroutine { ->
+      // ML Kit has no enumeration API; the JS registry answers on Android.
+      emptyList<String>()
+    }
+
+    AsyncFunction("removeBackground") Coroutine {
+      uri: String, trim: Boolean, format: String, quality: Double, maxPixels: Int,
+      subjectX: Double, subjectY: Double, includeMask: Boolean ->
+      requireVisionBackend().removeBackground(
+        uri, trim, format, quality, maxPixels, subjectX, subjectY, includeMask
+      )
+    }
+
+    AsyncFunction("labelImage") Coroutine { uri: String, maxResults: Int, minConfidence: Double ->
+      requireVisionBackend().labelImage(uri, maxResults, minConfidence)
+    }
+
+    AsyncFunction("recognizeText") Coroutine {
+      uri: String, languages: List<String>, recognitionLevel: String, usesLanguageCorrection: Boolean,
+      customWords: List<String>, minTextHeight: Double ->
+      // recognitionLevel, usesLanguageCorrection, and customWords are Vision
+      // (iOS) knobs; ML Kit runs a single model with no equivalents.
+      val unusedLevel = recognitionLevel
+      val unusedCorrection = usesLanguageCorrection
+      val unusedWords = customWords
+      requireVisionBackend().recognizeText(uri, languages, minTextHeight)
     }
   }
 }

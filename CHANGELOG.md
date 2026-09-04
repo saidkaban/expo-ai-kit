@@ -2,15 +2,85 @@
 
 ## Unreleased
 
+> Headline: **On-device vision**: `removeBackground()` (subject cutouts), `labelImage()`
+> (image labels), and `recognizeText()` (OCR) on iOS (Apple Vision) and Android (ML Kit, opt-in
+> config-plugin flag). Plus a simpler story for what the library does, grouped by capability
+> (Text, Speech, Vision, Embeddings) across the README, the documentation site, and npm, with a
+> short animated demo of each.
+
 ### Added
 
-- **On-device speech-to-text (opt-in).** Live microphone transcription — `streamTranscription()`
-  with revising (volatile) and finalized updates — and batch file transcription — `transcribe()`
-  for WAV/M4A/MP3/… — on iOS 26+ (Apple SpeechAnalyzer) and Android 12+ (ML Kit GenAI Speech
+- **Vision: background removal, image labels, and text recognition.**
+  - `removeBackground({ uri }, { subject?, mask?, trim?, format?, quality?, maxPixels? })` lifts
+    the subject out of a photo and returns a `file://` URI to a PNG cutout (transparent
+    background; JPEG flattens onto white) in the app cache, plus the subject's normalized and
+    pixel bounds, coverage, centroid, instance count, and trim origin. `subject: { x, y }` keeps
+    only the subject under a normalized point (tap-to-select; both engines segment subjects
+    individually) and `mask: true` also writes the engine's mask as a grayscale PNG (`maskUri`).
+    iOS 17+ via Vision's foreground instance mask (physical device); Android via ML Kit Subject
+    Segmentation.
+  - `labelImage({ uri }, { maxResults?, minConfidence? })` returns ranked
+    `{ label, confidence }` labels, Vision's image classifier on iOS (~1,300 labels; physical
+    device, like background removal, the Simulator cannot run Vision's neural requests), ML Kit
+    Image Labeling on Android (~400 labels, model bundled with the app, works offline at once).
+  - `recognizeText({ uri }, { languages?, minTextHeight?, recognitionLevel?,
+    usesLanguageCorrection?, customWords? })` returns the text plus blocks and lines with
+    normalized top-left bounds and corner points. Vision text recognition on iOS (auto-detects
+    the language); ML Kit Text Recognition v2 on Android with Latin, Chinese, Japanese, Korean,
+    and Devanagari script models.
+  - Lifecycle in the library's usual shape: `getVisionAvailability()` reports each feature as
+    `available` / `downloadable` / `downloading` / `unavailable` with a reason;
+    `prepareVision({ features?, languages?, onProgress? })` is the only call that downloads
+    (Android Google Play services models; iOS resolves at once);
+    `getSupportedTextRecognitionLanguages()` lists what the device can read. Analysis calls
+    throw `MODEL_NOT_DOWNLOADED` on Android until the model is prepared, they never download
+    implicitly.
+  - Android is **opt-in** via `["expo-ai-kit", { "vision": true }]` (adds the ML Kit clients
+    and the bundled label model to the APK; no permissions). Without the flag the APIs throw a
+    typed `VISION_NOT_ENABLED` error and availability reports `not-enabled`. iOS needs no
+    configuration.
+  - Vision calls are independent of the text (`INFERENCE_BUSY`) and speech (`SPEECH_BUSY`)
+    guards. New error codes: `VISION_NOT_ENABLED`, `IMAGE_DECODE_FAILED`, `NO_SUBJECT_FOUND`,
+    `VISION_FAILED`.
+- **Documentation recategorized by capability.** The README, npm description and keywords,
+  documentation sidebar, landing page, API reference, and `llms.txt` now present the library as
+  four capabilities, Text, Speech, Vision, Embeddings & RAG, each with its own guide (new
+  Text Generation hub and Vision guide), its engines per platform, and its opt-in flag.
+- **Example app** gained a Vision section (pick a photo → cutout / labels / OCR) and enables
+  the `vision` flag, so CI compiles the new Kotlin source set, plus a Share cutout button to
+  save the PNG to Photos. Verified on a Galaxy A16 (Android 16): Play services model install,
+  cutout, labels, and OCR; on an iPhone 17 Pro Max: cutout and labels; and on the iOS Simulator: OCR plus
+  the typed `device` unavailability for cutouts and labels.
+
+### Fixed
+
+- Documentation: iOS below 26 has thrown a typed `DEVICE_NOT_SUPPORTED` since 0.14.0; the
+  Platform Support and Troubleshooting pages no longer describe a "fallback message".
+
+## 0.14.1
+
+### Fixed
+
+- **Android: large model downloads could crash with a JNI global-reference overflow.** Download
+  progress events are now throttled (at most every 250 ms or 1%), the Expo event bridge retains
+  each event until JS consumes it, and emitting one per 8 KB chunk exhausted ART's global
+  reference table on multi-gigabyte downloads. (#15)
+
+## 0.14.0
+
+> Headline: **On-device speech-to-text**: live microphone transcription and audio-file
+> transcripts on iOS 26+ (Apple SpeechAnalyzer) and Android 12+ (ML Kit GenAI Speech
+> Recognition), opt-in via a config-plugin flag, plus an AI SDK transcription model.
+
+### Added
+
+- **On-device speech-to-text (opt-in).** Live microphone transcription, `streamTranscription()`
+  with revising (volatile) and finalized updates, and batch file transcription, `transcribe()`
+  for WAV/M4A/MP3/…, on iOS 26+ (Apple SpeechAnalyzer) and Android 12+ (ML Kit GenAI Speech
   Recognition, upgrading to Gemini Nano automatically where available). Explicit availability and
   lifecycle (`getSpeechRecognitionAvailability`, `prepareSpeechRecognition`,
   `getSupportedSpeechLocales`) plus microphone permission helpers
-  (`get`/`requestSpeechPermissionsAsync`). Enable with `["expo-ai-kit", { "speech": true }]` —
+  (`get`/`requestSpeechPermissionsAsync`). Enable with `["expo-ai-kit", { "speech": true }]`,
   it adds `RECORD_AUDIO` (Android) and `NSMicrophoneUsageDescription` (iOS, customizable);
   without the flag, speech APIs throw a typed `SPEECH_NOT_ENABLED` error and apps pay zero cost.
   Speech has its own single-flight guard (`SPEECH_BUSY`), independent of generation, so voice →
@@ -20,17 +90,16 @@
   text-only, requires the microphone permission even for file input (engine requirement), and
   ingests files at real-time rate (a 60-second file takes about a minute).
 - **AI SDK transcription model.** The provider gains `expoAiKit.transcriptionModel()`
-  (`TranscriptionModelV3`) — on-device speech-to-text through the AI SDK's `transcribe()` call,
+  (`TranscriptionModelV3`), on-device speech-to-text through the AI SDK's `transcribe()` call,
   with a locale option via `providerOptions['expo-ai-kit']` and honest warnings where the Android
   engine cannot provide segments.
-- **Built-in model preparation** — `prepareBuiltInModel()` makes Android's OS-managed ML Kit
+- **Built-in model preparation**: `prepareBuiltInModel()` makes Android's OS-managed ML Kit
   model ready before inference and is a no-op when it is already available. On iOS, the same call
   validates Apple Foundation Models availability.
 
 ### Fixed
 
-- **Android ML Kit could silently return an empty response when its model was not downloaded** —
-  generation now throws a typed `MODEL_NOT_DOWNLOADED` error with a clear preparation step.
+- **Android ML Kit could silently return an empty response when its model was not downloaded**: generation now throws a typed `MODEL_NOT_DOWNLOADED` error with a clear preparation step.
 - **Unavailable built-in models now fail with typed errors instead of fake successes.** On
   iOS below 26, `sendMessage`/`streamMessage` used to resolve successfully with the literal
   string `[On-device AI requires iOS 26+]`; they now throw/reject with `DEVICE_NOT_SUPPORTED`.
@@ -40,21 +109,21 @@
   error as `UNKNOWN`. Unsupported platforms (web) reject with `DEVICE_NOT_SUPPORTED`
   instead of resolving `{ text: '' }`.
 - **Streaming failures now reject the stream promise.** The native `onStreamToken` event
-  gained a typed error channel; mid-stream failures on both platforms — built-in and
-  LiteRT-LM models alike — reject `streamMessage`'s promise with a `ModelError` instead of
+  gained a typed error channel; mid-stream failures on both platforms, built-in and
+  LiteRT-LM models alike, reject `streamMessage`'s promise with a `ModelError` instead of
   resolving successfully with `[Error: …]` or empty text. Android's streaming path also no
   longer swallows unavailability: it throws the same typed errors as non-streaming
   generation, and a crash-on-throw hazard inside the stream coroutine was removed.
 - **Activating a built-in model now validates it.** `setModel('apple-fm')` and
   `setModel('mlkit')` verify the built-in can actually serve on this device (same typed
   errors as above), honoring the "sole gatekeeper" contract. To release a downloadable
-  model's memory without activating a ready built-in, use `unloadModel()` — it (and
+  model's memory without activating a ready built-in, use `unloadModel()`, it (and
   `deleteModel()`) still reverts to the platform built-in without validating it; their
   docs now say so.
 
 ## 0.13.0
 
-> Headline: **Android embeddings + iOS embedding languages** — `embed()` now runs on
+> Headline: **Android embeddings + iOS embedding languages**: `embed()` now runs on
 > Android (EmbeddingGemma 300M via MediaPipe TextEmbedder, opt-in via a config-plugin
 > flag) and speaks more than English on iOS (a `language` option selects the OS script
 > models). Plus task-typed embeddings for real RAG quality, and a model identity on
@@ -62,31 +131,31 @@
 
 ### Added
 
-- **Android `embed()`** — EmbeddingGemma 300M via MediaPipe TextEmbedder (768 dims,
-  max sequence 512, CPU, natively multilingual — Gemma Terms of Use apply). **Opt-in**
+- **Android `embed()`**: EmbeddingGemma 300M via MediaPipe TextEmbedder (768 dims,
+  max sequence 512, CPU, natively multilingual, Gemma Terms of Use apply). **Opt-in**
   via the new config plugin: `["expo-ai-kit", { "androidEmbeddings": true }]` + a new
   native build. Off by default (zero APK bytes; typed `EMBEDDINGS_NOT_ENABLED` error);
   on ≈ +25 MB APK. The ~184 MB model (pinned Google URL + SHA-256) downloads at runtime
-  via the lifecycle below — `embed()` itself never downloads (`MODEL_NOT_DOWNLOADED`).
-- **Embedding asset lifecycle** — `getEmbeddingModelStatus()`, `prepareEmbeddingModel({
+  via the lifecycle below, `embed()` itself never downloads (`MODEL_NOT_DOWNLOADED`).
+- **Embedding asset lifecycle**: `getEmbeddingModelStatus()`, `prepareEmbeddingModel({
   language, onProgress })`, `cancelEmbeddingModelDownload()`, `deleteEmbeddingModel()`.
   Android: SHA-256-verified atomic install; partial/corrupt fails closed. iOS: same
   calls drive the OS-managed asset flow (per-language prefetch; cancel/delete no-op).
-- **`embed(texts, { task })`** — `'semantic-similarity'` (default) | `'retrieval-query'`
+- **`embed(texts, { task })`**: `'semantic-similarity'` (default) | `'retrieval-query'`
   | `'retrieval-document'`. Maps onto EmbeddingGemma's prompt protocol on Android (use
   the retrieval pair for RAG); semantic intent only on iOS.
-- **`embed(texts, { task, language })`** — BCP-47 `language` (default `'en'`) selects the
+- **`embed(texts, { task, language })`**: BCP-47 `language` (default `'en'`) selects the
   iOS `NLContextualEmbedding` script model (Latin / Cyrillic / CJK) and the tokenizer
   language, fixing the previous `.english` hardcode. Unsupported → typed
   `LANGUAGE_NOT_SUPPORTED` naming the language; no silent Latin fallback, no
   auto-detection (by design). Android accepts and ignores it (single multilingual
   vector space). Discoverability: `getSupportedEmbeddingLanguages()`.
-- **`model` identity on `EmbedResult`** — `{ id, revision }` of the exact producing
-  model (Apple identifier/revision on iOS — varies with language; pinned EmbeddingGemma
-  identity on Android — revision changes when any pin changes). **Indexes are only
-  comparable under identical model identity** — never across platforms or iOS script
+- **`model` identity on `EmbedResult`**: `{ id, revision }` of the exact producing
+  model (Apple identifier/revision on iOS, varies with language; pinned EmbeddingGemma
+  identity on Android, revision changes when any pin changes). **Indexes are only
+  comparable under identical model identity**, never across platforms or iOS script
   models.
-- **AI SDK provider** — `embeddingModel()` resolves per platform and reports the real
+- **AI SDK provider**: `embeddingModel()` resolves per platform and reports the real
   `modelId` (`apple-nl-contextual` / `embedding-gemma-300m`; `EMBEDDING_MODEL_ID` is
   now a deprecated alias). Accepts `{ task, language }` via settings or
   `providerOptions['expo-ai-kit']`; dev-mode warning when no task is given.
@@ -96,32 +165,32 @@
 
 - `EmbedResult` gained a required `model` field (additive for readers).
 - `embedding-gemma-300m` is a reserved id: rejected by `registerModel()`, refused by
-  `setModel()` — it's an embedding asset, not a generation model.
+  `setModel()`, it's an embedding asset, not a generation model.
 
 ### Fixed
 
-- **Typed error codes degraded to `UNKNOWN` under Expo SDK 56** — expo-modules-core now
+- **Typed error codes degraded to `UNKNOWN` under Expo SDK 56**: expo-modules-core now
   wraps native rejections, which broke the anchored `CODE:modelId:reason` parsing for
   every `ModelError`. The parser (pure, unit-tested `src/errors.ts`) handles both forms;
   found and verified on a physical device.
-- **Multi-turn generation double-fed history (and broke Qwen3 entirely)** — both native
+- **Multi-turn generation double-fed history (and broke Qwen3 entirely)**: both native
   layers reused one LiteRT-LM conversation across calls, so the natively-accumulated
   turns duplicated the full history the JS layer already resends (the documented
   stateless contract), and any second `sendMessage` on Qwen3 died on a LiteRT-LM 0.10.0
   chat-template error (`string has no method named strip`). Inference now creates a
-  fresh conversation per call on both platforms — multi-turn Qwen3 verified working on a
+  fresh conversation per call on both platforms, multi-turn Qwen3 verified working on a
   physical iPhone. This is what `generateText` tool loops and `generateObject` repair
   turns ride on.
-- **Qwen3 defaulted to a broken GPU path** — with `backend: 'auto'`, Qwen3 SIGSEGVs
+- **Qwen3 defaulted to a broken GPU path**: with `backend: 'auto'`, Qwen3 SIGSEGVs
   natively on Android (Mali) and emits degenerate output on iOS (device-verified on
   both); CPU generates correctly. Registry entries can now pin a `preferredBackend`,
   used when the caller doesn't pass one (explicit `setModel(id, { backend })` still
-  wins) — the three Qwen3 entries pin `'cpu'`.
-- **Android non-streaming `sendMessage` could return only the final chunk** — it
+  wins), the three Qwen3 entries pin `'cpu'`.
+- **Android non-streaming `sendMessage` could return only the final chunk**: it
   assumed each LiteRT-LM callback carries accumulated text, but the runtime delivers
   deltas (device-verified: multi-token answers came back as their last fragment, e.g.
   "REE" for "THREE"). It now uses the same delta/accumulated detection as streaming.
-- **Thinking-model `<think>` blocks polluted results** — Qwen3's chain-of-thought
+- **Thinking-model `<think>` blocks polluted results**: Qwen3's chain-of-thought
   passed through into answers and could derail `generateObject`/`generateText` parsing
   (think text can look like JSON or a tool call). The orchestrated paths now split it
   off via the new exported pure helper `stripThinking(text)`; the AI SDK provider
@@ -130,17 +199,17 @@
 
 ## 0.12.1
 
-> Headline: **Android emulator crash fixed** — activating a downloadable model on an
+> Headline: **Android emulator crash fixed**: activating a downloadable model on an
 > x86_64 emulator no longer hard-crashes the app; it now throws a catchable
 > `DEVICE_NOT_SUPPORTED` `ModelError`. No API changes.
 
 ### Fixed
 
-- **Android x86/x86_64 (emulator) crash on `setModel()`** — LiteRT-LM ships an x86_64
+- **Android x86/x86_64 (emulator) crash on `setModel()`**: LiteRT-LM ships an x86_64
   `liblitertlm_jni.so`, but its x86 backend is unvalidated upstream and SIGSEGVs at engine
   init / during inference (google-ai-edge/LiteRT-LM
   [#2799](https://github.com/google-ai-edge/LiteRT-LM/issues/2799),
-  [#2159](https://github.com/google-ai-edge/LiteRT-LM/issues/2159) — still open as of
+  [#2159](https://github.com/google-ai-edge/LiteRT-LM/issues/2159), still open as of
   LiteRT-LM 0.15.0, so bumping the dependency wouldn't help). A native SIGSEGV kills the
   whole app process and can't be caught in Kotlin, so `loadModel` now fails fast with
   `DEVICE_NOT_SUPPORTED` before any LiteRT-LM call when the primary ABI is x86/x86_64.
@@ -150,13 +219,13 @@
 
 ## 0.12.0
 
-> Headline: **`getDownloadedModels()`** — one call to list the models already on
+> Headline: **`getDownloadedModels()`**: one call to list the models already on
 > the device, instead of filtering `getDownloadableModels()` yourself. Additive,
 > no breaking changes.
 
 ### Added
 
-- **`getDownloadedModels()`** — returns the downloadable models present on device
+- **`getDownloadedModels()`**: returns the downloadable models present on device
   (status `downloaded`, `loading`, or `ready`; `loading` counts because the file is
   already on disk mid-`setModel`). The pure filter behind it,
   `filterDownloadedModels(models)`, is exported and unit-tested too.
@@ -164,18 +233,18 @@
 
 ## 0.11.1
 
-> Headline: **Native build fixes** — the iOS *and* Android modules each failed to
+> Headline: **Native build fixes**: the iOS *and* Android modules each failed to
 > compile; both are fixed. No API changes; a patch for anyone building either platform.
 
 ### Fixed
 
-- **iOS `embed()` didn't compile** — `NLContextualEmbedding` was called with two members
+- **iOS `embed()` didn't compile**: `NLContextualEmbedding` was called with two members
   that don't exist (`requestEmbeddingAssets`, `isLoaded`), breaking the iOS build for every
   consumer. Use the real API: `requestAssets(completionHandler:)` and an unconditional
   `load()`. Thanks [@JoeToeniskoetter](https://github.com/JoeToeniskoetter) (#8).
-- **Android module didn't compile** — the `embed` stub's bare `throw` made the lambda return
+- **Android module didn't compile**: the `embed` stub's bare `throw` made the lambda return
   `Nothing`, which Expo's reified `AsyncFunction` rejects, failing `:expo-ai-kit:compileDebugKotlin`
-  since 0.10.0. Removed the stub — `embed()` is already guarded to iOS-only in JS, so Android
+  since 0.10.0. Removed the stub, `embed()` is already guarded to iOS-only in JS, so Android
   never reached it. (Android embeddings via MediaPipe remain the planned follow-up.)
 
 ### Internal
@@ -185,23 +254,23 @@
 
 ## 0.11.0
 
-> Headline: **Vercel AI SDK provider** — `import { expoAiKit } from 'expo-ai-kit/ai'`
+> Headline: **Vercel AI SDK provider**: `import { expoAiKit } from 'expo-ai-kit/ai'`
 > and use the AI SDK's `generateText` / `streamText` / `generateObject` / `embed`
-> with on-device models. Additive — no breaking changes, and the core stays
+> with on-device models. Additive, no breaking changes, and the core stays
 > zero-dependency.
 
 ### Added
 
-- **`expo-ai-kit/ai` subpath export** — a Vercel AI SDK provider implementing the
+- **`expo-ai-kit/ai` subpath export**: a Vercel AI SDK provider implementing the
   **`LanguageModelV3`** spec (AI SDK 6; AI SDK 7 accepts V3 models too):
-  - **`expoAiKit(modelId?, settings?)`** — a `LanguageModelV3` over the on-device model.
+  - **`expoAiKit(modelId?, settings?)`**: a `LanguageModelV3` over the on-device model.
     Omit the id (or pass `'auto'`) to use whatever model is active; pass any `setModel()`
     id (`'gemma-e2b'`, a `registerModel()` id, …) to have the provider activate it before
     generating. `settings` is the same shape as `setModel()`'s options (backend, generation
     config) and applies on activation.
-  - **`expoAiKit.embeddingModel()`** — an `EmbeddingModelV3` over `embed()`
+  - **`expoAiKit.embeddingModel()`**: an `EmbeddingModelV3` over `embed()`
     (Apple `NLContextualEmbedding`; iOS-only, like `embed()` itself).
-  - **`createExpoAiKit()`** — provider factory, plus `AUTO_MODEL_ID` / `EMBEDDING_MODEL_ID`
+  - **`createExpoAiKit()`**: provider factory, plus `AUTO_MODEL_ID` / `EMBEDDING_MODEL_ID`
     constants and the `ExpoAiKitProvider` / `ExpoAiKitModelSettings` types.
 - **Tool calling & JSON output via the AI SDK** ride the exact same prompt protocol as the
   core `generateText`/`generateObject` (same instruction, same `{"tool", "arguments"}`
@@ -212,9 +281,9 @@
 
 - **Zero runtime dependencies, still.** Only *types* are imported from `@ai-sdk/provider`
   (erased at build time); it's declared as an **optional** peer dependency and is only
-  needed — brought in by the `ai` package itself — when you use `expo-ai-kit/ai`.
+  needed, brought in by the `ai` package itself, when you use `expo-ai-kit/ai`.
 - **On-device impedance, reported honestly through the spec:** per-call sampling
-  (`temperature`, `topK`, …) can't be honored — sampling is fixed at model activation —
+  (`temperature`, `topK`, …) can't be honored, sampling is fixed at model activation,
   and is surfaced as `unsupported` call warnings; concurrent calls reject with
   `INFERENCE_BUSY` (single-flight guard applies unchanged); no token usage numbers;
   no image/file prompt parts (throws `DEVICE_NOT_SUPPORTED`); `toolChoice: 'required'` /
@@ -222,129 +291,129 @@
 - React Native needs the AI SDK's usual polyfills for streaming (`web-streams-polyfill`,
   `structuredClone`, `TextEncoder`).
 - The provider is orchestrated over the same `sendMessage`/`streamMessage`/`embed` calls
-  as everything else — native constrained decoding can later slot in behind it with no
+  as everything else, native constrained decoding can later slot in behind it with no
   API change.
 
 ## 0.10.0
 
-> Headline: **embeddings & on-device RAG** — `embed()` turns text into vectors
+> Headline: **embeddings & on-device RAG**: `embed()` turns text into vectors
 > (iOS, via Apple's zero-download `NLContextualEmbedding`), and a pure-JS toolkit
 > (`chunkText`, `cosineSimilarity`, `createVectorStore`) does retrieval on both
-> platforms. Additive — no breaking changes.
+> platforms. Additive, no breaking changes.
 
 ### Added
 
-- **`embed(texts)`** — turn an array of strings into embedding vectors for semantic search / RAG. Returns `{ embeddings, dimensions }` with one vector per input, in order. Backed by Apple's **`NLContextualEmbedding`**: a zero-download, OS-maintained model (iOS 17+, works even where Apple Intelligence isn't enabled). Embeddings don't touch the generation KV-cache, so `embed()` is **not** subject to the single-flight `INFERENCE_BUSY` guard.
+- **`embed(texts)`**: turn an array of strings into embedding vectors for semantic search / RAG. Returns `{ embeddings, dimensions }` with one vector per input, in order. Backed by Apple's **`NLContextualEmbedding`**: a zero-download, OS-maintained model (iOS 17+, works even where Apple Intelligence isn't enabled). Embeddings don't touch the generation KV-cache, so `embed()` is **not** subject to the single-flight `INFERENCE_BUSY` guard.
 - **RAG toolkit (pure JS, both platforms, any vector source):**
-  - **`chunkText(text, options?)`** — split a document into overlapping, sentence/paragraph-aware chunks sized for embedding (`chunkSize`, `overlap`).
-  - **`cosineSimilarity(a, b)`** — magnitude-invariant relevance score in `[-1, 1]`.
-  - **`createVectorStore(initial?)`** — a lightweight in-memory vector store: `add` / `addMany` / `get` / `remove` / `clear` / `size`, top-k `search(query, { topK, minScore })`, and `toJSON()` to snapshot for persistence (rehydrate by passing the snapshot back to `createVectorStore`).
+  - **`chunkText(text, options?)`**: split a document into overlapping, sentence/paragraph-aware chunks sized for embedding (`chunkSize`, `overlap`).
+  - **`cosineSimilarity(a, b)`**: magnitude-invariant relevance score in `[-1, 1]`.
+  - **`createVectorStore(initial?)`**: a lightweight in-memory vector store: `add` / `addMany` / `get` / `remove` / `clear` / `size`, top-k `search(query, { topK, minScore })`, and `toJSON()` to snapshot for persistence (rehydrate by passing the snapshot back to `createVectorStore`).
 - **New public types**: `EmbedResult`, `VectorRecord`, `VectorSearchResult`, `VectorSearchOptions`, `VectorStore`, `ChunkOptions`.
 
 ### Notes
 
-- **iOS-only for `embed()` right now.** On Android/web it throws `DEVICE_NOT_SUPPORTED` — Android support is planned via MediaPipe Text Embedder. The RAG toolkit is pure JS and works everywhere; you can pair it with any embedding source (the built-in `embed()`, a cloud embedder, or your own native module) since it only ever deals in plain `number[]` vectors.
-- The vector store does a linear scan per `search`, which is plenty for the thousands-of-chunks scale typical of on-device RAG; reach for a dedicated vector DB only past that. Persistence is intentionally yours to own — `toJSON()` gives a plain-array snapshot to write to AsyncStorage/disk.
+- **iOS-only for `embed()` right now.** On Android/web it throws `DEVICE_NOT_SUPPORTED`, Android support is planned via MediaPipe Text Embedder. The RAG toolkit is pure JS and works everywhere; you can pair it with any embedding source (the built-in `embed()`, a cloud embedder, or your own native module) since it only ever deals in plain `number[]` vectors.
+- The vector store does a linear scan per `search`, which is plenty for the thousands-of-chunks scale typical of on-device RAG; reach for a dedicated vector DB only past that. Persistence is intentionally yours to own, `toJSON()` gives a plain-array snapshot to write to AsyncStorage/disk.
 - The toolkit (`chunkText`, `cosineSimilarity`, `createVectorStore`) is dependency-free and fully unit-tested. The only native surface is `embed()` (iOS).
 
 ## 0.9.0
 
-> Headline: **bring your own model** — `registerModel()` lets developers add any
+> Headline: **bring your own model**: `registerModel()` lets developers add any
 > LiteRT-LM model to the registry at runtime, and `fetchModelMetadata()` looks up
-> its SHA256/size from HuggingFace. Additive — no breaking changes.
+> its SHA256/size from HuggingFace. Additive, no breaking changes.
 
 ### Added
 
-- **`registerModel(entry)`** — register a custom downloadable model at runtime. Once registered, the id works with `downloadModel` / `setModel` / `getDownloadableModels` exactly like a built-in, and the download is integrity-checked against the `sha256` you supply. Validates the entry and rejects ids that collide with a built-in (curated or native) model. Pairs with **`unregisterModel(id)`** and **`getRegisteredModels()`**.
-- **`fetchModelMetadata(downloadUrl)`** — look up a model file's `{ sha256, sizeBytes }` from a HuggingFace resolve URL so you can fill in a `registerModel` entry without computing them by hand. Trust note: it reads the hash from the same host you download from, so it only guards against transit corruption — for a real supply-chain guarantee, run it once at dev time and **pin** the returned hash in your source (like the built-in registry does).
-- **`validateModelEntry(entry)`** and **`parseHuggingFaceUrl(url)`** — the pure building blocks, exported and unit-tested.
+- **`registerModel(entry)`**: register a custom downloadable model at runtime. Once registered, the id works with `downloadModel` / `setModel` / `getDownloadableModels` exactly like a built-in, and the download is integrity-checked against the `sha256` you supply. Validates the entry and rejects ids that collide with a built-in (curated or native) model. Pairs with **`unregisterModel(id)`** and **`getRegisteredModels()`**.
+- **`fetchModelMetadata(downloadUrl)`**: look up a model file's `{ sha256, sizeBytes }` from a HuggingFace resolve URL so you can fill in a `registerModel` entry without computing them by hand. Trust note: it reads the hash from the same host you download from, so it only guards against transit corruption, for a real supply-chain guarantee, run it once at dev time and **pin** the returned hash in your source (like the built-in registry does).
+- **`validateModelEntry(entry)`** and **`parseHuggingFaceUrl(url)`**: the pure building blocks, exported and unit-tested.
 
 ### Notes
 
 - Custom models live in memory; call `registerModel()` at startup on every launch. The downloaded file persists on disk (keyed by id), so a model's `'downloaded'` status survives restarts once you re-register it.
-- Adding a model still requires no native changes — the native layer loads any non-built-in id generically through LiteRT-LM. The same on-device caveat applies: a given `.litertlm` must be compatible with the vendored LiteRT-LM runtime to actually load.
+- Adding a model still requires no native changes, the native layer loads any non-built-in id generically through LiteRT-LM. The same on-device caveat applies: a given `.litertlm` must be compatible with the vendored LiteRT-LM runtime to actually load.
 
 ## 0.8.0
 
-> Headline: **more downloadable models** — a size ladder of Qwen3 (0.6B / 1.7B / 4B)
+> Headline: **more downloadable models**: a size ladder of Qwen3 (0.6B / 1.7B / 4B)
 > and Phi-4 Mini joins Gemma 4 in the registry, each tagged with its license.
-> Additive — no breaking changes, no native changes.
+> Additive, no breaking changes, no native changes.
 
 ### Added
 
-- **Four new downloadable models**, all official `litert-community` LiteRT-LM builds: `qwen3-0.6b` (~0.5 GB, Apache-2.0), `qwen3-1.7b` (~2.1 GB, Apache-2.0), `qwen3-4b` (~2.7 GB, Apache-2.0), and `phi-4-mini` (~3.9 GB, MIT). With Gemma 4 E2B/E4B this gives a sub-GB-to-~4 GB ladder spanning three model families — pick per device with `getRecommendedModel()` or browse `getDownloadableModels()`. They flow through the existing `downloadModel` / `setModel` / inference path with integrity-checked downloads; no new API.
-- **`license` on every model.** `DownloadableModel` (and the registry) now carries a `license` field — an SPDX id (`Apache-2.0`, `MIT`) or family name (`Gemma`) — so you can check your obligations before shipping a model to users.
+- **Four new downloadable models**, all official `litert-community` LiteRT-LM builds: `qwen3-0.6b` (~0.5 GB, Apache-2.0), `qwen3-1.7b` (~2.1 GB, Apache-2.0), `qwen3-4b` (~2.7 GB, Apache-2.0), and `phi-4-mini` (~3.9 GB, MIT). With Gemma 4 E2B/E4B this gives a sub-GB-to-~4 GB ladder spanning three model families, pick per device with `getRecommendedModel()` or browse `getDownloadableModels()`. They flow through the existing `downloadModel` / `setModel` / inference path with integrity-checked downloads; no new API.
+- **`license` on every model.** `DownloadableModel` (and the registry) now carries a `license` field, an SPDX id (`Apache-2.0`, `MIT`) or family name (`Gemma`), so you can check your obligations before shipping a model to users.
 
 ### Notes
 
-- Downloadable models are loaded generically by model id (the native layer routes any non-built-in id to LiteRT-LM), so adding models is a registry-only change — these required no iOS/Android code changes. Context-window and RAM values are conservative defaults; benchmark on real devices and file an issue if a model needs adjustment. `qwen3-0.6b` ships an int4 build with a 2048-token KV; the others default to 4096.
+- Downloadable models are loaded generically by model id (the native layer routes any non-built-in id to LiteRT-LM), so adding models is a registry-only change, these required no iOS/Android code changes. Context-window and RAM values are conservative defaults; benchmark on real devices and file an issue if a model needs adjustment. `qwen3-0.6b` ships an int4 build with a 2048-token KV; the others default to 4096.
 
 ## 0.7.0
 
-> Headline: **tool / function calling** — `generateText()` lets the on-device model
+> Headline: **tool / function calling**: `generateText()` lets the on-device model
 > call functions you provide (fetch data, take actions) and use the results to
-> answer, on every backend. Additive — no breaking changes.
+> answer, on every backend. Additive, no breaking changes.
 
 ### Added
 
-- **`generateText(messages, options?)`** — generate text, optionally letting the model call tools. You pass a `tools` map (each with a `description`, a JSON-Schema `parameters`, and an optional `execute`); the model proposes a call, expo-ai-kit validates the arguments against the schema, runs your `execute`, feeds the result back, and loops until the model produces a plain-text answer or hits `maxSteps` (default 5). Returns `{ text, steps, toolCalls, toolResults, finishReason }`. With no `tools`, it's a single text generation. Works across Apple Foundation Models, ML Kit, and Gemma.
+- **`generateText(messages, options?)`**: generate text, optionally letting the model call tools. You pass a `tools` map (each with a `description`, a JSON-Schema `parameters`, and an optional `execute`); the model proposes a call, expo-ai-kit validates the arguments against the schema, runs your `execute`, feeds the result back, and loops until the model produces a plain-text answer or hits `maxSteps` (default 5). Returns `{ text, steps, toolCalls, toolResults, finishReason }`. With no `tools`, it's a single text generation. Works across Apple Foundation Models, ML Kit, and Gemma.
 - **Human-in-the-loop.** A tool with **no `execute`** stops the loop with `finishReason: 'tool-calls'` and returns the proposed call, so you can confirm or gate it before anything runs.
 - **New public types**: `Tool`, `ToolSet`, `ToolCall`, `ToolResult`, `StepResult`, `GenerateTextOptions`, `GenerateTextResult`, `GenerateTextFinishReason`.
 
 ### Notes
 
 - On-device models are imperfect at tool selection, so the loop is defensive: a malformed call, an unknown tool name, or arguments that fail schema validation are re-prompted with the error up to `maxRepairAttempts` times (default 2); if the model still can't comply, `generateText` throws `INFERENCE_FAILED` rather than execute with bad input. A thrown `execute` is caught and fed back as `{ error }` so the model can recover. Keep tool sets small and `parameters` flat for best reliability.
-- Like `generateObject`, tool calling is orchestrated in the JS layer over `sendMessage`, so it honors the same single-flight inference guard, `systemPrompt`, and `AbortSignal` semantics. The protocol is a tiny JSON envelope (`{"tool": "<name>", "arguments": { … }}`) parsed back out of the model's text — which keeps the call signature stable so native guided generation (Apple `Tool` protocol / LiteRT-LM `ToolManager`) can slot in behind it later without changing call sites.
+- Like `generateObject`, tool calling is orchestrated in the JS layer over `sendMessage`, so it honors the same single-flight inference guard, `systemPrompt`, and `AbortSignal` semantics. The protocol is a tiny JSON envelope (`{"tool": "<name>", "arguments": { … }}`) parsed back out of the model's text, which keeps the call signature stable so native guided generation (Apple `Tool` protocol / LiteRT-LM `ToolManager`) can slot in behind it later without changing call sites.
 
 ## 0.6.0
 
-> Headline: **structured output** — `generateObject()` returns a typed object
-> validated against a JSON Schema, on every backend. Additive — no breaking changes.
+> Headline: **structured output**: `generateObject()` returns a typed object
+> validated against a JSON Schema, on every backend. Additive, no breaking changes.
 
 ### Added
 
-- **`generateObject(messages, schema, options?)`** — get a typed object back instead of a string. You describe the shape with a JSON Schema; expo-ai-kit appends a strict instruction to the system prompt, runs the on-device model, extracts the JSON from its output (tolerating surrounding prose and ` ```json ` code fences), validates it against the schema, and — on a parse error or schema mismatch — feeds the error back and re-prompts up to `maxRepairAttempts` times (default 2). Returns `{ object, text }`; throws `INFERENCE_FAILED` if no schema-valid JSON is produced after the attempts. Works across Apple Foundation Models, ML Kit, and Gemma.
+- **`generateObject(messages, schema, options?)`**: get a typed object back instead of a string. You describe the shape with a JSON Schema; expo-ai-kit appends a strict instruction to the system prompt, runs the on-device model, extracts the JSON from its output (tolerating surrounding prose and ` ```json ` code fences), validates it against the schema, and, on a parse error or schema mismatch, feeds the error back and re-prompts up to `maxRepairAttempts` times (default 2). Returns `{ object, text }`; throws `INFERENCE_FAILED` if no schema-valid JSON is produced after the attempts. Works across Apple Foundation Models, ML Kit, and Gemma.
 - **New public types**: `JSONSchema`, `JSONSchemaType`, `GenerateObjectOptions`, `GenerateObjectResult`.
 
 ### Notes
 
-- The local validator enforces a pragmatic JSON Schema subset (`type`, `properties`, `required`, `items`, `enum`, type unions) and is intentionally lenient about unknown keywords and extra properties — enough to catch structural mistakes worth re-prompting over. Keep schemas small and shallow; on-device models follow flat shapes far more reliably than deeply nested ones.
+- The local validator enforces a pragmatic JSON Schema subset (`type`, `properties`, `required`, `items`, `enum`, type unions) and is intentionally lenient about unknown keywords and extra properties, enough to catch structural mistakes worth re-prompting over. Keep schemas small and shallow; on-device models follow flat shapes far more reliably than deeply nested ones.
 - Structured output is orchestrated in the JS layer over `sendMessage`, so it honors the same single-flight inference guard, `systemPrompt`, and `AbortSignal` semantics. This keeps the call signature stable so native constrained decoding (Apple guided generation / LiteRT-LM) can slot in behind it later without changing call sites.
 
 ## 0.5.0
 
 > Headline: **downloadable Gemma 4 (E2B / E4B) now runs on iOS**, not just Android,
 > via LiteRT-LM. Plus sampling controls, cancellation, and a typed error surface.
-> All additive — no breaking changes.
+> All additive, no breaking changes.
 
 ### Added
 
 - **iOS downloadable Gemma 4.** `downloadModel` / `setModel` / `sendMessage` / `streamMessage` now run Gemma 4 E2B and E4B on iOS through LiteRT-LM, alongside the built-in Apple Foundation Model. The LiteRT-LM C xcframework is fetched automatically during `pod install`.
 - **`GenerationConfig` sampling controls.** `setModel(id, { generation: { temperature, topK, topP, seed, maxTokens } })` sets per-session sampling. Support is best-effort per backend (see the capability matrix in the `GenerationConfig` docs): Gemma honors temperature/topK/topP[/seed]; Apple FM honors temperature/maxTokens.
-- **`getRecommendedModel()`** — returns the most capable downloadable model the device can actually run (e.g. E4B on high-RAM phones, E2B otherwise), or `null`.
-- **`cancelDownload(modelId)`** — aborts an in-flight download; the `downloadModel` promise rejects with `DOWNLOAD_CANCELLED`.
+- **`getRecommendedModel()`**: returns the most capable downloadable model the device can actually run (e.g. E4B on high-RAM phones, E2B otherwise), or `null`.
+- **`cancelDownload(modelId)`**: aborts an in-flight download; the `downloadModel` promise rejects with `DOWNLOAD_CANCELLED`.
 - **`AbortSignal` support in `sendMessage`** via `options.signal`. (To truly interrupt a long generation, prefer `streamMessage().stop()`.)
-- **New model status `'downloaded'`** — `getDownloadableModelStatus` now distinguishes a file that's on disk but not loaded from one that was never downloaded, so a re-download isn't triggered after an app restart.
+- **New model status `'downloaded'`**: `getDownloadableModelStatus` now distinguishes a file that's on disk but not loaded from one that was never downloaded, so a re-download isn't triggered after an app restart.
 - **New `ModelError` codes**: `INFERENCE_BUSY`, `INFERENCE_CANCELLED`, `DOWNLOAD_CANCELLED`, `UNKNOWN`.
 
 ### Changed
 
-- **Native errors are normalized to `ModelError`.** Failures thrown by the native layer now surface as a `ModelError` with a reliable `.code` and `.modelId`, instead of a raw string message — so `catch (e) { if (e.code === 'MODEL_NOT_DOWNLOADED') … }` works.
+- **Native errors are normalized to `ModelError`.** Failures thrown by the native layer now surface as a `ModelError` with a reliable `.code` and `.modelId`, instead of a raw string message, so `catch (e) { if (e.code === 'MODEL_NOT_DOWNLOADED') … }` works.
 - **Single-flight inference.** Concurrent `sendMessage`/`streamMessage` calls (which would corrupt the shared on-device KV cache) are rejected with `INFERENCE_BUSY` instead of running in parallel.
 - **`isAvailable()` is accurate on iOS.** It now reflects `SystemLanguageModel` availability (Apple Intelligence enabled and ready), not merely "iOS 26+".
 - **Gemma downloads are integrity-checked.** E2B/E4B registry entries now ship real SHA256 hashes, so a corrupted or truncated download is rejected.
-- **Packaging.** Stopped shipping the ~122 MB LiteRT-LM xcframework in the npm tarball — it's downloaded on `pod install` anyway. The package drops to ~68 KB / 43 files.
+- **Packaging.** Stopped shipping the ~122 MB LiteRT-LM xcframework in the npm tarball, it's downloaded on `pod install` anyway. The package drops to ~68 KB / 43 files.
 
 ### Fixed
 
-- **`streamMessage().stop()` no longer hangs.** The returned `promise` now always settles (resolving with the text so far) and the event listener is removed on done/error/stop — previously `stop()` could leave the promise pending forever and leak a subscription. Native now also emits a terminal event on cancellation.
+- **`streamMessage().stop()` no longer hangs.** The returned `promise` now always settles (resolving with the text so far) and the event listener is removed on done/error/stop, previously `stop()` could leave the promise pending forever and leak a subscription. Native now also emits a terminal event on cancellation.
 - **iOS `getDownloadableModelStatus` contract.** It is async on iOS (reads actor state); the JS layer now awaits it, so `DownloadableModel.status` is a string rather than an unresolved Promise.
 
 ## 0.4.1
 
 ### Fixed
 
-- **Packaging: stopped shipping `android/build/` artifacts.** The `files` allowlist in `package.json` included the entire `android` directory, dragging stale native build output (`.dex`/`.jar` files, Kotlin compile caches) into the published tarball. Narrowed it to `android/src` and `android/build.gradle` — the package drops from ~190 files / 1.7 MB to 31 files / 132 KB unpacked.
+- **Packaging: stopped shipping `android/build/` artifacts.** The `files` allowlist in `package.json` included the entire `android` directory, dragging stale native build output (`.dex`/`.jar` files, Kotlin compile caches) into the published tarball. Narrowed it to `android/src` and `android/build.gradle`, the package drops from ~190 files / 1.7 MB to 31 files / 132 KB unpacked.
 
 ## 0.4.0
 
@@ -354,15 +423,15 @@
 
 ### Removed
 
-- **Prompt helpers** — `summarize`, `translate`, `rewrite`, `extractKeyPoints`, `answerQuestion` and their `stream*` variants.
-- **Smart suggestions** — `suggest`, `smartReply`, `autocomplete`, `parseSuggestResponse` and their `stream*` variants.
-- **React hooks** (`hooks.ts`) — `useChat`, `useCompletion`, `useOnDeviceAI`, `useModel`, `useAvailableModels`.
-- **Chat memory** (`memory.ts`) — `ChatMemoryManager` and `buildPrompt`.
+- **Prompt helpers**: `summarize`, `translate`, `rewrite`, `extractKeyPoints`, `answerQuestion` and their `stream*` variants.
+- **Smart suggestions**: `suggest`, `smartReply`, `autocomplete`, `parseSuggestResponse` and their `stream*` variants.
+- **React hooks** (`hooks.ts`), `useChat`, `useCompletion`, `useOnDeviceAI`, `useModel`, `useAvailableModels`.
+- **Chat memory** (`memory.ts`), `ChatMemoryManager` and `buildPrompt`.
 - All associated option/return types (`LLMSummarizeOptions`, `LLMSuggestOptions`, `UseChatOptions`, `ChatMemoryOptions`, etc.).
 
 ### Changed
 
-- **README rewritten** — trimmed from 515 to ~130 lines and reorganised for a quick scan. Added a "Downloadable models (Gemma 4)" section documenting the previously undocumented model-management API.
+- **README rewritten**: trimmed from 515 to ~130 lines and reorganised for a quick scan. Added a "Downloadable models (Gemma 4)" section documenting the previously undocumented model-management API.
 
 ### Migration
 
@@ -377,7 +446,7 @@ unchanged.
 
 ### Fixed
 
-- **Android: stopped double-formatting Gemma prompts.** The Gemma path was sending `USER: ...\nASSISTANT:` markers to the LiteRT-LM Conversation API, which already wraps messages in Gemma's turn format internally — producing garbled, badly-spaced output. ML Kit and Gemma paths now format prompts independently (ML Kit keeps role prefixes, Gemma passes raw content). Streaming token extraction is also now robust to both accumulated and delta `onMessage` behavior.
+- **Android: stopped double-formatting Gemma prompts.** The Gemma path was sending `USER: ...\nASSISTANT:` markers to the LiteRT-LM Conversation API, which already wraps messages in Gemma's turn format internally, producing garbled, badly-spaced output. ML Kit and Gemma paths now format prompts independently (ML Kit keeps role prefixes, Gemma passes raw content). Streaming token extraction is also now robust to both accumulated and delta `onMessage` behavior.
 
 ## 0.3.5
 
@@ -389,7 +458,7 @@ unchanged.
 
 ### Added
 
-- **`setModel` backend option.** `setModel(id, { backend })` accepts `'auto'` (default — GPU with CPU fallback), `'gpu'`, or `'cpu'`. CPU is slower (~2-5 tok/s) but runs on low-RAM devices where GPU would trigger OOM kills. Added a soft RAM pre-check that logs a warning when available memory is below the model minimum but still attempts the load (LiteRT-LM uses memory-mapped I/O).
+- **`setModel` backend option.** `setModel(id, { backend })` accepts `'auto'` (default, GPU with CPU fallback), `'gpu'`, or `'cpu'`. CPU is slower (~2-5 tok/s) but runs on low-RAM devices where GPU would trigger OOM kills. Added a soft RAM pre-check that logs a warning when available memory is below the model minimum but still attempts the load (LiteRT-LM uses memory-mapped I/O).
 
 ### Changed
 
@@ -404,7 +473,7 @@ unchanged.
 
 ### Fixed
 
-- **Android: adapted `GemmaInferenceClient` to the LiteRT-LM 0.8.0 API** — `Backend.GPU()` → `Backend.GPU`, and `sendMessage`/`sendMessageAsync` now use `Message.of()` instead of raw strings.
+- **Android: adapted `GemmaInferenceClient` to the LiteRT-LM 0.8.0 API**: `Backend.GPU()` → `Backend.GPU`, and `sendMessage`/`sendMessageAsync` now use `Message.of()` instead of raw strings.
 
 ## 0.3.2
 
@@ -414,7 +483,7 @@ unchanged.
 
 ## 0.3.1
 
-Maintenance release — version bump only, no functional changes.
+Maintenance release, version bump only, no functional changes.
 
 ## 0.3.0
 
@@ -432,7 +501,7 @@ Maintenance release — version bump only, no functional changes.
 
 ### Note
 
-iOS continues to work with Apple Foundation Models (iOS 26+). Downloadable model APIs (`downloadModel`, `setModel` with Gemma models) are functional on Android only. On iOS, these throw descriptive "not yet supported" errors — no crashes.
+iOS continues to work with Apple Foundation Models (iOS 26+). Downloadable model APIs (`downloadModel`, `setModel` with Gemma models) are functional on Android only. On iOS, these throw descriptive "not yet supported" errors, no crashes.
 
 ## 0.2.1
 

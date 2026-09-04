@@ -1,5 +1,5 @@
 /**
- * Pure parsing of the native error contract — no native imports (unit-tested).
+ * Pure parsing of the native error contract, no native imports (unit-tested).
  *
  * Both native modules format failures as "CODE:modelId:reason" (e.g.
  * "MODEL_NOT_DOWNLOADED:gemma-e2b:Model file not found on disk"). Depending on
@@ -38,6 +38,10 @@ export const KNOWN_ERROR_CODES: ReadonlySet<ModelErrorCode> = new Set<ModelError
   'MIC_PERMISSION_DENIED',
   'AUDIO_DECODE_FAILED',
   'TRANSCRIPTION_FAILED',
+  'VISION_NOT_ENABLED',
+  'IMAGE_DECODE_FAILED',
+  'NO_SUBJECT_FOUND',
+  'VISION_FAILED',
 ]);
 
 export type ParsedNativeError = {

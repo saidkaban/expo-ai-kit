@@ -96,6 +96,10 @@ describe('parseNativeErrorMessage', () => {
       'EMBEDDINGS_NOT_ENABLED',
       'LANGUAGE_NOT_SUPPORTED',
       'INFERENCE_BUSY',
+      'VISION_NOT_ENABLED',
+      'IMAGE_DECODE_FAILED',
+      'NO_SUBJECT_FOUND',
+      'VISION_FAILED',
     ] as const) {
       expect(KNOWN_ERROR_CODES.has(code)).toBe(true);
       expect(parseNativeErrorMessage(`${code}:m:r`)?.code).toBe(code);

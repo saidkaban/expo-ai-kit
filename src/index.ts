@@ -67,7 +67,28 @@ import {
   TranscriptionCallback,
   TranscriptionHandle,
   TranscriptionNativeEvent,
+  ImageLabel,
+  LabelImageOptions,
+  PrepareVisionOptions,
+  RecognizeTextOptions,
+  RecognizeTextResult,
+  RemoveBackgroundOptions,
+  RemoveBackgroundResult,
+  VisionAvailability,
+  VisionImageSource,
 } from './types';
+import {
+  ANDROID_TEXT_RECOGNITION_LANGUAGES,
+  isAndroidTextLanguageSupported,
+  normalizeLanguageTags,
+  normalizeVisionAvailability,
+  resolveLabelImageOptions,
+  resolveRecognizeTextOptions,
+  resolveRemoveBackgroundOptions,
+  resolveVisionFeatures,
+  unavailableVisionAvailability,
+  validateVisionImage,
+} from './vision';
 
 export * from './types';
 export * from './models';
@@ -75,6 +96,7 @@ export * from './rag';
 export * from './embedding';
 export * from './errors';
 export * from './thinking';
+export { ANDROID_TEXT_RECOGNITION_LANGUAGES, VISION_FEATURES } from './vision';
 
 const DEFAULT_SYSTEM_PROMPT =
   'You are a helpful, friendly assistant. Answer the user directly and concisely.';
@@ -123,8 +145,8 @@ async function wrapNative<T>(run: () => Promise<T>): Promise<T> {
 // safe for concurrent decodes (interleaving can corrupt the cache and crash the
 // native side). JS is single-threaded, so a synchronous check-and-set of this
 // flag before any `await` is race-free. The flag is shared by sendMessage and
-// streamMessage and is held until the *native* call settles — not until an
-// early abort — so a detached-but-still-running generation still blocks a new one.
+// streamMessage and is held until the *native* call settles, not until an
+// early abort, so a detached-but-still-running generation still blocks a new one.
 let inferenceInFlight = false;
 
 function acquireInference(): void {
@@ -194,7 +216,7 @@ function toNativeGeneration(g?: GenerationConfig): NativeGenerationConfig {
  *   it completes throws a typed MODEL_NOT_DOWNLOADED error.
  * - Unsupported platforms (web, etc.): always `false`.
  *
- * `false` does not rule out downloadable models — see
+ * `false` does not rule out downloadable models, see
  * {@link getRecommendedModel} / {@link setModel} for the LiteRT-LM path.
  */
 export async function isAvailable(): Promise<boolean> {
@@ -286,8 +308,8 @@ export async function sendMessage(
   acquireInference(); // throws INFERENCE_BUSY if a generation is already running
   const sessionId = generateSessionId();
 
-  // Hold the single-flight flag until the NATIVE call settles — even if the
-  // caller aborts early — because the model may keep computing in the background.
+  // Hold the single-flight flag until the NATIVE call settles, even if the
+  // caller aborts early, because the model may keep computing in the background.
   const native = ExpoAiKitModule.sendMessage(messages, systemPrompt, sessionId);
   const release = () => {
     inferenceInFlight = false;
@@ -404,7 +426,7 @@ export function streamMessage(
       stop: () => {},
     };
   }
-  inferenceInFlight = true; // set synchronously — race-free with other JS
+  inferenceInFlight = true; // set synchronously, race-free with other JS
 
   const sessionId = generateSessionId();
 
@@ -481,18 +503,18 @@ export function streamMessage(
  * You describe the shape you want with a JSON Schema. expo-ai-kit appends a
  * strict instruction to the system prompt, runs the on-device model, extracts
  * the JSON from its output (tolerating prose and ```json fences), validates it
- * against the schema, and — on a parse error or schema mismatch — feeds the
+ * against the schema, and, on a parse error or schema mismatch, feeds the
  * error back and re-prompts up to `maxRepairAttempts` times.
  *
  * Works on every backend (Apple Foundation Models, ML Kit, Gemma) because it is
  * orchestrated over {@link sendMessage}: it honors the same single-flight guard,
- * `AbortSignal`, and `systemPrompt` semantics. Keep schemas small and shallow —
+ * `AbortSignal`, and `systemPrompt` semantics. Keep schemas small and shallow,
  * on-device models follow flat shapes far more reliably than deeply nested ones.
  *
  * @param messages - The conversation, same shape as {@link sendMessage}.
  * @param schema - A JSON Schema describing the desired result.
  * @param options - Optional settings (systemPrompt, signal, maxRepairAttempts).
- * @returns `{ object, text }` — the validated value and the raw output.
+ * @returns `{ object, text }`, the validated value and the raw output.
  * @throws {ModelError} INFERENCE_FAILED if no schema-valid JSON is produced
  *   after the repair attempts. Also propagates INFERENCE_BUSY / INFERENCE_CANCELLED
  *   from the underlying generation.
@@ -541,7 +563,7 @@ export async function generateObject<T = unknown>(
   // Inject the schema instruction. If the caller supplied a system message we
   // append to it (sendMessage reads system from the array); otherwise we carry
   // the instruction via the systemPrompt option, which sendMessage applies when
-  // the array has no system message — including on the repair turns we append.
+  // the array has no system message, including on the repair turns we append.
   const sysIdx = messages.findIndex((m) => m.role === 'system');
   let working: LLMMessage[];
   let systemPrompt: string | undefined;
@@ -561,7 +583,7 @@ export async function generateObject<T = unknown>(
     lastText = text;
 
     // Thinking models (Qwen3) reason in <think> blocks that can contain
-    // JSON-looking text — parse only the answer, and feed only the answer back
+    // JSON-looking text, parse only the answer, and feed only the answer back
     // on repair turns (reasoning is model-internal, not conversation history).
     const { text: answer } = stripThinking(text);
 
@@ -601,7 +623,7 @@ export async function generateObject<T = unknown>(
  * Unlike {@link generateObject} (where the JSON *is* the answer), tool calling is
  * a loop: the model proposes a call, expo-ai-kit validates the arguments against
  * the tool's `parameters`, runs your `execute`, feeds the result back, and lets
- * the model continue — until it produces a plain-text answer or the `maxSteps`
+ * the model continue, until it produces a plain-text answer or the `maxSteps`
  * budget is reached. With no `tools`, this is a single text generation.
  *
  * Orchestrated in JS over {@link sendMessage}, so it works on every backend
@@ -701,7 +723,7 @@ export async function generateText(
 
     for (let repair = 0; ; repair++) {
       const r = await sendMessage(working, { systemPrompt, signal: options?.signal });
-      // Thinking models (Qwen3) reason in <think> blocks — the answer is what
+      // Thinking models (Qwen3) reason in <think> blocks, the answer is what
       // remains, and only the answer goes into results and repair history.
       text = stripThinking(r.text).text;
 
@@ -726,7 +748,7 @@ export async function generateText(
         continue;
       }
 
-      // parsed.kind === 'tool' — validate the proposed args before executing.
+      // parsed.kind === 'tool', validate the proposed args before executing.
       const errors = validateAgainstSchema(parsed.args, tools[parsed.toolName].parameters);
       if (errors.length === 0) {
         call = { toolName: parsed.toolName, args: parsed.args };
@@ -793,7 +815,7 @@ export async function generateText(
     ];
   }
 
-  // Step budget exhausted while still calling tools — no final answer was
+  // Step budget exhausted while still calling tools, no final answer was
   // produced. Signal it via finishReason so the caller can raise maxSteps.
   return {
     text: '',
@@ -832,33 +854,33 @@ function resolveEmbedOptions(options?: EmbedOptions): { task: string; language: 
  * call. Pair with {@link chunkText} to split documents first.
  *
  * Backends:
- * - **iOS** (17+): Apple's `NLContextualEmbedding` — zero-download, OS-managed
+ * - **iOS** (17+): Apple's `NLContextualEmbedding`, zero-download, OS-managed
  *   script models (Latin / Cyrillic / CJK), selected by `options.language`
  *   (BCP-47, default `'en'`). An unsupported language throws a typed
- *   LANGUAGE_NOT_SUPPORTED error naming it — never a silent Latin fallback.
- * - **Android**: EmbeddingGemma 300M via MediaPipe TextEmbedder — natively
+ *   LANGUAGE_NOT_SUPPORTED error naming it, never a silent Latin fallback.
+ * - **Android**: EmbeddingGemma 300M via MediaPipe TextEmbedder, natively
  *   multilingual (single vector space; `language` is ignored), 768 dimensions,
  *   max sequence 512 tokens, CPU. **Opt-in**: enable the config plugin flag
  *   `["expo-ai-kit", { "androidEmbeddings": true }]` and rebuild, then download
- *   the ~184 MB model with {@link prepareEmbeddingModel} — embed() itself NEVER
+ *   the ~184 MB model with {@link prepareEmbeddingModel}, embed() itself NEVER
  *   triggers a download (throws MODEL_NOT_DOWNLOADED instead).
  *
  * Pass `options.task` to say what the vectors are for (`'retrieval-query'` vs
- * `'retrieval-document'` vs the default `'semantic-similarity'`) — it maps onto
+ * `'retrieval-document'` vs the default `'semantic-similarity'`), it maps onto
  * EmbeddingGemma's prompt protocol on Android and measurably improves retrieval.
  *
  * The result's `model` identity ({@link EmbeddingModelIdentity}) tells you which
  * exact model produced the vectors. **Vectors are only comparable under
- * identical model identity** — never across platforms or iOS script models.
+ * identical model identity**, never across platforms or iOS script models.
  *
  * Embeddings don't use the generation KV-cache, so `embed()` is **not** subject
- * to the single-flight `INFERENCE_BUSY` guard — it can run alongside generation.
+ * to the single-flight `INFERENCE_BUSY` guard, it can run alongside generation.
  * (On Android, concurrent embed() calls serialize behind a native mutex.)
  *
  * @param texts - Non-empty array of strings to embed. Empty strings produce a
  *   zero vector (both platforms), keeping output aligned with input.
  * @param options - Optional `{ task, language }`. See {@link EmbedOptions}.
- * @returns `{ embeddings, dimensions, model }` — `embeddings[i]` is the vector
+ * @returns `{ embeddings, dimensions, model }`, `embeddings[i]` is the vector
  *   for `texts[i]`.
  * @throws {ModelError} DEVICE_NOT_SUPPORTED on web / iOS < 17;
  *   EMBEDDINGS_NOT_ENABLED on Android when built without the config-plugin flag;
@@ -914,7 +936,7 @@ export async function embed(texts: string[], options?: EmbedOptions): Promise<Em
  *   pinned size (~184 MB) and identity. Requires the `androidEmbeddings`
  *   config-plugin flag (throws EMBEDDINGS_NOT_ENABLED otherwise).
  * - **iOS**: reports whether the OS has the `NLContextualEmbedding` assets for
- *   `options.language` (default `'en'`) — the asset is OS-managed, so
+ *   `options.language` (default `'en'`), the asset is OS-managed, so
  *   `sizeBytes` is 0. Throws LANGUAGE_NOT_SUPPORTED for unsupported languages.
  *
  * @throws {ModelError} DEVICE_NOT_SUPPORTED on web.
@@ -943,15 +965,15 @@ export async function getEmbeddingModelStatus(options?: {
 }
 
 /**
- * Make the embedding model ready for {@link embed} — the ONLY call that
+ * Make the embedding model ready for {@link embed}, the ONLY call that
  * downloads embedding assets.
  *
  * - **Android**: downloads the pinned Google-hosted EmbeddingGemma bundle
  *   (~184 MB, stored per-app), verifies its SHA-256, and installs it atomically
- *   (temp file → verify → rename) — a partial or corrupt download fails closed
+ *   (temp file → verify → rename), a partial or corrupt download fails closed
  *   and leaves nothing usable behind. `onProgress` receives 0–1.
  * - **iOS**: asks the OS to fetch the `NLContextualEmbedding` assets for
- *   `options.language` (default `'en'`) — the same on-demand flow embed() uses,
+ *   `options.language` (default `'en'`), the same on-demand flow embed() uses,
  *   just ahead of time. No progress granularity is available from the OS.
  *
  * Resolves when the model is ready. No-op if already prepared.
@@ -998,7 +1020,7 @@ export async function prepareEmbeddingModel(options?: {
 /**
  * Cancel an in-flight {@link prepareEmbeddingModel} download.
  *
- * Android only — the pending prepare rejects with DOWNLOAD_CANCELLED and the
+ * Android only, the pending prepare rejects with DOWNLOAD_CANCELLED and the
  * partial file is removed. No-op on iOS (the OS owns its asset downloads) and
  * when nothing is downloading.
  */
@@ -1012,7 +1034,7 @@ export async function cancelEmbeddingModelDownload(): Promise<void> {
 /**
  * Delete the downloaded embedding model from the device.
  *
- * Android only — unloads the embedder if loaded and removes the ~184 MB asset
+ * Android only, unloads the embedder if loaded and removes the ~184 MB asset
  * (plus any partial download). No-op on iOS: the `NLContextualEmbedding` assets
  * are OS-managed and cannot be deleted by the app.
  */
@@ -1028,7 +1050,7 @@ export async function deleteEmbeddingModel(): Promise<void> {
  *
  * - **iOS**: enumerates the `NLContextualEmbedding` catalog (the Latin /
  *   Cyrillic / CJK script models) and returns the union of their languages.
- * - **Android**: returns `[]` — EmbeddingGemma is natively multilingual with a
+ * - **Android**: returns `[]`, EmbeddingGemma is natively multilingual with a
  *   single vector space, so `language` is ignored rather than selected.
  * - Web: returns `[]`.
  */
@@ -1118,8 +1140,8 @@ export async function getDownloadedModels(): Promise<DownloadableModel[]> {
  * Pick the best downloadable model the current device can run.
  *
  * Returns the most capable model (largest, by RAM requirement) whose
- * `meetsRequirements` is true — e.g. Gemma 4 E4B on high-spec phones, falling
- * back to E2B on more constrained ones — or `null` if the device can't run any.
+ * `meetsRequirements` is true, e.g. Gemma 4 E4B on high-spec phones, falling
+ * back to E2B on more constrained ones, or `null` if the device can't run any.
  *
  * This is a convenience over {@link getDownloadableModels}; the caller still
  * downloads + activates explicitly. Pass `platform` is implicit (current OS).
@@ -1222,7 +1244,7 @@ export async function cancelDownload(modelId: string): Promise<void> {
  * Delete a downloaded model from the device.
  *
  * If the model is currently loaded, it will be unloaded first and the active
- * model reverts to the platform built-in — which, like {@link unloadModel},
+ * model reverts to the platform built-in, which, like {@link unloadModel},
  * is not validated here and may be unavailable on this device.
  *
  * @param modelId - ID of the model to delete
@@ -1260,7 +1282,7 @@ export async function deleteModel(modelId: string): Promise<void> {
  * @throws {ModelError} MODEL_LOAD_FAILED if loading into memory fails
  * @throws {ModelError} INFERENCE_OOM if device can't fit model in memory
  * @throws {ModelError} DEVICE_NOT_SUPPORTED for downloadable models on x86/x86_64
- *   Android (emulators on Intel/AMD hosts) — LiteRT-LM's native x86 backend
+ *   Android (emulators on Intel/AMD hosts), LiteRT-LM's native x86 backend
  *   crashes the app process, so activation fails fast instead. Use a physical
  *   device or an arm64 emulator image; built-in models are unaffected.
  * @throws {ModelError} DEVICE_NOT_SUPPORTED or MODEL_NOT_DOWNLOADED when
@@ -1268,7 +1290,7 @@ export async function deleteModel(modelId: string): Promise<void> {
  *   below iOS 26, with Apple Intelligence disabled, or while its OS-managed
  *   assets are still preparing; 'mlkit' on unsupported devices or before
  *   prepareBuiltInModel() has completed. To release a downloadable model's
- *   memory without activating a ready built-in, use {@link unloadModel} — it
+ *   memory without activating a ready built-in, use {@link unloadModel}, it
  *   never validates the built-in.
  */
 export async function setModel(modelId: string, options?: SetModelOptions): Promise<void> {
@@ -1276,14 +1298,14 @@ export async function setModel(modelId: string, options?: SetModelOptions): Prom
     throw new ModelError(
       'MODEL_NOT_FOUND',
       modelId,
-      `"${modelId}" is the embedding model asset, not a generation model — ` +
+      `"${modelId}" is the embedding model asset, not a generation model, ` +
         'it cannot be activated with setModel(). Use embed() / prepareEmbeddingModel().'
     );
   }
   const entry = getRegistryEntry(modelId);
   const minRamBytes = entry?.minRamBytes ?? 0;
   // Explicit caller choice wins; otherwise honor the registry's per-model hint
-  // (e.g. Qwen3 pins 'cpu' — its GPU path is broken in LiteRT-LM 0.10.0).
+  // (e.g. Qwen3 pins 'cpu', its GPU path is broken in LiteRT-LM 0.10.0).
   const backend = options?.backend ?? entry?.preferredBackend ?? 'auto';
   const generation = toNativeGeneration(options?.generation);
   await wrapNative(() => ExpoAiKitModule.setModel(modelId, minRamBytes, backend, generation));
@@ -1319,7 +1341,7 @@ export async function unloadModel(): Promise<void> {
 // Opt-in via the config plugin (["expo-ai-kit", { "speech": true }]) because it
 // adds microphone permissions to the app. Independent of the generation
 // single-flight guard: a voice pipeline (streamTranscription -> sendMessage)
-// never trips INFERENCE_BUSY. Speech has its own single-flight instead — the
+// never trips INFERENCE_BUSY. Speech has its own single-flight instead, the
 // platform engines run one recognition session at a time.
 
 let speechInFlight = false;
@@ -1349,10 +1371,10 @@ function speechUnsupportedPlatformError(): ModelError {
  * Check whether on-device speech recognition can run on this device for a
  * locale (defaults to the device locale).
  *
- * - `available` — ready right now.
- * - `downloadable` / `downloading` — supported, but the OS-managed speech
+ * - `available`, ready right now.
+ * - `downloadable` / `downloading`, supported, but the OS-managed speech
  *   model is not ready. Call {@link prepareSpeechRecognition} first.
- * - `unavailable` — with a reason: 'platform' (web), 'os-version' (iOS < 26,
+ * - `unavailable`, with a reason: 'platform' (web), 'os-version' (iOS < 26,
  *   Android < 12), 'device', 'locale', or 'not-enabled' (the app was built
  *   without the config-plugin `speech` flag).
  */
@@ -1463,8 +1485,8 @@ export async function requestSpeechPermissionsAsync(): Promise<SpeechPermissionR
  *
  * iOS (26+, SpeechAnalyzer): faster than real time, returns timestamped
  * {@link TranscriptionSegment}s. Android (12+, ML Kit): the engine ingests
- * audio at real-time rate, so a 60-second file takes about a minute — right
- * for voice notes, wrong for podcasts — and returns text only
+ * audio at real-time rate, so a 60-second file takes about a minute, right
+ * for voice notes, wrong for podcasts, and returns text only
  * (`segments: []`). Android also requires the microphone permission even for
  * file input.
  *
@@ -1548,7 +1570,7 @@ export async function transcribe(options: TranscribeOptions): Promise<Transcribe
 
 /**
  * Live microphone transcription with volatile (revising) and finalized
- * updates. Requires microphone permission — see
+ * updates. Requires microphone permission, see
  * {@link requestSpeechPermissionsAsync}.
  *
  * `onUpdate` receives the full assembled transcript so far; `isFinal` marks
@@ -1579,7 +1601,7 @@ export function streamTranscription(
       stop: () => {},
     };
   }
-  speechInFlight = true; // set synchronously — race-free with other JS
+  speechInFlight = true; // set synchronously, race-free with other JS
 
   const locale = normalizeSpeechLocale(options?.locale) ?? '';
   const sessionId = generateSessionId();
@@ -1664,4 +1686,215 @@ export function streamTranscription(
   };
 
   return { promise, stop };
+}
+
+// ============================================================================
+// Vision, background removal, image labels, text recognition (OCR)
+// ============================================================================
+// Apple Vision on iOS; ML Kit on Android behind the config plugin's `vision`
+// flag (["expo-ai-kit", { "vision": true }]) because it adds ML Kit clients and
+// a bundled label model to the APK. Independent of the generation and speech
+// single-flight guards: a vision call can run alongside either. Cutouts are
+// written to the app cache and returned as file:// URIs, pixel buffers never
+// cross the bridge.
+
+const VISION_MODEL_IDS = new Set(['apple-vision', 'mlkit-vision']);
+
+function visionUnsupportedPlatformError(fn: string): ModelError {
+  return new ModelError('DEVICE_NOT_SUPPORTED', '', `${fn}() is only available on iOS and Android`);
+}
+
+/**
+ * Check which vision features can run on this device.
+ *
+ * Each of `backgroundRemoval`, `imageLabeling`, and `textRecognition` is
+ * `available`, `downloadable` / `downloading` (Android: the Google Play
+ * services model is not installed yet, call {@link prepareVision}), or
+ * `unavailable` with a reason: 'platform' (web), 'os-version' (background
+ * removal needs iOS 17+), 'device' (iOS Simulator for background removal and
+ * labels; Android without Google Play services for background removal and
+ * OCR), or 'not-enabled' (the Android app was built without the config-plugin
+ * `vision` flag).
+ */
+export async function getVisionAvailability(): Promise<VisionAvailability> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    return unavailableVisionAvailability('platform');
+  }
+  const raw = await wrapNative(() => ExpoAiKitModule.getVisionAvailability());
+  return normalizeVisionAvailability(raw);
+}
+
+/**
+ * Make vision features ready, the ONLY vision call that downloads anything.
+ *
+ * Android downloads the Google Play services models for the requested
+ * features (subject segmentation; one text-recognition model per script named
+ * in `languages`, Latin by default). Image labeling ships inside the app and
+ * needs no download. iOS ships every model with the OS, so the call validates
+ * support and resolves. Resolves immediately when everything is ready.
+ *
+ * @throws {ModelError} VISION_NOT_ENABLED (Android, plugin flag off);
+ *   DEVICE_NOT_SUPPORTED when a requested feature cannot run on this device;
+ *   DOWNLOAD_FAILED when a Play services model cannot be installed.
+ */
+export async function prepareVision(options?: PrepareVisionOptions): Promise<void> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    throw visionUnsupportedPlatformError('prepareVision');
+  }
+  const features = resolveVisionFeatures(options?.features);
+  const languages = normalizeLanguageTags(options?.languages);
+
+  let subscription: ReturnType<typeof ExpoAiKitModule.addListener> | undefined;
+  if (options?.onProgress) {
+    subscription = ExpoAiKitModule.addListener('onDownloadProgress', (event) => {
+      if (VISION_MODEL_IDS.has(event.modelId)) {
+        options.onProgress!(event.progress);
+      }
+    });
+  }
+  try {
+    await wrapNative(() => ExpoAiKitModule.prepareVision(features, languages));
+  } finally {
+    subscription?.remove();
+  }
+}
+
+/**
+ * BCP-47 languages {@link recognizeText} can read on this device. iOS asks the
+ * Vision framework; Android answers from the ML Kit script-model registry when
+ * the vision feature is enabled (and `[]` when it is not).
+ */
+export async function getSupportedTextRecognitionLanguages(): Promise<string[]> {
+  if (Platform.OS === 'ios') {
+    return await wrapNative(() => ExpoAiKitModule.getSupportedTextRecognitionLanguagesNative());
+  }
+  if (Platform.OS === 'android') {
+    const availability = await getVisionAvailability();
+    if (availability.textRecognition.status === 'unavailable') return [];
+    return [...ANDROID_TEXT_RECOGNITION_LANGUAGES];
+  }
+  return [];
+}
+
+/**
+ * Cut the subject out of a photo, on-device background removal.
+ *
+ * Writes the cutout to the app's cache directory and returns its `file://`
+ * URI (PNG with a transparent background by default), plus where the subject
+ * sits in the source image. Pass `subject: { x, y }` (normalized, e.g. where
+ * the user tapped) to keep only that subject, and `mask: true` to also get the
+ * grayscale mask PNG as `maskUri`. iOS 17+ uses Vision's foreground instance
+ * mask; Android uses ML Kit Subject Segmentation (Google Play services model,
+ * call {@link prepareVision} once first).
+ *
+ * @throws {ModelError} DEVICE_NOT_SUPPORTED (web, iOS < 17, iOS Simulator,
+ *   Android without Google Play services); VISION_NOT_ENABLED (Android, plugin
+ *   flag off); MODEL_NOT_DOWNLOADED (Android, before prepareVision);
+ *   IMAGE_DECODE_FAILED for unreadable input; NO_SUBJECT_FOUND when the image
+ *   has no foreground subject; VISION_FAILED for engine failures.
+ *
+ * @example
+ * ```ts
+ * const cutout = await removeBackground({ uri: photo.uri });
+ * <Image source={{ uri: cutout.uri }} />
+ * ```
+ */
+export async function removeBackground(
+  image: VisionImageSource,
+  options?: RemoveBackgroundOptions
+): Promise<RemoveBackgroundResult> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    throw visionUnsupportedPlatformError('removeBackground');
+  }
+  const uri = validateVisionImage(image, 'removeBackground');
+  const { trim, format, quality, maxPixels, subjectX, subjectY, mask } =
+    resolveRemoveBackgroundOptions(options);
+  return await wrapNative(() =>
+    ExpoAiKitModule.removeBackground(
+      uri,
+      trim,
+      format,
+      quality,
+      maxPixels,
+      subjectX,
+      subjectY,
+      mask
+    )
+  );
+}
+
+/**
+ * Describe what is in an image with ranked labels ("Dog", "Beach", …).
+ *
+ * Returns labels sorted by confidence, highest first. iOS uses Vision's image
+ * classifier (about 1,300 labels; physical device, the Simulator cannot run
+ * it); Android uses ML Kit Image Labeling (about 400 labels, model bundled
+ * with the app, works offline immediately). The vocabularies and formats
+ * differ per platform, Vision identifiers like `consumer_electronics`, ML Kit
+ * words like `Dog`, so treat labels as display strings, not a shared taxonomy.
+ *
+ * @throws {ModelError} DEVICE_NOT_SUPPORTED (web, iOS Simulator);
+ *   VISION_NOT_ENABLED (Android, plugin flag off); IMAGE_DECODE_FAILED;
+ *   VISION_FAILED.
+ */
+export async function labelImage(
+  image: VisionImageSource,
+  options?: LabelImageOptions
+): Promise<ImageLabel[]> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    throw visionUnsupportedPlatformError('labelImage');
+  }
+  const uri = validateVisionImage(image, 'labelImage');
+  const { maxResults, minConfidence } = resolveLabelImageOptions(options);
+  return await wrapNative(() => ExpoAiKitModule.labelImage(uri, maxResults, minConfidence));
+}
+
+/**
+ * Read the text in an image (OCR), with per-block and per-line bounds.
+ *
+ * iOS uses Vision text recognition (auto-detects the language unless you pass
+ * `languages`). Android uses ML Kit Text Recognition v2, `languages` selects
+ * the script models (Latin by default; Chinese, Japanese, Korean, Devanagari),
+ * each a Google Play services download made by {@link prepareVision}.
+ *
+ * @throws {ModelError} DEVICE_NOT_SUPPORTED (web; Android without Google Play
+ *   services); VISION_NOT_ENABLED (Android, plugin flag off);
+ *   MODEL_NOT_DOWNLOADED (Android, before prepareVision for the script);
+ *   LANGUAGE_NOT_SUPPORTED when no on-device model reads a requested language;
+ *   IMAGE_DECODE_FAILED; VISION_FAILED.
+ */
+export async function recognizeText(
+  image: VisionImageSource,
+  options?: RecognizeTextOptions
+): Promise<RecognizeTextResult> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+    throw visionUnsupportedPlatformError('recognizeText');
+  }
+  const uri = validateVisionImage(image, 'recognizeText');
+  const resolved = resolveRecognizeTextOptions(options);
+
+  // Android's language support is a static registry per script model; reject
+  // unsupported requests up front instead of silently reading Latin.
+  if (Platform.OS === 'android') {
+    const unsupported = resolved.languages.find((tag) => !isAndroidTextLanguageSupported(tag));
+    if (unsupported !== undefined) {
+      throw new ModelError(
+        'LANGUAGE_NOT_SUPPORTED',
+        'mlkit-vision',
+        `No on-device text-recognition model reads "${unsupported}". ` +
+          'Call getSupportedTextRecognitionLanguages() for the list'
+      );
+    }
+  }
+
+  return await wrapNative(() =>
+    ExpoAiKitModule.recognizeText(
+      uri,
+      resolved.languages,
+      resolved.recognitionLevel,
+      resolved.usesLanguageCorrection,
+      resolved.customWords,
+      resolved.minTextHeight
+    )
+  );
 }

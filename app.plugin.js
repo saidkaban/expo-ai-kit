@@ -8,6 +8,7 @@ const pkg = require('./package.json');
 
 const EMBEDDINGS_PROP_KEY = 'expoAiKit.androidEmbeddings';
 const SPEECH_PROP_KEY = 'expoAiKit.speech';
+const VISION_PROP_KEY = 'expoAiKit.vision';
 const DEFAULT_MIC_PERMISSION =
   'Allow $(PRODUCT_NAME) to use the microphone for on-device speech recognition';
 
@@ -17,12 +18,12 @@ const DEFAULT_MIC_PERMISSION =
  * Options:
  * - `androidEmbeddings` (boolean, default `false`): compile the Android
  *   embedding backend (EmbeddingGemma 300M via MediaPipe TextEmbedder) into
- *   the app. Off by default — zero bytes added to the APK, and Android
+ *   the app. Off by default, zero bytes added to the APK, and Android
  *   `embed()` throws a typed EMBEDDINGS_NOT_ENABLED error explaining this
  *   flag. On, prebuild writes a gradle property that makes the library's
  *   android/build.gradle add the `com.google.mediapipe:tasks-text` dependency
  *   and compile its embeddings source set (~+25 MB APK on arm64). Enabling
- *   requires a new native build (dev client / EAS — not OTA); the ~184 MB
+ *   requires a new native build (dev client / EAS, not OTA); the ~184 MB
  *   model itself is downloaded at runtime via `prepareEmbeddingModel()`.
  *   iOS needs no configuration: embeddings ride the OS-managed
  *   NLContextualEmbedding assets.
@@ -39,13 +40,26 @@ const DEFAULT_MIC_PERMISSION =
  *     string with `{ "speech": { "microphonePermission": "..." } }`.
  *   Without the flag, speech APIs throw a typed SPEECH_NOT_ENABLED error.
  *
+ * - `vision` (boolean, default `false`): enable on-device vision on Android,
+ *   removeBackground() (ML Kit Subject Segmentation), labelImage() (ML Kit
+ *   Image Labeling), and recognizeText() (ML Kit Text Recognition v2). Off by
+ *   default because it adds the ML Kit clients and the bundled label model to
+ *   the APK. On, prebuild writes a gradle property that compiles the library's
+ *   vision source set and adds the ML Kit dependencies; the segmentation and
+ *   OCR models are Google Play services modules downloaded once at runtime by
+ *   prepareVision(). Without the flag, Android vision APIs throw a typed
+ *   VISION_NOT_ENABLED error. iOS needs no configuration: the Vision framework
+ *   ships with the OS (no permissions are added, the app reads image files it
+ *   already has access to).
+ *
  * Usage in app.json / app.config.js:
- *   "plugins": [["expo-ai-kit", { "androidEmbeddings": true, "speech": true }]]
+ *   "plugins": [["expo-ai-kit", { "androidEmbeddings": true, "speech": true, "vision": true }]]
  */
 const withExpoAiKit = (config, props = {}) => {
   const androidEmbeddings = props.androidEmbeddings === true;
   const speech =
     props.speech === true || (typeof props.speech === 'object' && props.speech !== null);
+  const vision = props.vision === true;
   const explicitMicPermission =
     typeof props.speech === 'object' && props.speech !== null
       ? props.speech.microphonePermission
@@ -57,7 +71,9 @@ const withExpoAiKit = (config, props = {}) => {
     c.modResults = c.modResults.filter((item) => {
       if (
         item.type === 'property' &&
-        (item.key === EMBEDDINGS_PROP_KEY || item.key === SPEECH_PROP_KEY)
+        (item.key === EMBEDDINGS_PROP_KEY ||
+          item.key === SPEECH_PROP_KEY ||
+          item.key === VISION_PROP_KEY)
       ) {
         return false;
       }
@@ -84,6 +100,15 @@ const withExpoAiKit = (config, props = {}) => {
           value: 'expo-ai-kit: compile the opt-in ML Kit speech-recognition backend',
         },
         { type: 'property', key: SPEECH_PROP_KEY, value: 'true' }
+      );
+    }
+    if (vision) {
+      c.modResults.push(
+        {
+          type: 'comment',
+          value: 'expo-ai-kit: compile the opt-in ML Kit vision backend',
+        },
+        { type: 'property', key: VISION_PROP_KEY, value: 'true' }
       );
     }
     return c;

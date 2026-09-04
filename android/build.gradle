@@ -35,7 +35,7 @@ if (useManagedAndroidSdkVersions) {
 // The expo-ai-kit config plugin (app.plugin.js) writes this gradle property at
 // prebuild when the app enables ["expo-ai-kit", { "androidEmbeddings": true }].
 // Off (default): the MediaPipe dependency is not added and src/embeddings is
-// not compiled — zero bytes added to the APK. On: ~+25 MB APK (arm64).
+// not compiled, zero bytes added to the APK. On: ~+25 MB APK (arm64).
 def androidEmbeddingsEnabled = (findProperty("expoAiKit.androidEmbeddings") ?: "false").toString().toBoolean()
 
 // Opt-in speech-to-text (ML Kit GenAI Speech Recognition). The config plugin
@@ -43,6 +43,14 @@ def androidEmbeddingsEnabled = (findProperty("expoAiKit.androidEmbeddings") ?: "
 // ["expo-ai-kit", { "speech": true }]. Off (default): no speech dependency and
 // src/speech is not compiled.
 def speechEnabled = (findProperty("expoAiKit.speech") ?: "false").toString().toBoolean()
+
+// Opt-in vision (ML Kit Subject Segmentation, Image Labeling, Text Recognition
+// v2). The config plugin writes this property at prebuild when the app enables
+// ["expo-ai-kit", { "vision": true }]. Off (default): no ML Kit vision
+// dependency and src/vision is not compiled. On: the ML Kit clients plus the
+// bundled image-labeling model are added to the APK; the segmentation and OCR
+// models are Google Play services modules downloaded by prepareVision().
+def visionEnabled = (findProperty("expoAiKit.vision") ?: "false").toString().toBoolean()
 
 android {
   namespace "expo.modules.aikit"
@@ -64,6 +72,9 @@ android {
       if (speechEnabled) {
         java.srcDirs += 'src/speech/java'
       }
+      if (visionEnabled) {
+        java.srcDirs += 'src/vision/java'
+      }
     }
   }
 }
@@ -81,11 +92,24 @@ dependencies {
   implementation "com.google.mlkit:genai-prompt:1.0.0-beta2"
   implementation "com.google.ai.edge.litertlm:litertlm-android:0.10.0"
   if (androidEmbeddingsEnabled) {
-    // Keep in sync with tasksTextVersion in src/models.ts — it is part of the
+    // Keep in sync with tasksTextVersion in src/models.ts, it is part of the
     // embedding model identity, so bumping this must bump the JS pin too.
     implementation "com.google.mediapipe:tasks-text:1.0.0"
   }
   if (speechEnabled) {
     implementation "com.google.mlkit:genai-speech-recognition:1.0.0-alpha1"
+  }
+  if (visionEnabled) {
+    // Subject segmentation and OCR are unbundled (Play services modules);
+    // image labeling ships its model with the app so it works offline at once.
+    implementation "com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1"
+    implementation "com.google.mlkit:image-labeling:17.0.9"
+    implementation "com.google.android.gms:play-services-mlkit-text-recognition:19.0.1"
+    implementation "com.google.android.gms:play-services-mlkit-text-recognition-chinese:16.0.1"
+    implementation "com.google.android.gms:play-services-mlkit-text-recognition-japanese:16.0.1"
+    implementation "com.google.android.gms:play-services-mlkit-text-recognition-korean:16.0.1"
+    implementation "com.google.android.gms:play-services-mlkit-text-recognition-devanagari:16.0.1"
+    // ModuleInstallClient, installs the Play services models in prepareVision().
+    implementation "com.google.android.gms:play-services-base:18.10.0"
   }
 }

@@ -16,7 +16,7 @@ public class ExpoAiKitModule: Module {
   // Only the Apple FM path reads this; Gemma applies sampling at conversation creation.
   private var generationConfig: [String: Double] = [:]
 
-  // Gemma/LiteRT-LM client. Constructor is cheap — no engine load until setModel.
+  // Gemma/LiteRT-LM client. Constructor is cheap, no engine load until setModel.
   private let gemmaClient = GemmaInferenceClient()
 
   // Embedding model identifiers with an OS asset request currently in flight
@@ -36,6 +36,10 @@ public class ExpoAiKitModule: Module {
     speechClientStorage = client
     return client
   }
+
+  // Vision (Apple Vision framework). Cheap to construct; every model ships
+  // with the OS. Independent of the generation and speech paths.
+  private let visionClient = VisionClient()
 
   // In-flight batch transcriptions so stopTranscription can cancel them.
   private var activeSpeechTasks: [String: Task<[String: Any], Error>] = [:]
@@ -159,12 +163,12 @@ public class ExpoAiKitModule: Module {
       domain: "ExpoAiKit", code: 0,
       userInfo: [NSLocalizedDescriptionKey:
         "LANGUAGE_NOT_SUPPORTED::No on-device embedding model supports language \"\(language)\". " +
-        "iOS ships script-based models (Latin / Cyrillic / CJK) — call getSupportedEmbeddingLanguages() for the list."]
+        "iOS ships script-based models (Latin / Cyrillic / CJK), call getSupportedEmbeddingLanguages() for the list."]
     )
   }
 
   /// Ensure the model's assets are on-device, asking the OS to fetch them if
-  /// needed — the same on-demand flow embed() has always used, now per model.
+  /// needed, the same on-demand flow embed() has always used, now per model.
   @available(iOS 17.0, *)
   private func ensureEmbeddingAssets(_ model: NLContextualEmbedding) async throws {
     if model.hasAvailableAssets { return }
@@ -386,7 +390,7 @@ public class ExpoAiKitModule: Module {
                 ])
               }
 
-              // Always emit terminal done — covers normal completion AND cancellation —
+              // Always emit terminal done, covers normal completion AND cancellation,
               // so the JS stream settles instead of hanging.
               self.sendEvent("onStreamToken", [
                 "sessionId": sessionId,
@@ -487,7 +491,7 @@ public class ExpoAiKitModule: Module {
       if #available(iOS 17.0, *) {
         // `task` is accepted as semantic intent only on iOS: NLContextualEmbedding
         // has no task conditioning. (Android maps it onto EmbeddingGemma's
-        // prompt protocol.) `language` picks the script model — and is passed
+        // prompt protocol.) `language` picks the script model, and is passed
         // to the tokenizer below, so the same language drives both.
         _ = task
         let (model, nlLanguage) = try self.resolveEmbeddingModel(language: language)
@@ -502,7 +506,7 @@ public class ExpoAiKitModule: Module {
         embeddings.reserveCapacity(texts.count)
 
         for text in texts {
-          // An empty string has no tokens — return a zero vector so output length
+          // An empty string has no tokens, return a zero vector so output length
           // always matches input length (callers index embeddings[i] by texts[i]).
           if text.isEmpty {
             embeddings.append([Double](repeating: 0.0, count: dimension))
@@ -556,7 +560,7 @@ public class ExpoAiKitModule: Module {
       }
       return [
         "status": status,
-        // OS-managed asset — its size is not exposed by the API.
+        // OS-managed asset, its size is not exposed by the API.
         "sizeBytes": 0,
         "model": self.embeddingModelIdentity(model),
       ]
@@ -916,6 +920,67 @@ public class ExpoAiKitModule: Module {
           await self.speechClient().stopLive()
         }
       }
+    }
+
+    // ==================================================================
+    // Vision (Apple Vision framework)
+    // ==================================================================
+    // Background removal (iOS 17+), image labels, and text recognition.
+    // Independent of the generation and speech guards. The heavy Vision
+    // requests run on a detached task so they never block the module queue.
+    // Cutouts are written to Caches/expo-ai-kit/vision and returned as URIs.
+
+    AsyncFunction("getVisionAvailability") { () async -> [String: Any] in
+      return self.visionClient.availability()
+    }
+
+    AsyncFunction("prepareVision") { (features: [String], languages: [String]) async throws in
+      // iOS ships every vision model with the OS: nothing to download. Validate
+      // the requested features so unsupported devices fail the same way Android does.
+      _ = languages
+      try self.visionClient.requireFeatures(features)
+    }
+
+    AsyncFunction("getSupportedTextRecognitionLanguagesNative") { () async -> [String] in
+      return self.visionClient.supportedTextLanguages()
+    }
+
+    AsyncFunction("removeBackground") {
+      (
+        uri: String, trim: Bool, format: String, quality: Double, maxPixels: Int,
+        subjectX: Double, subjectY: Double, includeMask: Bool
+      ) async throws -> [String: Any] in
+      let client = self.visionClient
+      return try await Task.detached(priority: .userInitiated) {
+        try client.removeBackground(
+          path: uri, trim: trim, format: format, quality: quality, maxPixels: maxPixels,
+          subjectX: subjectX, subjectY: subjectY, includeMask: includeMask)
+      }.value
+    }
+
+    AsyncFunction("labelImage") {
+      (uri: String, maxResults: Int, minConfidence: Double) async throws -> [[String: Any]] in
+      let client = self.visionClient
+      return try await Task.detached(priority: .userInitiated) {
+        try client.labelImage(path: uri, maxResults: maxResults, minConfidence: minConfidence)
+      }.value
+    }
+
+    AsyncFunction("recognizeText") {
+      (
+        uri: String, languages: [String], recognitionLevel: String, usesLanguageCorrection: Bool,
+        customWords: [String], minTextHeight: Double
+      ) async throws -> [String: Any] in
+      let client = self.visionClient
+      return try await Task.detached(priority: .userInitiated) {
+        try client.recognizeText(
+          path: uri,
+          languages: languages,
+          recognitionLevel: recognitionLevel,
+          usesLanguageCorrection: usesLanguageCorrection,
+          customWords: customWords,
+          minTextHeight: minTextHeight)
+      }.value
     }
   }
 }

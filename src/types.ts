@@ -2,8 +2,8 @@
  * Hardware backend for on-device model inference.
  *
  * - 'auto': Try GPU first, fall back to CPU (default)
- * - 'gpu': Force GPU — faster (~40-50 tok/s) but needs more memory
- * - 'cpu': Force CPU — slower (~2-5 tok/s) but works on low-RAM devices
+ * - 'gpu': Force GPU, faster (~40-50 tok/s) but needs more memory
+ * - 'cpu': Force CPU, slower (~2-5 tok/s) but works on low-RAM devices
  */
 export type InferenceBackend = 'auto' | 'gpu' | 'cpu';
 
@@ -11,15 +11,15 @@ export type InferenceBackend = 'auto' | 'gpu' | 'cpu';
  * Sampling / generation parameters applied to a model session.
  *
  * Support is per-backend (on-device runtimes expose different knobs), so these
- * are best-effort — unsupported fields are ignored rather than erroring:
+ * are best-effort, unsupported fields are ignored rather than erroring:
  *
  * | field       | Gemma (LiteRT-LM) | Apple Foundation Models | ML Kit |
  * |-------------|:-----------------:|:-----------------------:|:------:|
- * | temperature | ✓                 | ✓                       | —      |
- * | topK        | ✓                 | —                       | —      |
- * | topP        | ✓                 | —                       | —      |
- * | seed        | ✓ (iOS only)      | —                       | —      |
- * | maxTokens   | —                 | ✓ (max output)          | —      |
+ * | temperature | ✓                 | ✓                       |, |
+ * | topK        | ✓                 |, |, |
+ * | topP        | ✓                 |, |, |
+ * | seed        | ✓ (iOS only)      |, |, |
+ * | maxTokens   |, | ✓ (max output)          |, |
  *
  * Notes:
  * - Gemma/LiteRT-LM has no per-generation output-token cap (its `maxNumTokens`
@@ -84,7 +84,7 @@ export type LLMSendOptions = {
    * an INFERENCE_CANCELLED {@link ModelError}.
    *
    * Note: on-device, non-streaming generation cannot always be interrupted
-   * mid-decode — abort always unblocks the caller, but the model may keep
+   * mid-decode, abort always unblocks the caller, but the model may keep
    * computing in the background until it finishes, during which a new
    * sendMessage/streamMessage will throw INFERENCE_BUSY. To truly interrupt a
    * long generation, prefer streamMessage().stop().
@@ -139,7 +139,7 @@ export type LLMStreamEvent = {
   isDone: boolean;
   /**
    * Native failure channel carrying the "CODE:modelId:reason" contract when the
-   * stream failed. Events with this field never reach the onToken callback —
+   * stream failed. Events with this field never reach the onToken callback,
    * streamMessage rejects its promise with the parsed ModelError instead.
    */
   error?: string;
@@ -170,8 +170,8 @@ export type JSONSchemaType =
 /**
  * A JSON Schema describing the shape you want {@link generateObject} to return.
  *
- * A pragmatic subset is enforced locally — `type`, `properties`, `required`,
- * `items`, and `enum` — which covers most extraction shapes. Any other JSON
+ * A pragmatic subset is enforced locally, `type`, `properties`, `required`,
+ * `items`, and `enum`, which covers most extraction shapes. Any other JSON
  * Schema keywords you include (e.g. `description`, `minLength`) are still sent
  * to the model to guide it, but are not validated on-device. Keep schemas small:
  * on-device models follow flat, shallow shapes far more reliably than deeply
@@ -205,7 +205,7 @@ export type GenerateObjectOptions = {
    */
   systemPrompt?: string;
   /**
-   * Abort the request. Behaves like {@link LLMSendOptions.signal} — the returned
+   * Abort the request. Behaves like {@link LLMSendOptions.signal}, the returned
    * promise rejects with an INFERENCE_CANCELLED {@link ModelError}.
    */
   signal?: AbortSignal;
@@ -234,7 +234,7 @@ export type GenerateObjectResult<T = unknown> = {
 /**
  * A tool (function) the model may call to fetch data or take an action.
  *
- * The model never runs anything itself — it *proposes* a call (a name + JSON
+ * The model never runs anything itself, it *proposes* a call (a name + JSON
  * arguments), {@link generateText} validates the arguments against `parameters`,
  * and only then invokes your `execute`. The result is fed back into the
  * conversation so the model can use it to produce its final answer.
@@ -245,7 +245,7 @@ export type GenerateObjectResult<T = unknown> = {
 export type Tool<TArgs = any, TResult = any> = {
   /**
    * What the tool does and when to use it. This is how the model decides
-   * whether a request matches this tool — make it specific and action-oriented.
+   * whether a request matches this tool, make it specific and action-oriented.
    */
   description: string;
   /**
@@ -258,7 +258,7 @@ export type Tool<TArgs = any, TResult = any> = {
    * Runs the tool with the validated arguments and returns a result.
    *
    * **Optional on purpose.** If you omit it, {@link generateText} does not run
-   * anything — it stops with `finishReason: 'tool-calls'` and hands you the
+   * anything, it stops with `finishReason: 'tool-calls'` and hands you the
    * proposed call so you can confirm, gate, or execute it yourself.
    */
   execute?: (args: TArgs) => TResult | Promise<TResult>;
@@ -299,7 +299,7 @@ export type StepResult = {
  * Why {@link generateText} stopped.
  *
  * - `'stop'`: the model produced a final text answer.
- * - `'tool-calls'`: stopped because a proposed tool has no `execute` — the call
+ * - `'tool-calls'`: stopped because a proposed tool has no `execute`, the call
  *   is returned for you to handle (human-in-the-loop).
  * - `'max-steps'`: hit the `maxSteps` cap while still calling tools. Raise the cap.
  */
@@ -322,7 +322,7 @@ export type GenerateTextOptions = {
    */
   systemPrompt?: string;
   /**
-   * Abort the request. Behaves like {@link LLMSendOptions.signal} — the returned
+   * Abort the request. Behaves like {@link LLMSendOptions.signal}, the returned
    * promise rejects with an INFERENCE_CANCELLED {@link ModelError}.
    */
   signal?: AbortSignal;
@@ -340,7 +340,7 @@ export type GenerateTextOptions = {
 export type GenerateTextResult = {
   /** The final assistant text (empty if it stopped on a tool call without `execute`). */
   text: string;
-  /** Every step taken, in order — useful for tracing or debugging. */
+  /** Every step taken, in order, useful for tracing or debugging. */
   steps: StepResult[];
   /** All tool calls across every step, flattened. */
   toolCalls: ToolCall[];
@@ -357,11 +357,11 @@ export type GenerateTextResult = {
 /**
  * What the embedding will be used for. EmbeddingGemma (Android) is trained with
  * task-specific prompt prefixes, so query and document vectors live in matched
- * sub-spaces — telling it the task measurably improves retrieval quality.
+ * sub-spaces, telling it the task measurably improves retrieval quality.
  *
  * - `'semantic-similarity'` (default): symmetric text-to-text comparison.
  * - `'retrieval-query'`: the *question* side of a RAG lookup.
- * - `'retrieval-document'`: the *corpus* side — use when indexing chunks.
+ * - `'retrieval-document'`: the *corpus* side, use when indexing chunks.
  *
  * On Android this maps onto MediaPipe's `TextFormatContext`
  * (SEMANTIC_SIMILARITY / RETRIEVAL_QUERY / RETRIEVAL_DOCUMENT). On iOS,
@@ -383,10 +383,10 @@ export type EmbedOptions = {
    * - **iOS**: selects which `NLContextualEmbedding` script model to load
    *   (Latin / Cyrillic / CJK) and is passed through to the tokenizer. If no
    *   on-device model supports the language, embed() throws a typed
-   *   LANGUAGE_NOT_SUPPORTED {@link ModelError} naming the rejected language —
+   *   LANGUAGE_NOT_SUPPORTED {@link ModelError} naming the rejected language,
    *   it never silently falls back to the Latin model. See
    *   `getSupportedEmbeddingLanguages()`.
-   * - **Android**: accepted and ignored — EmbeddingGemma is natively
+   * - **Android**: accepted and ignored, EmbeddingGemma is natively
    *   multilingual with a single vector space, so there is nothing to select.
    *
    * There is deliberately no auto-detection: a mixed batch would silently mix
@@ -399,20 +399,20 @@ export type EmbedOptions = {
  * Identity of the exact embedding model that produced a result.
  *
  * **Vectors and persisted indexes are only comparable under identical model
- * identity** — never across platforms, and never across iOS script models.
+ * identity**, never across platforms, and never across iOS script models.
  * Store `id` + `revision` alongside any persisted index and rebuild the index
  * when they change.
  */
 export type EmbeddingModelIdentity = {
   /**
-   * Model id — the Apple NL model identifier on iOS (varies with `language`),
+   * Model id, the Apple NL model identifier on iOS (varies with `language`),
    * or `'embedding-gemma-300m'` on Android.
    */
   id: string;
   /**
    * Revision string. On iOS this is the OS asset revision. On Android it
-   * encodes every pinned artifact — tasks-text version, model SHA-256 prefix,
-   * dimensions, and the format-context protocol — so it changes whenever any
+   * encodes every pinned artifact, tasks-text version, model SHA-256 prefix,
+   * dimensions, and the format-context protocol, so it changes whenever any
    * of them changes.
    */
   revision: string;
@@ -451,7 +451,7 @@ export type EmbeddingModelState = {
   /**
    * Download size in bytes. On Android this is the pinned EmbeddingGemma bundle
    * size (~184 MB, stored per-app). On iOS the asset is OS-managed and its size
-   * is not exposed — reported as 0.
+   * is not exposed, reported as 0.
    */
   sizeBytes: number;
   /** Identity of the model this status refers to. */
@@ -542,7 +542,7 @@ export type SpeechUnavailableReason =
 /**
  * Availability of on-device speech recognition, per locale.
  * 'downloadable'/'downloading' mean the device is supported but the OS-managed
- * speech model assets are not ready — call prepareSpeechRecognition() first.
+ * speech model assets are not ready, call prepareSpeechRecognition() first.
  */
 export type SpeechRecognitionAvailability =
   | { status: 'available' }
@@ -636,6 +636,189 @@ export type TranscriptionNativeEvent = {
   error?: string;
 };
 
+// ============================================================================
+// Vision (background removal, image labels, text recognition)
+// ============================================================================
+
+/** Image input for the vision APIs: a local file URI (`file://…`) or absolute path. */
+export type VisionImageSource = { uri: string };
+
+/** Rectangle normalized to the source image: origin top-left, every value 0–1. */
+export type NormalizedRect = { x: number; y: number; width: number; height: number };
+
+/** Point normalized to the source image: origin top-left, 0–1. */
+export type NormalizedPoint = { x: number; y: number };
+
+/** Rectangle in source-image pixels. */
+export type PixelRect = { x: number; y: number; width: number; height: number };
+
+/** The three on-device vision features. */
+export type VisionFeature = 'background-removal' | 'image-labeling' | 'text-recognition';
+
+/** Why a vision feature is unavailable on this device. */
+export type VisionUnavailableReason =
+  /** Unsupported platform (web, etc.). */
+  | 'platform'
+  /** OS too old (background removal needs iOS 17+). */
+  | 'os-version'
+  /**
+   * OS is new enough but this device cannot run the feature: the iOS Simulator
+   * (background removal and image labeling, Vision's neural requests need a
+   * physical device; text recognition works there), or Android without Google
+   * Play services (background removal and text recognition).
+   */
+  | 'device'
+  /** The Android app was built without the vision feature (config-plugin flag off). */
+  | 'not-enabled';
+
+/**
+ * Availability of one vision feature. `downloadable`/`downloading` mean the
+ * device is supported but the Google Play services model is not on-device yet,
+ * call prepareVision() first. iOS ships its models with the OS.
+ */
+export type VisionFeatureAvailability =
+  | { status: 'available' }
+  | { status: 'downloadable' | 'downloading' }
+  | { status: 'unavailable'; reason: VisionUnavailableReason };
+
+/** Availability of every vision feature, from `getVisionAvailability()`. */
+export type VisionAvailability = {
+  backgroundRemoval: VisionFeatureAvailability;
+  imageLabeling: VisionFeatureAvailability;
+  textRecognition: VisionFeatureAvailability;
+};
+
+export type PrepareVisionOptions = {
+  /** Features to make ready. Defaults to all three. */
+  features?: VisionFeature[];
+  /**
+   * BCP-47 languages you plan to pass to recognizeText(). Android downloads
+   * one Google Play services model per script (Latin, Chinese, Japanese,
+   * Korean, Devanagari); defaults to Latin. Ignored on iOS.
+   */
+  languages?: string[];
+  /** Model download progress, 0..1 (Android; iOS resolves immediately). */
+  onProgress?: (progress: number) => void;
+};
+
+/** Output encoding for a cutout. PNG keeps transparency; JPEG flattens onto white. */
+export type VisionImageFormat = 'png' | 'jpeg';
+
+export type RemoveBackgroundOptions = {
+  /**
+   * Keep only the subject under this point (normalized to the source image,
+   * origin top-left, 0–1), for example where the user tapped. Omit to keep
+   * every subject the engine finds. Throws NO_SUBJECT_FOUND when nothing is
+   * under the point.
+   */
+  subject?: NormalizedPoint;
+  /**
+   * Also write the mask the engine used (8-bit grayscale PNG, white = subject,
+   * same size as the output) and return it as `maskUri`. Defaults to `false`.
+   */
+  mask?: boolean;
+  /** Crop the output to the subject's bounds (plus a 2 px margin). Defaults to `true`. */
+  trim?: boolean;
+  /** Output format. Defaults to `'png'` (transparent background). */
+  format?: VisionImageFormat;
+  /** JPEG quality 0–1. Defaults to 0.9. Ignored for PNG. */
+  quality?: number;
+  /**
+   * Maximum decoded pixels (width × height). Larger images are downscaled before
+   * processing to bound memory. Defaults to 6,000,000; capped at 25,000,000.
+   */
+  maxPixels?: number;
+};
+
+export type RemoveBackgroundResult = {
+  /** `file://` URI of the cutout, written to the app's cache directory. Move or copy it to keep it. */
+  uri: string;
+  /** `file://` URI of the grayscale mask PNG when `mask: true` was passed (same size as `uri`). */
+  maskUri?: string;
+  /** Output image size in pixels (the trimmed size when `trim` is on). */
+  width: number;
+  height: number;
+  /** Size of the (possibly downscaled) source the engine processed. */
+  sourceWidth: number;
+  sourceHeight: number;
+  /** Subject bounds in the source image, normalized 0–1. */
+  bounds: NormalizedRect;
+  /** Subject bounds in source pixels. */
+  pixelBounds: PixelRect;
+  /** Fraction of source pixels that belong to the subject, 0–1. */
+  foregroundCoverage: number;
+  /** Subject centroid in the source image, normalized 0–1. */
+  centroid: NormalizedPoint;
+  /** How many distinct subjects the engine found in the image (all of them, even when `subject` picked one). */
+  instanceCount: number;
+  /** Where the output's top-left corner sits in the source, normalized 0–1 (`{0,0}` when `trim` is off). */
+  trimOrigin: NormalizedPoint;
+};
+
+export type LabelImageOptions = {
+  /** Maximum labels to return, highest confidence first. Defaults to 10; `0` returns every label above `minConfidence`. */
+  maxResults?: number;
+  /** Lowest confidence to keep, 0–1. Defaults to 0.5. */
+  minConfidence?: number;
+};
+
+/** One image label with its confidence (0–1). */
+export type ImageLabel = { label: string; confidence: number };
+
+/** iOS only: Vision's recognition level. Android always runs its single model. */
+export type TextRecognitionLevel = 'accurate' | 'fast';
+
+export type RecognizeTextOptions = {
+  /**
+   * BCP-47 languages to recognize, in priority order. Omit to auto-detect (iOS)
+   * or read Latin script (Android). On Android the tags select script models,
+   * `getSupportedTextRecognitionLanguages()` lists what the device can read.
+   */
+  languages?: string[];
+  /** iOS only. Defaults to `'accurate'`. */
+  recognitionLevel?: TextRecognitionLevel;
+  /** iOS only: apply language correction to the recognized text. Defaults to `true`. */
+  usesLanguageCorrection?: boolean;
+  /** iOS only: domain words that language correction should prefer. */
+  customWords?: string[];
+  /** Ignore text shorter than this fraction of the image height, 0–1. */
+  minTextHeight?: number;
+};
+
+/** A single recognized line. */
+export type RecognizedTextLine = {
+  text: string;
+  /** Normalized bounds in the source image, origin top-left. */
+  bounds: NormalizedRect;
+  /** Recognition confidence 0–1 when the engine reports one. */
+  confidence?: number;
+  /** BCP-47 language when the engine reports one (Android). */
+  language?: string;
+  /** Four corners, clockwise from top-left, normalized 0–1. */
+  cornerPoints?: NormalizedPoint[];
+};
+
+/**
+ * A contiguous region of text. Android (ML Kit) groups paragraph-like blocks
+ * with one or more lines; iOS (Vision) reports each line as its own block.
+ */
+export type RecognizedTextBlock = {
+  text: string;
+  /** Normalized bounds in the source image, origin top-left. */
+  bounds: NormalizedRect;
+  lines: RecognizedTextLine[];
+  /** BCP-47 language when the engine reports one (Android). */
+  language?: string;
+  /** Four corners, clockwise from top-left, normalized 0–1. */
+  cornerPoints?: NormalizedPoint[];
+};
+
+export type RecognizeTextResult = {
+  /** All recognized text, blocks joined with newlines, in reading order. */
+  text: string;
+  blocks: RecognizedTextBlock[];
+};
+
 /**
  * Error codes for model-related operations.
  */
@@ -654,7 +837,7 @@ export type ModelErrorCode =
   | 'DEVICE_NOT_SUPPORTED'
   /**
    * Android: the app was built without the embedding backend. Enable it with
-   * the config plugin — `["expo-ai-kit", { "androidEmbeddings": true }]` — and
+   * the config plugin, `["expo-ai-kit", { "androidEmbeddings": true }]`, and
    * make a new native build (dev client / EAS; not OTA).
    */
   | 'EMBEDDINGS_NOT_ENABLED'
@@ -668,7 +851,7 @@ export type ModelErrorCode =
   | 'SPEECH_BUSY'
   /**
    * The app was built without the speech feature. Enable it with the config
-   * plugin — `["expo-ai-kit", { "speech": true }]` — and make a new native
+   * plugin, `["expo-ai-kit", { "speech": true }]`, and make a new native
    * build (dev client / EAS; not OTA).
    */
   | 'SPEECH_NOT_ENABLED'
@@ -678,6 +861,18 @@ export type ModelErrorCode =
   | 'AUDIO_DECODE_FAILED'
   /** The speech engine failed mid-session. */
   | 'TRANSCRIPTION_FAILED'
+  /**
+   * Android: the app was built without the vision feature. Enable it with the
+   * config plugin, `["expo-ai-kit", { "vision": true }]`, and make a new
+   * native build (dev client / EAS; not OTA).
+   */
+  | 'VISION_NOT_ENABLED'
+  /** The image could not be opened or decoded. */
+  | 'IMAGE_DECODE_FAILED'
+  /** removeBackground() found no foreground subject in the image. */
+  | 'NO_SUBJECT_FOUND'
+  /** The vision engine failed. */
+  | 'VISION_FAILED'
   | 'UNKNOWN';
 
 /**
