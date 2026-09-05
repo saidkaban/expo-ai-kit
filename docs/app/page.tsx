@@ -169,7 +169,7 @@ export default function Home() {
       <section className="docs-hero">
         <div className="docs-hero-glow" aria-hidden="true" />
         <p className="docs-eyebrow">ON-DEVICE · iOS AND ANDROID · TYPESCRIPT</p>
-        <h1>On-device AI primitives for Expo apps.</h1>
+        <h1>On-device AI for Expo and React Native apps.</h1>
         <p className="docs-hero-copy">
           A local LLM, speech-to-text, vision, and embeddings as plain async
           functions. Uses the models already on the phone (Apple
