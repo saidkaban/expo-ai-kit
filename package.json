@@ -1,6 +1,6 @@
 {
   "name": "expo-ai-kit",
-  "version": "0.14.1",
+  "version": "0.15.0",
   "description": "On-device AI for Expo & React Native in one import: chat with local LLMs, typed JSON output, tool calling, speech-to-text, background removal, image labels, OCR, embeddings and semantic search. Apple Foundation Models, Apple Vision, SpeechAnalyzer, ML Kit, LiteRT-LM. No API keys, no cloud.",
   "main": "build/index.js",
   "types": "build/index.d.ts",
