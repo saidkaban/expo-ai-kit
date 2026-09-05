@@ -32,8 +32,8 @@ export default function EmbeddingsPage() {
       <h1>Embeddings &amp; RAG</h1>
       <p className="text-xl text-muted leading-relaxed">
         Turn text into vectors for semantic search, then retrieve the most
-        relevant chunks of your own documents to ground the model&apos;s answers
-, all on-device.
+        relevant chunks of your own documents to ground the model&apos;s answers,
+        all on-device.
       </p>
 
       <BadgeGroup platforms={["ios", "android", "new"]} />
@@ -58,8 +58,8 @@ export default function EmbeddingsPage() {
         <li>
           A pure-JS toolkit, <code>chunkText</code>,{" "}
           <code>cosineSimilarity</code>, and <code>createVectorStore</code>,
-          that does the chunking and retrieval on <strong>both platforms</strong>
-          , with any source of vectors.
+          that does the chunking and retrieval on <strong>both platforms</strong>,
+          with any source of vectors.
         </li>
       </ul>
 

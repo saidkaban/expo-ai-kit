@@ -38,8 +38,8 @@ export default function TextGenerationPage() {
       <p>
         Text is the capability that needs no configuration. By default it runs
         on the OS model, <strong>Apple Foundation Models</strong> on iOS 26+
-        and the <strong>ML Kit Prompt API</strong> on supported Android devices
-, and you can switch to a downloadable Gemma, Qwen, or Phi model with{" "}
+        and the <strong>ML Kit Prompt API</strong> on supported Android devices,
+        and you can switch to a downloadable Gemma, Qwen, or Phi model with{" "}
         <code>setModel()</code> (see{" "}
         <Link href="/guides/models" className="text-accent hover:underline">
           Models
