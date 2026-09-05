@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>On-device AI for Expo & React Native.</strong><br />
-  Text · Speech · Vision · Embeddings, running on the phone. No API keys.
+  LLM · Speech · Vision · Embeddings, running on the phone. No API keys.
 </p>
 
 <p align="center">
@@ -35,7 +35,7 @@
 
 ```ts
 import {
-  sendMessage, streamMessage, generateObject, generateText, // 💬 Text
+  sendMessage, streamMessage, generateObject, generateText, // 💬 LLM
   transcribe, streamTranscription,                          // 🎙️ Speech
   removeBackground, labelImage, recognizeText,              // 👁️ Vision
   embed, chunkText, createVectorStore,                      // 🔎 Embeddings
@@ -79,7 +79,7 @@ npx expo install expo-ai-kit
 > `npx expo run:ios|android`, or EAS Build. Bare React Native needs Expo modules installed,
 > `npx pod-install` on iOS, and `minSdkVersion 26` on Android.
 
-**Text** works with no configuration. **Speech**, **Vision** (Android), and **Embeddings**
+The **LLM** works with no configuration. **Speech**, **Vision** (Android), and **Embeddings**
 (Android) are opt-in build flags, so apps that don't use them pay nothing in size or permissions:
 
 ```json
@@ -111,7 +111,7 @@ const { text } = await sendMessage([
 ]);
 ```
 
-## 💬 Text
+## 💬 LLM
 
 Generate and stream text with the OS model or a downloaded one. `messages` is an array of
 `{ role: 'system' | 'user' | 'assistant'; content: string }`. The message APIs are stateless, so
@@ -248,7 +248,7 @@ const { text, blocks } = await recognizeText({ uri: photo.uri });
 | `labelImage` | Vision image classifier, ~1,300 labels (physical device) | ML Kit Image Labeling, ~400 labels, bundled with the app |
 | `recognizeText` | Vision text recognition, auto-detects language | ML Kit Text Recognition v2: Latin, Chinese, Japanese, Korean, Devanagari |
 
-Vision calls are independent of the text and speech guards, so they can run alongside a
+Vision calls are independent of the LLM and speech guards, so they can run alongside a
 generation or a transcription. `getVisionAvailability()` reports each feature separately, and
 `getSupportedTextRecognitionLanguages()` lists what the device can read.
 
@@ -290,7 +290,7 @@ pure JavaScript and work with any vectors.
 
 A few patterns that combine capabilities:
 
-**Voice memo → structured summary.** Speech feeds Text.
+**Voice memo → structured summary.** Speech feeds the LLM.
 
 ```tsx
 const { text } = await transcribe({ audio: { uri: memoUri } });
@@ -304,7 +304,7 @@ const { object } = await generateObject<{ title: string; actionItems: string[] }
 );
 ```
 
-**Receipt scanner.** Vision feeds Text.
+**Receipt scanner.** Vision feeds the LLM.
 
 ```tsx
 const { text } = await recognizeText({ uri: receipt.uri });
@@ -335,12 +335,12 @@ photoIndex.add(photo.id, vector, { uri: photo.uri });
 const cutout = await removeBackground({ uri: photo.uri }); // transparent PNG, subject-trimmed
 ```
 
-Text and speech are single-flight; vision and embeddings are not. The pipelines above can run
+The LLM and speech are single-flight; vision and embeddings are not. The pipelines above can run
 alongside each other.
 
 ## Models
 
-Text generation defaults to the OS model. Switch to a downloadable model when the device has no
+The LLM defaults to the OS model. Switch to a downloadable model when the device has no
 built-in one or you need a specific model.
 
 | Model id | Parameters | Download | License |
@@ -407,7 +407,7 @@ Everything is exported from `expo-ai-kit` (the AI SDK provider from `expo-ai-kit
 
 | Capability | Do the work | Availability & preparation | Opt-in flag |
 |---|---|---|---|
-| 💬 Text | `sendMessage`, `streamMessage`, `generateObject`, `generateText`, `stripThinking` | `isAvailable`, `prepareBuiltInModel` | none |
+| 💬 LLM | `sendMessage`, `streamMessage`, `generateObject`, `generateText`, `stripThinking` | `isAvailable`, `prepareBuiltInModel` | none |
 | 🎙️ Speech | `transcribe`, `streamTranscription` | `getSpeechRecognitionAvailability`, `prepareSpeechRecognition`, `getSupportedSpeechLocales`, `getSpeechPermissionsAsync`, `requestSpeechPermissionsAsync` | `speech` |
 | 👁️ Vision | `removeBackground`, `labelImage`, `recognizeText` | `getVisionAvailability`, `prepareVision`, `getSupportedTextRecognitionLanguages` | `vision` (Android) |
 | 🔎 Embeddings | `embed`, `chunkText`, `cosineSimilarity`, `createVectorStore` | `getEmbeddingModelStatus`, `prepareEmbeddingModel`, `cancelEmbeddingModelDownload`, `deleteEmbeddingModel`, `getSupportedEmbeddingLanguages` | `androidEmbeddings` (Android) |
@@ -423,8 +423,8 @@ condensed for coding agents.
 | Feature | iOS | Android |
 |---|---|---|
 | Minimum OS | iOS 15.1+ | API 26+ |
-| Text (built-in) | Apple Foundation Models, iOS 26+ on Apple Intelligence devices | ML Kit Prompt API on supported devices |
-| Text (downloadable) | Gemma, Qwen, Phi, custom LiteRT-LM | Gemma, Qwen, Phi, custom LiteRT-LM (arm64) |
+| LLM (built-in) | Apple Foundation Models, iOS 26+ on Apple Intelligence devices | ML Kit Prompt API on supported devices |
+| LLM (downloadable) | Gemma, Qwen, Phi, custom LiteRT-LM | Gemma, Qwen, Phi, custom LiteRT-LM (arm64) |
 | Speech | SpeechAnalyzer, iOS 26+ | ML Kit GenAI Speech Recognition, Android 12+ |
 | Vision | Vision framework; background removal iOS 17+; cutouts and labels need a physical device, OCR also runs in the Simulator | ML Kit Vision with Google Play services (labels work without it) |
 | Embeddings | `NLContextualEmbedding`, iOS 17+ | EmbeddingGemma 300M, opt-in |

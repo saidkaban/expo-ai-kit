@@ -5,7 +5,7 @@
 > Headline: **On-device vision**: `removeBackground()` (subject cutouts), `labelImage()`
 > (image labels), and `recognizeText()` (OCR) on iOS (Apple Vision) and Android (ML Kit, opt-in
 > config-plugin flag). Plus a simpler story for what the library does, grouped by capability
-> (Text, Speech, Vision, Embeddings) across the README, the documentation site, and npm, with a
+> (LLM, Speech, Vision, Embeddings) across the README, the documentation site, and npm, with a
 > short animated demo of each.
 
 ### Added
@@ -44,8 +44,8 @@
     `VISION_FAILED`.
 - **Documentation recategorized by capability.** The README, npm description and keywords,
   documentation sidebar, landing page, API reference, and `llms.txt` now present the library by
-  capability (Text, Speech, Vision, Embeddings), each with its own guide (new Text Generation
-  hub and Vision guide), its engines per platform, and its opt-in flag.
+  capability (LLM, Speech, Vision, Embeddings), each with its own guide (new LLM hub and
+  Vision guide), its engines per platform, and its opt-in flag.
 - **Example app** gained a Vision section (pick a photo → cutout / labels / OCR) and enables
   the `vision` flag, so CI compiles the new Kotlin source set, plus a Share cutout button to
   save the PNG to Photos. Verified on a Galaxy A16 (Android 16): Play services model install,

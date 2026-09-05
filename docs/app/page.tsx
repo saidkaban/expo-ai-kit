@@ -135,10 +135,10 @@ const useCases = [
 const capabilities = [
   {
     emoji: "💬",
-    title: "Text",
+    title: "LLM",
     copy: "Chat and stream, get typed JSON back, let the model call your functions.",
     api: "sendMessage · streamMessage · generateObject · generateText",
-    href: "/guides/text-generation",
+    href: "/guides/llm",
   },
   {
     emoji: "🎙️",
@@ -171,8 +171,8 @@ export default function Home() {
         <p className="docs-eyebrow">ON-DEVICE · iOS AND ANDROID · TYPESCRIPT</p>
         <h1>On-device AI primitives for Expo apps.</h1>
         <p className="docs-hero-copy">
-          Text generation, speech-to-text, vision, and embeddings as plain
-          async functions. Uses the models already on the phone (Apple
+          A local LLM, speech-to-text, vision, and embeddings as plain async
+          functions. Uses the models already on the phone (Apple
           Foundation Models, Apple Vision, SpeechAnalyzer, ML Kit) and
           downloadable LiteRT-LM models when you want a specific one. No API
           keys, nothing leaves the device.
@@ -228,7 +228,7 @@ export default function Home() {
       <h2 id="one-import">Everything in one import</h2>
       <CodeBlock language="typescript" filename="app.ts">
         {`import {
-  sendMessage, streamMessage, generateObject, generateText, // 💬 Text
+  sendMessage, streamMessage, generateObject, generateText, // 💬 LLM
   transcribe, streamTranscription,                          // 🎙️ Speech
   removeBackground, labelImage, recognizeText,              // 👁️ Vision
   embed, chunkText, createVectorStore,                      // 🔎 Embeddings
@@ -283,7 +283,7 @@ export default function Home() {
         ))}
       </div>
       <p>
-        Text works with no configuration. Speech, vision (Android), and Android
+        The LLM works with no configuration. Speech, vision (Android), and Android
         embeddings are opt-in build flags, so apps that don&apos;t use them add
         no size or permissions, see the{" "}
         <Link href="/api#config-plugin" className="text-accent hover:underline">
@@ -294,12 +294,12 @@ export default function Home() {
 
       <h2 id="recipes">Recipes</h2>
       <p>
-        A few patterns that combine capabilities. Text and speech are
+        A few patterns that combine capabilities. The LLM and speech are
         single-flight; vision and embeddings are not, so these can run
         alongside each other.
       </p>
       <CodeBlock language="typescript" filename="voice-memo.ts">
-        {`// 🎙️ Speech → 💬 Text: a voice memo becomes a structured summary
+        {`// 🎙️ Speech → 💬 LLM: a voice memo becomes a structured summary
 const { text } = await transcribe({ audio: { uri: memoUri } });
 const { object } = await generateObject<{ title: string; actionItems: string[] }>(
   [{ role: 'user', content: \`Summarize this voice memo:\\n\${text}\` }],
@@ -311,7 +311,7 @@ const { object } = await generateObject<{ title: string; actionItems: string[] }
 );`}
       </CodeBlock>
       <CodeBlock language="typescript" filename="receipt.ts">
-        {`// 👁️ Vision → 💬 Text: a photo of a receipt becomes typed data
+        {`// 👁️ Vision → 💬 LLM: a photo of a receipt becomes typed data
 const { text } = await recognizeText({ uri: receipt.uri });
 const { object } = await generateObject<{ merchant: string; total: number; date: string }>(
   [{ role: 'user', content: \`Extract the merchant, total, and date from this receipt:\\n\${text}\` }],
@@ -347,7 +347,7 @@ photoIndex.add(photo.id, vector, { uri: photo.uri });
         </div>
         <div>
           <strong>Opt-in build flags</strong>
-          <span>Speech, vision (Android), and Android embeddings are flags; text works with no configuration.</span>
+          <span>Speech, vision (Android), and Android embeddings are flags; the LLM works with no configuration.</span>
         </div>
         <div>
           <strong>Zero runtime dependencies</strong>

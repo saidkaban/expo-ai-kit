@@ -5,7 +5,8 @@ release history in `CHANGELOG.md`, and implementation details in source comments
 duplicate those records here.
 
 `expo-ai-kit` provides on-device AI for Expo and React Native as a set of capabilities, currently
-text generation, speech-to-text, vision (background removal, image labels, OCR), and embeddings,
+LLM (chat, structured output, tool calling), speech-to-text, vision (background removal, image
+labels, OCR), and embeddings,
 across Apple Foundation Models, Apple SpeechAnalyzer, Apple Vision, ML Kit (Prompt API, GenAI Speech
 Recognition, Vision), and downloadable or custom LiteRT-LM models on iOS and Android. Developer-facing
 material (README, docs site, npm metadata, `llms.txt`) presents the capabilities in that order and
