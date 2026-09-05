@@ -116,7 +116,7 @@ export default function GetStartedPage() {
 
       <h2 id="optional-features">Optional Features</h2>
       <p>
-        Text generation works out of the box. Speech, vision (Android), and
+        The LLM works out of the box. Speech, vision (Android), and
         Android embeddings are opt-in flags, so apps that don&apos;t use them
         add no size or permissions. Turn on what you need and make a new native
         build:

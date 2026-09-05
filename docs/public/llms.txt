@@ -1,6 +1,6 @@
 # expo-ai-kit
 
-> On-device AI for Expo and React Native. Capabilities: Text (generation, structured output,
+> On-device AI for Expo and React Native. Capabilities: LLM (chat, structured output,
 > tool calling), Speech (speech-to-text), Vision (background removal, image labels, OCR), and
 > Embeddings (semantic search, retrieval). Runs locally on iOS and Android on Apple Foundation
 > Models, Apple Vision, Apple SpeechAnalyzer, Apple NLContextualEmbedding, ML Kit (Prompt API,
@@ -15,7 +15,7 @@ Install: `npx expo install expo-ai-kit` (native module, needs a development buil
 
 ```ts
 import {
-  sendMessage, streamMessage, generateObject, generateText, // Text
+  sendMessage, streamMessage, generateObject, generateText, // LLM
   transcribe, streamTranscription,                          // Speech
   removeBackground, labelImage, recognizeText,              // Vision
   embed, chunkText, createVectorStore,                      // Embeddings
@@ -36,7 +36,7 @@ import {
 
 ## Capabilities
 
-- Text: `sendMessage`, `streamMessage` (stateless, pass full history each call),
+- LLM: `sendMessage`, `streamMessage` (stateless, pass full history each call),
   `generateText` (bounded tool-calling loop), `generateObject` (JSON-Schema-validated objects
   with repair loop). Check `isAvailable()` and await `prepareBuiltInModel()` first. Built-in
   engines: Apple Foundation Models (iOS 26+), ML Kit Prompt API (Android); or downloadable
@@ -109,7 +109,7 @@ import {
 ## Links
 
 - Docs: https://expo-ai-kit.dev
-- Text guide: https://expo-ai-kit.dev/guides/text-generation
+- LLM guide: https://expo-ai-kit.dev/guides/llm
 - Speech guide: https://expo-ai-kit.dev/guides/speech
 - Vision guide: https://expo-ai-kit.dev/guides/vision
 - Embeddings guide: https://expo-ai-kit.dev/guides/embeddings

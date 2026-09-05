@@ -361,7 +361,7 @@ export function PhotoInspector() {
 
       <h2 id="voice-memo-summary">Voice Memo → Summary</h2>
       <p>
-        Speech feeds Text: transcribe a recording, then ask the model for a
+        Speech feeds the LLM: transcribe a recording, then ask the model for a
         typed summary. The two capabilities have separate guards, so the chain
         never trips <code>INFERENCE_BUSY</code>.
       </p>
@@ -391,7 +391,7 @@ export async function summarizeMemo(uri: string): Promise<Summary> {
 
       <h2 id="receipt-scanner">Receipt Scanner</h2>
       <p>
-        Vision feeds Text: read the receipt with OCR, then extract typed fields.
+        Vision feeds the LLM: read the receipt with OCR, then extract typed fields.
         On Android, call <code>prepareVision({`{ features: ['text-recognition'] }`})</code>{" "}
         once first.
       </p>

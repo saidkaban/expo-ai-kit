@@ -6,6 +6,12 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
+  async redirects() {
+    return [
+      // The LLM guide was briefly published as /guides/text-generation.
+      { source: "/guides/text-generation", destination: "/guides/llm", permanent: true },
+    ];
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "img.shields.io" },

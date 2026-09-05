@@ -246,7 +246,7 @@ const languages = await getSupportedTextRecognitionLanguages();
           services report <code>reason: &apos;device&apos;</code> for those two.
         </li>
         <li>
-          Vision calls are independent of the text and speech guards, they run
+          Vision calls are independent of the LLM and speech guards, they run
           alongside a generation or a transcription without tripping{" "}
           <code>INFERENCE_BUSY</code> or <code>SPEECH_BUSY</code>.
         </li>

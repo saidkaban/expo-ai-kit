@@ -10,7 +10,7 @@ export interface NavSection {
   items: NavItem[];
 }
 
-// The sidebar mirrors the library's capabilities (Text, Speech, Vision,
+// The sidebar mirrors the library's capabilities (LLM, Speech, Vision,
 // Embeddings today), followed by the cross-cutting model, platform, and
 // integration guides. A new capability gets its own group here.
 export const navigation: NavSection[] = [
@@ -30,11 +30,11 @@ export const navigation: NavSection[] = [
     ],
   },
   {
-    title: "Text",
+    title: "LLM",
     items: [
       {
-        title: "Text Generation",
-        href: "/guides/text-generation",
+        title: "LLM",
+        href: "/guides/llm",
         description: "Generate and stream text with the on-device model",
       },
       {
@@ -118,8 +118,8 @@ export const navigation: NavSection[] = [
     title: "API Reference",
     items: [
       {
-        title: "Text",
-        href: "/api#text",
+        title: "LLM",
+        href: "/api#llm",
         description: "isAvailable, prepareBuiltInModel, sendMessage, streamMessage, generateObject, generateText",
       },
       {

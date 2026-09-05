@@ -6,9 +6,9 @@ import Link from "next/link";
 import { createPageMetadata } from "@/lib/site";
 
 export const metadata = createPageMetadata(
-  "Text Generation",
-  "Generate and stream text with the on-device model, availability, preparation, system prompts, cancellation, and where structured output and tool calling fit.",
-  "/guides/text-generation"
+  "LLM",
+  "Chat with the on-device model and generate text: availability, preparation, system prompts, cancellation, and where structured output and tool calling fit.",
+  "/guides/llm"
 );
 
 const headings = [
@@ -22,10 +22,10 @@ const headings = [
   { id: "beyond-text", text: "Beyond Plain Text", level: 2 },
 ];
 
-export default function TextGenerationPage() {
+export default function LlmPage() {
   return (
     <DocsLayout headings={headings}>
-      <h1>Text Generation</h1>
+      <h1>LLM</h1>
       <p className="text-xl text-muted leading-relaxed">
         Chat with the model your users&apos; phones already have, or one you
         download, with two functions: <code>sendMessage()</code> and{" "}
@@ -36,7 +36,7 @@ export default function TextGenerationPage() {
 
       <h2 id="overview">Overview</h2>
       <p>
-        Text is the capability that needs no configuration. By default it runs
+        The LLM is the capability that needs no configuration. By default it runs
         on the OS model, <strong>Apple Foundation Models</strong> on iOS 26+
         and the <strong>ML Kit Prompt API</strong> on supported Android devices,
         and you can switch to a downloadable Gemma, Qwen, or Phi model with{" "}

@@ -97,7 +97,7 @@ npx expo run:android`}
 
       <h2 id="optional-features">Optional features (opt-in)</h2>
       <p>
-        Text generation needs nothing beyond the setup above. Speech, vision,
+        The LLM needs nothing beyond the setup above. Speech, vision,
         and embeddings are gated behind config-plugin flags, off by default,
         so apps that don&apos;t use them pay zero APK bytes and add no
         permissions. Each flag requires a <strong>new native build</strong>{" "}

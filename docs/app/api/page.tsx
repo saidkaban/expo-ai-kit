@@ -6,12 +6,12 @@ import { createPageMetadata } from "@/lib/site";
 
 export const metadata = createPageMetadata(
   "API Reference",
-  "Complete expo-ai-kit API reference, grouped by capability: text generation, speech-to-text, vision, embeddings, models, the AI SDK provider, the config plugin, types, and errors.",
+  "Complete expo-ai-kit API reference, grouped by capability: LLM, speech-to-text, vision, embeddings, models, the AI SDK provider, the config plugin, types, and errors.",
   "/api"
 );
 
 const headings = [
-  { id: "text", text: "Text", level: 2 },
+  { id: "llm", text: "LLM", level: 2 },
   { id: "isavailable", text: "isAvailable()", level: 3 },
   { id: "preparebuiltinmodel", text: "prepareBuiltInModel()", level: 3 },
   { id: "sendmessage", text: "sendMessage()", level: 3 },
@@ -68,13 +68,13 @@ export default function APIReferencePage() {
       </p>
 
       {/* ------------------------------------------------------------------ */}
-      <h2 id="text">Text</h2>
+      <h2 id="llm">LLM</h2>
       <p>
         Generate and stream text with the OS model or a downloaded one, get
         typed objects back, or let the model call your functions. Text needs no
         configuration. See the{" "}
-        <a href="/guides/text-generation" className="text-accent hover:underline">
-          Text Generation guide
+        <a href="/guides/llm" className="text-accent hover:underline">
+          LLM guide
         </a>
         .
       </p>
@@ -330,7 +330,7 @@ function requestSpeechPermissionsAsync(): Promise<SpeechPermissionResponse>`}
         Background removal, image labels, and text recognition (OCR) with Apple
         Vision on iOS and ML Kit on Android. Android is opt-in via the config
         plugin&apos;s <code>vision</code> flag; iOS needs nothing. Independent of
-        the text and speech guards. Every call takes an image as{" "}
+        the LLM and speech guards. Every call takes an image as{" "}
         <code>{`{ uri }`}</code> (a <code>file://</code> URI or path). See the{" "}
         <a href="/guides/vision" className="text-accent hover:underline">
           Vision guide
@@ -760,7 +760,7 @@ const { text } = await generateText({
       {/* ------------------------------------------------------------------ */}
       <h2 id="config-plugin">Config Plugin</h2>
       <p>
-        Text works with no configuration. Speech, vision (Android), and Android
+        The LLM works with no configuration. Speech, vision (Android), and Android
         embeddings are opt-in build flags so apps that don&apos;t use them pay
         nothing in size or permissions. Turning a flag on requires a new native
         build (dev client / EAS, not an OTA update); without it the matching

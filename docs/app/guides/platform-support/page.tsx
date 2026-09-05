@@ -7,7 +7,7 @@ import { createPageMetadata } from "@/lib/site";
 
 export const metadata = createPageMetadata(
   "Platform Support",
-  "Compare expo-ai-kit support for text, speech, vision, and embeddings across Apple Foundation Models, Apple Vision, SpeechAnalyzer, Android ML Kit, and LiteRT-LM.",
+  "Compare expo-ai-kit support for the LLM, speech, vision, and embeddings across Apple Foundation Models, Apple Vision, SpeechAnalyzer, Android ML Kit, and LiteRT-LM.",
   "/guides/platform-support"
 );
 
@@ -33,10 +33,10 @@ export default function PlatformSupportPage() {
 
       <h2 id="overview">Overview</h2>
       <p>
-        expo-ai-kit provides four on-device capabilities, text, speech,
-        vision, and embeddings, by leveraging native platform frameworks. Both
-        iOS and Android are fully supported; this page starts with text
-        generation and ends with a per-feature comparison.
+        expo-ai-kit runs its capabilities, LLM, speech, vision, and
+        embeddings, on native platform frameworks. Both iOS and Android are
+        supported; this page starts with the LLM and ends with a per-feature
+        comparison.
       </p>
       <p>
         There are two model paths. The <strong>built-in OS models</strong>,
