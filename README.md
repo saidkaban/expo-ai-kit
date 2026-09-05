@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>On-device AI for Expo & React Native.</strong><br />
-  Text · Speech · Vision · Embeddings, running on the phone. No API keys. No cloud. No cost.
+  Text · Speech · Vision · Embeddings, running on the phone. No API keys.
 </p>
 
 <p align="center">
@@ -19,15 +19,6 @@
   <a href="https://github.com/saidkaban/expo-ai-kit/blob/main/CHANGELOG.md">Changelog</a> ·
   <a href="https://expo-ai-kit.dev/llms.txt">llms.txt</a>
 </p>
-
-Phones already ship with capable AI models. expo-ai-kit is one small, typed API over the best of
-them, so your app can chat, transcribe, see, and search on the device: offline, private, and with
-no per-request bill. One package, both platforms.
-
-## See it
-
-Real outputs captured on a Galaxy A16, replayed with their original timing. Each clip is one
-call from the API below.
 
 <table>
   <tr>
@@ -53,31 +44,29 @@ import {
 
 ## What your app can do
 
-| | You call | Instead of | iOS | Android |
-|---|---|---|---|---|
-| 💬 Chat with a local model, stream tokens | `sendMessage` / `streamMessage` | a hosted LLM API | Apple Foundation Models | ML Kit Prompt API |
-| 🧾 Get a typed object back | `generateObject` | prompt hacks + JSON parsing | ″ | ″ |
-| 🛠️ Let the model call your functions | `generateText({ tools })` | a function-calling API | ″ | ″ |
-| 🎙️ Transcribe voice, live or from a file | `streamTranscription` / `transcribe` | a speech-to-text API | SpeechAnalyzer | ML Kit Speech Recognition |
-| ✂️ Cut the subject out of a photo | `removeBackground` | a background-removal API | Apple Vision | ML Kit Subject Segmentation |
-| 🏷️ Describe what is in a photo | `labelImage` | an image-tagging API | Apple Vision | ML Kit Image Labeling |
-| 🔤 Read the text in a photo | `recognizeText` | an OCR API | Apple Vision | ML Kit Text Recognition |
-| 🔎 Search by meaning, build RAG | `embed` + `createVectorStore` | an embeddings API + a vector DB | NLContextualEmbedding | EmbeddingGemma |
-| 🧠 Run a Gemma, Qwen, or Phi model you choose | `downloadModel` + `setModel` | a model-hosting service | LiteRT-LM | LiteRT-LM |
+| What you want | Call | iOS | Android |
+|---|---|---|---|
+| 💬 Chat with a local model, stream tokens | `sendMessage`, `streamMessage` | Apple Foundation Models | ML Kit Prompt API |
+| 🧾 Typed JSON from the model | `generateObject` | Apple Foundation Models | ML Kit Prompt API |
+| 🛠️ Let the model call your functions | `generateText({ tools })` | Apple Foundation Models | ML Kit Prompt API |
+| 🎙️ Speech to text, live or from a file | `streamTranscription`, `transcribe` | SpeechAnalyzer | ML Kit Speech Recognition |
+| ✂️ Cut the subject out of a photo | `removeBackground` | Apple Vision | ML Kit Subject Segmentation |
+| 🏷️ Label what is in a photo | `labelImage` | Apple Vision | ML Kit Image Labeling |
+| 🔤 Read the text in a photo | `recognizeText` | Apple Vision | ML Kit Text Recognition |
+| 🔎 Search by meaning, build RAG | `embed`, `createVectorStore` | NLContextualEmbedding | EmbeddingGemma |
+| 🧠 Run a Gemma, Qwen, or Phi model you pick | `downloadModel`, `setModel` | LiteRT-LM | LiteRT-LM |
 
-Every capability has the same three-step shape: **check availability → prepare once → use.**
-Preparation is the only step that ever downloads anything, and it resolves immediately when the
-device is already ready. Failures throw a `ModelError` with a typed `.code`, never a fake
-success or empty text.
+Every capability follows the same three steps: check availability, prepare once, use. Only the
+prepare step downloads anything, and failures throw a `ModelError` with a typed `code`.
 
-| | |
-|---|---|
-| 🔒 **Private by default** | Every capability runs on the device. Nothing is sent anywhere. |
-| 📱 **Native first** | OS-provided models mean no weights to bundle for most features. |
-| 🧩 **Small primitives** | Plain async functions that compose. No hidden state, no framework. |
-| 🔌 **AI SDK compatible** | `expo-ai-kit/ai` plugs the same engines into the Vercel AI SDK. |
-| 🪶 **Zero runtime dependencies** | `dependencies` is empty; optional features are opt-in build flags. |
-| 🤖 **Agent friendly** | Typed errors, explicit lifecycles, and an [llms.txt](https://expo-ai-kit.dev/llms.txt) your coding agent can read. |
+- Everything runs on the device. Nothing is sent to a server.
+- Uses the models the OS already ships (Apple Foundation Models, Apple Vision, SpeechAnalyzer,
+  ML Kit), so most features need no bundled weights. Download a Gemma, Qwen, or Phi model when
+  you want a specific one.
+- Plain async functions. No hooks, no hidden state, no runtime dependencies.
+- `expo-ai-kit/ai` exposes the same engines as a Vercel AI SDK provider.
+- Typed errors, explicit lifecycles, and an [llms.txt](https://expo-ai-kit.dev/llms.txt) for
+  coding agents.
 
 ## Install
 
@@ -228,7 +217,7 @@ const result = await transcribe({ audio: { uri: recordingUri } });
 
 ## 👁️ Vision
 
-Three things a phone can do with a photo, entirely on-device. Enable the Android side with
+Background removal, image labels, and text recognition, all on-device. Enable the Android side with
 `"vision": true`; iOS needs no configuration. Pass any local image as `{ uri }` (a `file://` URI
 or path, for example from `expo-image-picker`).
 
@@ -253,7 +242,7 @@ const labels = await labelImage({ uri: photo.uri }, { maxResults: 5 });
 const { text, blocks } = await recognizeText({ uri: photo.uri });
 ```
 
-| | iOS | Android |
+| Function | iOS | Android |
 |---|---|---|
 | `removeBackground` | Vision subject lifting, iOS 17+ (physical device) | ML Kit Subject Segmentation (Play services model) |
 | `labelImage` | Vision image classifier, ~1,300 labels (physical device) | ML Kit Image Labeling, ~400 labels, bundled with the app |
@@ -297,9 +286,9 @@ Every result carries a `model: { id, revision }` identity; persisted vectors are
 when that identity matches exactly. `chunkText`, `cosineSimilarity`, and `createVectorStore` are
 pure JavaScript and work with any vectors.
 
-## Recipes: the capabilities compose
+## Recipes
 
-The primitives are designed to chain. A few patterns that fit in a screen of code:
+A few patterns that combine capabilities:
 
 **Voice memo → structured summary.** Speech feeds Text.
 
@@ -340,14 +329,14 @@ photoIndex.add(photo.id, vector, { uri: photo.uri });
 // later: embed the user's query with task 'retrieval-query' and photoIndex.search(queryVector)
 ```
 
-**Product cutout.** One call.
+**Product cutout.**
 
 ```tsx
 const cutout = await removeBackground({ uri: photo.uri }); // transparent PNG, subject-trimmed
 ```
 
-Text generation, speech, vision, and embeddings each have their own concurrency rules (text and
-speech are single-flight; vision and embeddings are not), so these pipelines never trip each other.
+Text and speech are single-flight; vision and embeddings are not. The pipelines above can run
+alongside each other.
 
 ## Models
 
@@ -382,7 +371,7 @@ shipping it.
 
 ## Vercel AI SDK
 
-Prefer the AI SDK's API? The provider wraps the same on-device engines (AI SDK 6 and 7,
+The provider wraps the same on-device engines for the Vercel AI SDK (versions 6 and 7,
 `LanguageModelV3`, `EmbeddingModelV3`, `TranscriptionModelV3`).
 
 ```bash
@@ -418,12 +407,12 @@ Everything is exported from `expo-ai-kit` (the AI SDK provider from `expo-ai-kit
 
 | Capability | Do the work | Availability & preparation | Opt-in flag |
 |---|---|---|---|
-| 💬 Text | `sendMessage`, `streamMessage`, `generateObject`, `generateText`, `stripThinking` | `isAvailable`, `prepareBuiltInModel` |, |
+| 💬 Text | `sendMessage`, `streamMessage`, `generateObject`, `generateText`, `stripThinking` | `isAvailable`, `prepareBuiltInModel` | none |
 | 🎙️ Speech | `transcribe`, `streamTranscription` | `getSpeechRecognitionAvailability`, `prepareSpeechRecognition`, `getSupportedSpeechLocales`, `getSpeechPermissionsAsync`, `requestSpeechPermissionsAsync` | `speech` |
 | 👁️ Vision | `removeBackground`, `labelImage`, `recognizeText` | `getVisionAvailability`, `prepareVision`, `getSupportedTextRecognitionLanguages` | `vision` (Android) |
 | 🔎 Embeddings & RAG | `embed`, `chunkText`, `cosineSimilarity`, `createVectorStore` | `getEmbeddingModelStatus`, `prepareEmbeddingModel`, `cancelEmbeddingModelDownload`, `deleteEmbeddingModel`, `getSupportedEmbeddingLanguages` | `androidEmbeddings` (Android) |
-| 🧠 Models | `setModel`, `unloadModel`, `getActiveModel` | `getBuiltInModels`, `getDownloadableModels`, `getDownloadedModels`, `getRecommendedModel`, `downloadModel`, `cancelDownload`, `deleteModel`, `registerModel`, `unregisterModel`, `getRegisteredModels`, `fetchModelMetadata` |, |
-| 🔌 AI SDK | `expoAiKit()`, `expoAiKit.embeddingModel()`, `expoAiKit.transcriptionModel()`, `createExpoAiKit` |, |, |
+| 🧠 Models | `setModel`, `unloadModel`, `getActiveModel` | `getBuiltInModels`, `getDownloadableModels`, `getDownloadedModels`, `getRecommendedModel`, `downloadModel`, `cancelDownload`, `deleteModel`, `registerModel`, `unregisterModel`, `getRegisteredModels`, `fetchModelMetadata` | none |
+| 🔌 AI SDK | `expoAiKit()`, `expoAiKit.embeddingModel()`, `expoAiKit.transcriptionModel()`, `createExpoAiKit` | | |
 
 Full TypeScript definitions ship with the package; the [documentation](https://expo-ai-kit.dev) has
 the complete reference, and [llms.txt](https://expo-ai-kit.dev/llms.txt) is the same information
@@ -431,9 +420,9 @@ condensed for coding agents.
 
 ## Compatibility
 
-| | iOS | Android |
+| Feature | iOS | Android |
 |---|---|---|
-| Library minimum | iOS 15.1+ | API 26+ |
+| Minimum OS | iOS 15.1+ | API 26+ |
 | Text (built-in) | Apple Foundation Models, iOS 26+ on Apple Intelligence devices | ML Kit Prompt API on supported devices |
 | Text (downloadable) | Gemma, Qwen, Phi, custom LiteRT-LM | Gemma, Qwen, Phi, custom LiteRT-LM (arm64) |
 | Speech | SpeechAnalyzer, iOS 26+ | ML Kit GenAI Speech Recognition, Android 12+ |
