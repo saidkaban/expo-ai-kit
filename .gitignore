@@ -73,3 +73,8 @@ example/*
 # LiteRT-LM C xcframework — downloaded on pod install by scripts/install-litertlm.sh
 ios/Vendor/CLiteRTLM.xcframework/
 ios/Vendor/.litertlm-version
+
+# expo-module-scripts restores its legacy .eslintrc.js template on every
+# `npm install` (the `prepare` script runs `expo-module configure`). ESLint 9
+# reads eslint.config.js and ignores it, so keep it out of git status.
+.eslintrc.js
