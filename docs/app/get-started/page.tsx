@@ -297,7 +297,7 @@ await promise;`}
         </li>
         <li>
           <Link href="/guides/embeddings" className="text-accent hover:underline">
-            Embeddings &amp; RAG
+            Embeddings
           </Link>:
           Semantic search over your own data
         </li>

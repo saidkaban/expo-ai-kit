@@ -78,9 +78,9 @@ export const navigation: NavSection[] = [
     title: "Embeddings",
     items: [
       {
-        title: "Embeddings & RAG",
+        title: "Embeddings",
         href: "/guides/embeddings",
-        description: "Build semantic search and retrieval-augmented generation",
+        description: "Semantic search and retrieval over your own data",
       },
     ],
   },
@@ -135,7 +135,7 @@ export const navigation: NavSection[] = [
       {
         title: "Embeddings",
         href: "/api#embeddings",
-        description: "embed(), the embedding lifecycle, and the RAG toolkit",
+        description: "embed(), the embedding lifecycle, and the retrieval toolkit",
       },
       {
         title: "Models",

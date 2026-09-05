@@ -304,7 +304,7 @@ export default function PlatformSupportPage() {
           </tr>
           <tr>
             <td>
-              <code>embed()</code> (embeddings &amp; RAG)
+              <code>embed()</code> (embeddings)
             </td>
             <td>✅ iOS 17+ (zero-download OS model)</td>
             <td>

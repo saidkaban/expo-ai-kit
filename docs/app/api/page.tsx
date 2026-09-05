@@ -6,7 +6,7 @@ import { createPageMetadata } from "@/lib/site";
 
 export const metadata = createPageMetadata(
   "API Reference",
-  "Complete expo-ai-kit API reference, grouped by capability: text generation, speech-to-text, vision, embeddings and RAG, models, the AI SDK provider, the config plugin, types, and errors.",
+  "Complete expo-ai-kit API reference, grouped by capability: text generation, speech-to-text, vision, embeddings, models, the AI SDK provider, the config plugin, types, and errors.",
   "/api"
 );
 
@@ -25,10 +25,10 @@ const headings = [
   { id: "labelimage", text: "labelImage()", level: 3 },
   { id: "recognizetext", text: "recognizeText()", level: 3 },
   { id: "vision-lifecycle", text: "Vision lifecycle", level: 3 },
-  { id: "embeddings", text: "Embeddings & RAG", level: 2 },
+  { id: "embeddings", text: "Embeddings", level: 2 },
   { id: "embed", text: "embed()", level: 3 },
   { id: "embedding-lifecycle", text: "Embedding model lifecycle", level: 3 },
-  { id: "rag-toolkit", text: "RAG Toolkit", level: 3 },
+  { id: "rag-toolkit", text: "Retrieval toolkit", level: 3 },
   { id: "model-management", text: "Models", level: 2 },
   { id: "getbuiltinmodels", text: "getBuiltInModels()", level: 3 },
   { id: "getdownloadablemodels", text: "getDownloadableModels()", level: 3 },
@@ -444,12 +444,12 @@ function getSupportedTextRecognitionLanguages(): Promise<string[]>`}
       </CodeBlock>
 
       {/* ------------------------------------------------------------------ */}
-      <h2 id="embeddings">Embeddings &amp; RAG</h2>
+      <h2 id="embeddings">Embeddings</h2>
       <p>
-        Turn text into vectors for semantic search and retrieval-augmented
-        generation, then search them with dependency-free helpers. See the{" "}
+        Turn text into vectors for semantic search and retrieval, then search
+        them with dependency-free helpers. See the{" "}
         <a href="/guides/embeddings" className="text-accent hover:underline">
-          Embeddings &amp; RAG guide
+          Embeddings guide
         </a>
         .
       </p>
@@ -457,9 +457,9 @@ function getSupportedTextRecognitionLanguages(): Promise<string[]>`}
       <h3 id="embed">embed()</h3>
       <BadgeGroup platforms={["ios", "android", "new"]} />
       <p>
-        Turn text into embedding vectors for semantic search / RAG. See the{" "}
+        Turn text into embedding vectors for semantic search and retrieval. See the{" "}
         <a href="/guides/embeddings" className="text-accent hover:underline">
-          Embeddings &amp; RAG guide
+          Embeddings guide
         </a>
         . iOS (17+): Apple&apos;s zero-download <code>NLContextualEmbedding</code>:
         <code>language</code> selects the script model. Android: EmbeddingGemma
@@ -516,7 +516,7 @@ function getSupportedEmbeddingLanguages(): Promise<string[]> // iOS catalog; [] 
       </CodeBlock>
 
       {/* ------------------------------------------------------------------ */}
-      <h3 id="rag-toolkit">RAG Toolkit</h3>
+      <h3 id="rag-toolkit">Retrieval toolkit</h3>
       <BadgeGroup platforms={["ios", "android"]} />
       <p>
         Pure-JS helpers for retrieval. They work on every platform with any source
@@ -862,7 +862,7 @@ type GenerateTextResult = {
   finishReason: GenerateTextFinishReason;
 };
 
-// Embeddings & RAG
+// Embeddings
 type EmbeddingTask = 'semantic-similarity' | 'retrieval-query' | 'retrieval-document';
 type EmbedOptions = { task?: EmbeddingTask; language?: string };
 type EmbeddingModelIdentity = { id: string; revision: string };

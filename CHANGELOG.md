@@ -43,9 +43,9 @@
     guards. New error codes: `VISION_NOT_ENABLED`, `IMAGE_DECODE_FAILED`, `NO_SUBJECT_FOUND`,
     `VISION_FAILED`.
 - **Documentation recategorized by capability.** The README, npm description and keywords,
-  documentation sidebar, landing page, API reference, and `llms.txt` now present the library as
-  four capabilities, Text, Speech, Vision, Embeddings & RAG, each with its own guide (new
-  Text Generation hub and Vision guide), its engines per platform, and its opt-in flag.
+  documentation sidebar, landing page, API reference, and `llms.txt` now present the library by
+  capability (Text, Speech, Vision, Embeddings), each with its own guide (new Text Generation
+  hub and Vision guide), its engines per platform, and its opt-in flag.
 - **Example app** gained a Vision section (pick a photo → cutout / labels / OCR) and enables
   the `vision` flag, so CI compiles the new Kotlin source set, plus a Share cutout button to
   save the PNG to Photos. Verified on a Galaxy A16 (Android 16): Play services model install,

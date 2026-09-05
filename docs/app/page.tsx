@@ -116,7 +116,7 @@ const useCases = [
   },
   {
     emoji: "🔎",
-    job: "Search by meaning, build RAG",
+    job: "Search by meaning",
     call: "embed, createVectorStore",
     ios: "NLContextualEmbedding",
     android: "EmbeddingGemma",
@@ -157,7 +157,7 @@ const capabilities = [
   {
     emoji: "🔎",
     title: "Embeddings",
-    copy: "Vectors for semantic search and on-device retrieval-augmented generation.",
+    copy: "Turn text into vectors for semantic search and retrieval over your own data.",
     api: "embed · chunkText · createVectorStore",
     href: "/guides/embeddings",
   },
@@ -231,7 +231,7 @@ export default function Home() {
   sendMessage, streamMessage, generateObject, generateText, // 💬 Text
   transcribe, streamTranscription,                          // 🎙️ Speech
   removeBackground, labelImage, recognizeText,              // 👁️ Vision
-  embed, chunkText, createVectorStore,                      // 🔎 Embeddings & RAG
+  embed, chunkText, createVectorStore,                      // 🔎 Embeddings
 } from 'expo-ai-kit';`}
       </CodeBlock>
       <p>

@@ -5,8 +5,8 @@ import { BadgeGroup } from "@/components/Badge";
 import { createPageMetadata } from "@/lib/site";
 
 export const metadata = createPageMetadata(
-  "Embeddings & RAG",
-  "Create on-device embeddings and build private semantic search and retrieval-augmented generation with expo-ai-kit.",
+  "Embeddings",
+  "Create on-device embeddings for private semantic search and retrieval with expo-ai-kit.",
   "/guides/embeddings"
 );
 
@@ -29,7 +29,7 @@ const headings = [
 export default function EmbeddingsPage() {
   return (
     <DocsLayout headings={headings}>
-      <h1>Embeddings &amp; RAG</h1>
+      <h1>Embeddings</h1>
       <p className="text-xl text-muted leading-relaxed">
         Turn text into vectors for semantic search, then retrieve the most
         relevant chunks of your own documents to ground the model&apos;s answers,

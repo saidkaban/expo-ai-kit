@@ -2,7 +2,7 @@
 
 > On-device AI for Expo and React Native. Capabilities: Text (generation, structured output,
 > tool calling), Speech (speech-to-text), Vision (background removal, image labels, OCR), and
-> Embeddings (semantic search, RAG). Runs locally on iOS and Android on Apple Foundation
+> Embeddings (semantic search, retrieval). Runs locally on iOS and Android on Apple Foundation
 > Models, Apple Vision, Apple SpeechAnalyzer, Apple NLContextualEmbedding, ML Kit (Prompt API,
 > GenAI Speech Recognition, Vision), EmbeddingGemma, and downloadable/custom LiteRT-LM models
 > (Gemma, Qwen, Phi). Zero runtime dependencies, typed errors, TypeScript-first, and a Vercel AI
@@ -18,7 +18,7 @@ import {
   sendMessage, streamMessage, generateObject, generateText, // Text
   transcribe, streamTranscription,                          // Speech
   removeBackground, labelImage, recognizeText,              // Vision
-  embed, chunkText, createVectorStore,                      // Embeddings & RAG
+  embed, chunkText, createVectorStore,                      // Embeddings
 } from 'expo-ai-kit';
 ```
 
@@ -30,7 +30,7 @@ import {
 - Voice → text, live → `streamTranscription`; from a file → `transcribe` (flag `speech`).
 - Cut the subject out of a photo → `removeBackground` (flag `vision` on Android; iOS 17+ device).
 - What is in a photo → `labelImage`; text in a photo (OCR) → `recognizeText`.
-- Semantic search / RAG over app data → `embed` + `chunkText` + `createVectorStore`.
+- Semantic search over app data → `embed` + `chunkText` + `createVectorStore`.
 - Use a specific open model → `getRecommendedModel` / `downloadModel` / `setModel`, or `registerModel`.
 - Already on the Vercel AI SDK → `expoAiKit()` from `expo-ai-kit/ai`.
 
@@ -64,7 +64,7 @@ import {
   Android: ML Kit, Subject Segmentation and Text Recognition v2 (Latin/Chinese/Japanese/Korean/
   Devanagari) are Play services modules; Image Labeling is bundled and works offline at once.
   Vision calls never hold the text or speech guards.
-- Embeddings + RAG: `embed` (task-typed), `chunkText`, `cosineSimilarity`, `createVectorStore`;
+- Embeddings: `embed` (task-typed), `chunkText`, `cosineSimilarity`, `createVectorStore`;
   iOS NLContextualEmbedding (iOS 17+), Android EmbeddingGemma 300M (opt-in flag
   `androidEmbeddings` + `prepareEmbeddingModel`). Every result carries `model: { id, revision }`;
   vectors compare only under identical identity.

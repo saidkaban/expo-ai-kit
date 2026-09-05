@@ -38,7 +38,7 @@ import {
   sendMessage, streamMessage, generateObject, generateText, // 💬 Text
   transcribe, streamTranscription,                          // 🎙️ Speech
   removeBackground, labelImage, recognizeText,              // 👁️ Vision
-  embed, chunkText, createVectorStore,                      // 🔎 Embeddings & RAG
+  embed, chunkText, createVectorStore,                      // 🔎 Embeddings
 } from 'expo-ai-kit';
 ```
 
@@ -53,7 +53,7 @@ import {
 | ✂️ Cut the subject out of a photo | `removeBackground` | Apple Vision | ML Kit Subject Segmentation |
 | 🏷️ Label what is in a photo | `labelImage` | Apple Vision | ML Kit Image Labeling |
 | 🔤 Read the text in a photo | `recognizeText` | Apple Vision | ML Kit Text Recognition |
-| 🔎 Search by meaning, build RAG | `embed`, `createVectorStore` | NLContextualEmbedding | EmbeddingGemma |
+| 🔎 Search by meaning | `embed`, `createVectorStore` | NLContextualEmbedding | EmbeddingGemma |
 | 🧠 Run a Gemma, Qwen, or Phi model you pick | `downloadModel`, `setModel` | LiteRT-LM | LiteRT-LM |
 
 Every capability follows the same three steps: check availability, prepare once, use. Only the
@@ -252,7 +252,7 @@ Vision calls are independent of the text and speech guards, so they can run alon
 generation or a transcription. `getVisionAvailability()` reports each feature separately, and
 `getSupportedTextRecognitionLanguages()` lists what the device can read.
 
-## 🔎 Embeddings & RAG
+## 🔎 Embeddings
 
 Turn text into vectors for semantic search, then feed the best matches to the model, with small,
 dependency-free primitives. iOS uses Apple's zero-download `NLContextualEmbedding` (iOS 17+);
@@ -410,7 +410,7 @@ Everything is exported from `expo-ai-kit` (the AI SDK provider from `expo-ai-kit
 | 💬 Text | `sendMessage`, `streamMessage`, `generateObject`, `generateText`, `stripThinking` | `isAvailable`, `prepareBuiltInModel` | none |
 | 🎙️ Speech | `transcribe`, `streamTranscription` | `getSpeechRecognitionAvailability`, `prepareSpeechRecognition`, `getSupportedSpeechLocales`, `getSpeechPermissionsAsync`, `requestSpeechPermissionsAsync` | `speech` |
 | 👁️ Vision | `removeBackground`, `labelImage`, `recognizeText` | `getVisionAvailability`, `prepareVision`, `getSupportedTextRecognitionLanguages` | `vision` (Android) |
-| 🔎 Embeddings & RAG | `embed`, `chunkText`, `cosineSimilarity`, `createVectorStore` | `getEmbeddingModelStatus`, `prepareEmbeddingModel`, `cancelEmbeddingModelDownload`, `deleteEmbeddingModel`, `getSupportedEmbeddingLanguages` | `androidEmbeddings` (Android) |
+| 🔎 Embeddings | `embed`, `chunkText`, `cosineSimilarity`, `createVectorStore` | `getEmbeddingModelStatus`, `prepareEmbeddingModel`, `cancelEmbeddingModelDownload`, `deleteEmbeddingModel`, `getSupportedEmbeddingLanguages` | `androidEmbeddings` (Android) |
 | 🧠 Models | `setModel`, `unloadModel`, `getActiveModel` | `getBuiltInModels`, `getDownloadableModels`, `getDownloadedModels`, `getRecommendedModel`, `downloadModel`, `cancelDownload`, `deleteModel`, `registerModel`, `unregisterModel`, `getRegisteredModels`, `fetchModelMetadata` | none |
 | 🔌 AI SDK | `expoAiKit()`, `expoAiKit.embeddingModel()`, `expoAiKit.transcriptionModel()`, `createExpoAiKit` | | |
 

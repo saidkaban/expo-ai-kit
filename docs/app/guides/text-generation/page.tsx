@@ -157,7 +157,7 @@ const { text } = await promise;`}
         </li>
         <li>
           <Link href="/guides/embeddings" className="text-accent hover:underline">
-            Embeddings &amp; RAG
+            Embeddings
           </Link>:
           retrieve the most relevant chunks of your own data and add them to
           the conversation.
