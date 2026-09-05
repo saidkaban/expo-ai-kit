@@ -7,7 +7,7 @@
 > GenAI Speech Recognition, Vision), EmbeddingGemma, and downloadable/custom LiteRT-LM models
 > (Gemma, Qwen, Phi). Zero runtime dependencies, typed errors, TypeScript-first, and a Vercel AI
 > SDK provider (LanguageModelV3 + EmbeddingModelV3 + TranscriptionModelV3). No API keys, no
-> cloud, no per-token cost.
+> cloud.
 
 Install: `npx expo install expo-ai-kit` (native module, needs a development build, not Expo Go).
 
@@ -75,7 +75,7 @@ import {
   `expoAiKit.embeddingModel()`; `expoAiKit.transcriptionModel()` (AI SDK `transcribe()`).
   Works with AI SDK 6 and 7. Vision has no AI SDK model type, use the core functions.
 
-## Recipes (capabilities compose; their guards never collide)
+## Recipes (combining capabilities)
 
 - Voice memo → summary: `transcribe` then `generateObject` on `result.text`.
 - Receipt scanner: `recognizeText` then `generateObject` on `result.text`.
@@ -99,8 +99,8 @@ import {
 - Availability is explicit: check `isAvailable()` / `getSpeechRecognitionAvailability()` /
   `getVisionAvailability()` / `getEmbeddingModelStatus()` and call the matching `prepare*()`
   before first use. Only `prepare*()` calls download anything.
-- Config plugin: `["expo-ai-kit", { "speech": true, "vision": true, "androidEmbeddings": true }]`
-, each flag is opt-in and requires a new native build (not OTA). Without a flag the matching
+- Config plugin: `["expo-ai-kit", { "speech": true, "vision": true, "androidEmbeddings": true }]`.
+  Each flag is opt-in and requires a new native build (not OTA). Without a flag the matching
   APIs throw SPEECH_NOT_ENABLED / VISION_NOT_ENABLED / EMBEDDINGS_NOT_ENABLED.
 - Platform floors: library iOS 15.1+ / Android API 26+; Apple Foundation Models iOS 26+ on
   Apple-Intelligence devices; SpeechAnalyzer iOS 26+; ML Kit speech Android 12+ (API 31);
