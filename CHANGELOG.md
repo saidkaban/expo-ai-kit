@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.18.5
+
+### Fixed
+
+- The config plugin now raises Android `minSdkVersion` to 26 when `llm` or `speech` is on. Without
+  it, a default Expo app failed at the manifest merge. A higher value is left alone.
+- Android release builds keep LiteRT-LM's JNI classes, which R8 could remove or rename.
+- iOS no longer crashes on a `generation.seed` outside 32 bits, such as `Date.now()`. Such a value
+  is wrapped into range, so it stays reproducible.
+- `setModel()`, `unloadModel()`, and `deleteModel()` on the active model now reject with
+  `INFERENCE_BUSY` during a generation. They used to free the engine it was running on, which could
+  crash the app.
+
 ## 0.18.4
 
 0.18.3 was tagged but never published, so this is the first release with these changes.
