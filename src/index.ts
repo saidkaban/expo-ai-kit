@@ -10,6 +10,7 @@ import {
   filterDownloadedModels,
   getAllModels,
   getRegistryEntry,
+  isRetiredModelId,
 } from './models';
 import {
   ANDROID_ADVANCED_SPEECH_LOCALES,
@@ -1302,7 +1303,7 @@ export async function cancelDownload(modelId: string): Promise<void> {
  */
 export async function deleteModel(modelId: string): Promise<void> {
   const entry = getRegistryEntry(modelId);
-  if (!entry) {
+  if (!entry && !isRetiredModelId(modelId)) {
     throw new ModelError('MODEL_NOT_FOUND', modelId);
   }
   if (modelId === ExpoAiKitModule.getActiveModel()) {
@@ -1357,9 +1358,16 @@ export async function setModel(modelId: string, options?: SetModelOptions): Prom
     );
   }
   const entry = getRegistryEntry(modelId);
+  if (!entry && isRetiredModelId(modelId)) {
+    throw new ModelError(
+      'MODEL_NOT_FOUND',
+      modelId,
+      `"${modelId}" was removed from the model registry. Choose another model from ` +
+        'getDownloadableModels(), or call deleteModel() to reclaim its storage.'
+    );
+  }
   const minRamBytes = entry?.minRamBytes ?? 0;
-  // Explicit caller choice wins; otherwise honor the registry's per-model hint
-  // (e.g. Qwen3 pins 'cpu', its GPU path is broken in LiteRT-LM 0.10.0).
+  // Explicit caller choice wins; otherwise honor the registry's per-model hint.
   const backend = options?.backend ?? entry?.preferredBackend ?? 'auto';
   const generation = toNativeGeneration(options?.generation);
   assertNoInferenceInFlight('change the model');
