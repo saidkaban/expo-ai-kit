@@ -130,12 +130,13 @@ jobs:
         # compile too and must not pull in the LiteRT-LM runtime. `face`: only
         # `vision: ["face-detection"]`, which must compile without the other
         # ML Kit vision clients.
-        features: [all, none, face]
+        # `sdk58`: `all` on the newest Expo SDK.
+        features: [all, none, face, sdk58]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - uses: actions/setup-java@v4
         with:
@@ -147,6 +148,10 @@ jobs:
       - name: Install example deps
         working-directory: example
         run: npm ci
+      - name: Move the example to Expo SDK 58
+        if: matrix.features == 'sdk58'
+        working-directory: example
+        run: npx expo install expo@^58.0.0 && npx expo install --fix
       - name: Drop every plugin option (default build)
         if: matrix.features == 'none'
         working-directory: example
@@ -186,18 +191,23 @@ jobs:
       matrix:
         # See the android job: `none` is the default build and must not
         # download or link the LiteRT-LM xcframework.
-        features: [all, none]
+        # `sdk58`: `all` on the newest Expo SDK.
+        features: [all, none, sdk58]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run build
       - name: Install example deps
         working-directory: example
         run: npm ci
+      - name: Move the example to Expo SDK 58
+        if: matrix.features == 'sdk58'
+        working-directory: example
+        run: npx expo install expo@^58.0.0 && npx expo install --fix
       - name: Drop every plugin option (default build)
         if: matrix.features == 'none'
         working-directory: example
@@ -226,5 +236,6 @@ jobs:
             -configuration Debug \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
+            ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO \
             build
