@@ -11,12 +11,13 @@ import type { JSONSchema, JSONSchemaType } from './types';
 /** Build the instruction appended to the system prompt to elicit schema-shaped JSON. */
 export function buildSchemaInstruction(schema: JSONSchema): string {
   return [
-    'You must respond with a single JSON value that strictly conforms to this JSON Schema:',
+    'Answer the request with a single JSON value holding the actual answer. This JSON Schema describes the shape of that value:',
     '',
     JSON.stringify(schema),
     '',
     'Rules:',
     '- Output ONLY the JSON value. No prose, no explanation, no markdown code fences.',
+    '- Fill in real values. Never output the schema itself.',
     '- Include every property listed under "required".',
     '- Use the exact property names and value types defined by the schema.',
   ].join('\n');
