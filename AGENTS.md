@@ -41,7 +41,9 @@ a side effect of unrelated work.
   dependencies do not change this rule.
 - **Single-flight generation.** `sendMessage` and `streamMessage` share one generation guard and reject
   overlap with `INFERENCE_BUSY`. Any higher-level generation API must use that guarded path or the same
-  guard; do not introduce an uncoordinated native inference route.
+  guard; do not introduce an uncoordinated native inference route. `setModel`, `unloadModel`, and
+  deleting the active model also reject with `INFERENCE_BUSY` during a generation, because they free
+  the engine it is using.
 - **Existing message APIs are stateless.** Callers pass the complete history to every `sendMessage` or
   `streamMessage` call, so LiteRT-LM creates a fresh native conversation for each call. Reusing a global
   conversation here would duplicate history and mix unrelated or branched calls. Conversation and

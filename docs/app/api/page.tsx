@@ -1042,7 +1042,10 @@ try {
           <code>sendMessage</code> / <code>streamMessage</code> /{" "}
           <code>generateObject</code> / <code>generateText</code> rejects with{" "}
           <code>INFERENCE_BUSY</code>, wait for the active one, or{" "}
-          <code>stop()</code> the active stream first. Speech has its own guard
+          <code>stop()</code> the active stream first.{" "}
+          <code>setModel</code>, <code>unloadModel</code>, and deleting the
+          active model reject the same way while a generation runs. Speech has
+          its own guard
           (<code>SPEECH_BUSY</code>); vision and embeddings have none, so they
           run alongside either.
         </p>

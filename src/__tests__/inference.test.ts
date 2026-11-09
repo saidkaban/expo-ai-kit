@@ -10,7 +10,14 @@
 import { Platform } from 'react-native';
 
 import ExpoAiKitModule from '../ExpoAiKitModule';
-import { ModelError, sendMessage, setModel, streamMessage } from '../index';
+import {
+  deleteModel,
+  ModelError,
+  sendMessage,
+  setModel,
+  streamMessage,
+  unloadModel,
+} from '../index';
 import type { LLMStreamEvent } from '../types';
 
 jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
@@ -27,6 +34,7 @@ jest.mock('../ExpoAiKitModule', () => ({
     getActiveModel: jest.fn(),
     setModel: jest.fn(),
     unloadModel: jest.fn(),
+    deleteModel: jest.fn(),
     getBuiltInModels: jest.fn(),
     getDeviceRamBytes: jest.fn(),
   },
@@ -303,6 +311,56 @@ describe('streamMessage', () => {
     await promise;
     expect(streamSubscriptions).toHaveLength(1);
     expect(streamSubscriptions[0].removed).toBe(true);
+  });
+});
+
+describe('model lifecycle during a generation', () => {
+  const messages = [{ role: 'user' as const, content: 'hi' }];
+
+  function startGeneration(): { finish: () => Promise<unknown> } {
+    let resolve!: (r: { text: string }) => void;
+    native.sendMessage.mockReturnValueOnce(
+      new Promise((r) => {
+        resolve = r;
+      })
+    );
+    const running = sendMessage(messages);
+    return {
+      finish: () => {
+        resolve({ text: 'done' });
+        return running;
+      },
+    };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mutablePlatform.OS = 'ios';
+    native.getActiveModel.mockReturnValue('gemma-e2b');
+  });
+
+  it.each([
+    ['setModel', () => setModel('gemma-e2b'), () => native.setModel],
+    ['unloadModel', () => unloadModel(), () => native.unloadModel],
+    ['deleteModel of the active model', () => deleteModel('gemma-e2b'), () => native.deleteModel],
+  ])('rejects %s with INFERENCE_BUSY, then allows it', async (_name, call, nativeFn) => {
+    const generation = startGeneration();
+
+    const error = await call().catch((e) => e);
+    expect(error).toBeInstanceOf(ModelError);
+    expect(error.code).toBe('INFERENCE_BUSY');
+    expect(nativeFn()).not.toHaveBeenCalled();
+
+    await generation.finish();
+    await call();
+    expect(nativeFn()).toHaveBeenCalledTimes(1);
+  });
+
+  it('still deletes a model that is not active', async () => {
+    const generation = startGeneration();
+    await deleteModel('gemma-e4b');
+    expect(native.deleteModel).toHaveBeenCalledWith('gemma-e4b');
+    await generation.finish();
   });
 });
 

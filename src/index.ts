@@ -164,6 +164,18 @@ function acquireInference(): void {
   inferenceInFlight = true;
 }
 
+// Loading, unloading, or deleting the active model frees the engine a running
+// generation is still using, which crashes the app natively.
+function assertNoInferenceInFlight(action: string): void {
+  if (inferenceInFlight) {
+    throw new ModelError(
+      'INFERENCE_BUSY',
+      '',
+      `Cannot ${action} while a generation is in flight. Wait for it to finish, or stop the active stream first.`
+    );
+  }
+}
+
 /**
  * Map the public GenerationConfig to the native shape, dropping undefined fields
  * and validating ranges up front so callers get a clear error instead of an
@@ -1285,11 +1297,16 @@ export async function cancelDownload(modelId: string): Promise<void> {
  *
  * @param modelId - ID of the model to delete
  * @throws {ModelError} MODEL_NOT_FOUND if modelId is not in the registry
+ * @throws {ModelError} INFERENCE_BUSY if modelId is the active model and a
+ *   generation is running
  */
 export async function deleteModel(modelId: string): Promise<void> {
   const entry = getRegistryEntry(modelId);
   if (!entry) {
     throw new ModelError('MODEL_NOT_FOUND', modelId);
+  }
+  if (modelId === ExpoAiKitModule.getActiveModel()) {
+    assertNoInferenceInFlight('delete the active model');
   }
 
   await wrapNative(() => ExpoAiKitModule.deleteModel(modelId));
@@ -1328,6 +1345,7 @@ export async function deleteModel(modelId: string): Promise<void> {
  *   prepareBuiltInModel() has completed. To release a downloadable model's
  *   memory without activating a ready built-in, use {@link unloadModel}, it
  *   never validates the built-in.
+ * @throws {ModelError} INFERENCE_BUSY if a generation is running
  */
 export async function setModel(modelId: string, options?: SetModelOptions): Promise<void> {
   if (modelId === ANDROID_EMBEDDING_MODEL.id) {
@@ -1344,6 +1362,7 @@ export async function setModel(modelId: string, options?: SetModelOptions): Prom
   // (e.g. Qwen3 pins 'cpu', its GPU path is broken in LiteRT-LM 0.10.0).
   const backend = options?.backend ?? entry?.preferredBackend ?? 'auto';
   const generation = toNativeGeneration(options?.generation);
+  assertNoInferenceInFlight('change the model');
   await wrapNative(() => ExpoAiKitModule.setModel(modelId, minRamBytes, backend, generation));
 }
 
@@ -1366,8 +1385,11 @@ export function getActiveModel(): string {
  * (e.g. iOS below 26, or Android without ML Kit support), later generation
  * calls throw typed errors (DEVICE_NOT_SUPPORTED / MODEL_NOT_DOWNLOADED)
  * until {@link setModel} activates a downloaded model again.
+ *
+ * @throws {ModelError} INFERENCE_BUSY if a generation is running
  */
 export async function unloadModel(): Promise<void> {
+  assertNoInferenceInFlight('unload the model');
   await wrapNative(() => ExpoAiKitModule.unloadModel());
 }
 
