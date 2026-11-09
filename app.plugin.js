@@ -11,6 +11,9 @@ const LLM_PROP_KEY = 'expoAiKit.llm';
 const EMBEDDINGS_PROP_KEY = 'expoAiKit.androidEmbeddings';
 const SPEECH_PROP_KEY = 'expoAiKit.speech';
 const VISION_PROP_KEY = 'expoAiKit.vision';
+const MIN_SDK_PROP_KEY = 'android.minSdkVersion';
+// ML Kit GenAI, which the `llm` and `speech` options link, requires API 26.
+const REQUIRED_MIN_SDK = 26;
 const DEFAULT_MIC_PERMISSION =
   'Allow $(PRODUCT_NAME) to use the microphone for on-device speech recognition';
 
@@ -56,8 +59,9 @@ const DEFAULT_MIC_PERMISSION =
  *   On, prebuild:
  *   - Android: writes a gradle property that compiles the library's speech
  *     source set and adds the `com.google.mlkit:genai-speech-recognition`
- *     dependency, and adds RECORD_AUDIO to AndroidManifest (the ML Kit speech
- *     engine requires it even for file transcription).
+ *     dependency, adds RECORD_AUDIO to AndroidManifest (the ML Kit speech
+ *     engine requires it even for file transcription), and raises
+ *     minSdkVersion to 26.
  *   - iOS: adds NSMicrophoneUsageDescription (needed for live transcription
  *     only; file transcription needs no permission). Customize the purpose
  *     string with `{ "speech": { "microphonePermission": "..." } }`.
@@ -102,6 +106,22 @@ function resolveVisionProperty(value) {
   const features = VISION_FEATURES.filter((f) => value.includes(f));
   if (features.length === 0) return null;
   return features.length === VISION_FEATURES.length ? 'true' : features.join(',');
+}
+
+/** Raise android.minSdkVersion to the required level. Never lowers it. */
+function raiseMinSdk(properties) {
+  const existing = properties.find(
+    (item) => item.type === 'property' && item.key === MIN_SDK_PROP_KEY
+  );
+  if (!existing) {
+    properties.push({
+      type: 'property',
+      key: MIN_SDK_PROP_KEY,
+      value: String(REQUIRED_MIN_SDK),
+    });
+  } else if (!(Number(existing.value) >= REQUIRED_MIN_SDK)) {
+    existing.value = String(REQUIRED_MIN_SDK);
+  }
 }
 
 const withExpoAiKit = (config, props = {}) => {
@@ -174,6 +194,9 @@ const withExpoAiKit = (config, props = {}) => {
         { type: 'property', key: VISION_PROP_KEY, value: vision }
       );
     }
+    if (llm || speech) {
+      raiseMinSdk(c.modResults);
+    }
     return c;
   });
 
@@ -206,3 +229,4 @@ const withExpoAiKit = (config, props = {}) => {
 
 module.exports = createRunOncePlugin(withExpoAiKit, pkg.name, pkg.version);
 module.exports.resolveVisionProperty = resolveVisionProperty;
+module.exports.raiseMinSdk = raiseMinSdk;

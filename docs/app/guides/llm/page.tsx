@@ -75,7 +75,8 @@ export default function LlmPage() {
       <p>
         The option links the LiteRT-LM runtime that runs downloadable models
         (about 30 MB of iOS arm64 code, 21 MB on Android) and, on Android, the
-        ML Kit Prompt API client, which needs <code>minSdkVersion</code> 26. The
+        ML Kit Prompt API client, which needs <code>minSdkVersion</code> 26, so
+        the config plugin raises it to 26 if it is lower. The
         built-in models are OS-provided and add nothing further. Without the
         option, <code>isAvailable()</code> returns <code>false</code> and the
         generation, activation, and download calls throw a typed{" "}
