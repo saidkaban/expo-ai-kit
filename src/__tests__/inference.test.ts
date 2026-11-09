@@ -10,7 +10,7 @@
 import { Platform } from 'react-native';
 
 import ExpoAiKitModule from '../ExpoAiKitModule';
-import { ModelError, sendMessage, streamMessage } from '../index';
+import { ModelError, sendMessage, setModel, streamMessage } from '../index';
 import type { LLMStreamEvent } from '../types';
 
 jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
@@ -303,5 +303,27 @@ describe('streamMessage', () => {
     await promise;
     expect(streamSubscriptions).toHaveLength(1);
     expect(streamSubscriptions[0].removed).toBe(true);
+  });
+});
+
+describe('generation seed', () => {
+  async function nativeSeed(seed: number): Promise<number | undefined> {
+    native.setModel.mockClear();
+    await setModel('gemma-e2b', { generation: { seed } });
+    return native.setModel.mock.calls[0][3].seed;
+  }
+
+  it.each([1_762_000_000_000, 2 ** 31, -(2 ** 40), Number.MAX_SAFE_INTEGER])(
+    'wraps %d into a stable non-negative 32-bit value',
+    async (seed) => {
+      const wrapped = await nativeSeed(seed);
+      expect(wrapped).toBeGreaterThanOrEqual(0);
+      expect(wrapped).toBeLessThanOrEqual(2 ** 31 - 1);
+      expect(await nativeSeed(seed)).toBe(wrapped);
+    }
+  );
+
+  it.each([0, 42, -5, 2 ** 31 - 1])('leaves %d unchanged', async (seed) => {
+    expect(await nativeSeed(seed)).toBe(seed);
   });
 });

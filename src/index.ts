@@ -193,7 +193,9 @@ function toNativeGeneration(g?: GenerationConfig): NativeGenerationConfig {
     if (!Number.isInteger(g.seed)) {
       throw new Error('generation.seed must be an integer');
     }
-    out.seed = g.seed;
+    // LiteRT-LM takes a 32-bit seed, and iOS crashes on a larger one such as
+    // Date.now(). Values already in range pass through unchanged.
+    out.seed = g.seed === (g.seed | 0) ? g.seed : g.seed & 0x7fffffff;
   }
   if (g?.maxTokens != null) {
     if (!Number.isInteger(g.maxTokens) || g.maxTokens <= 0) {

@@ -37,7 +37,7 @@ export type GenerationConfig = {
   topK?: number;
   /** Nucleus sampling: cumulative probability threshold in [0, 1]. */
   topP?: number;
-  /** RNG seed for reproducible sampling (Gemma only). */
+  /** RNG seed for reproducible sampling (Gemma only). Values outside 32 bits are wrapped into range. */
   seed?: number;
   /** Maximum number of output tokens to generate (Apple FM / ML Kit only). */
   maxTokens?: number;
