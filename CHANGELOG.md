@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.19.0
+
+### Breaking
+
+- The curated model list changed. `qwen3-0.6b`, `qwen3-1.7b`, `qwen3-4b`, and `phi-4-mini` were
+  removed, and `qwen3.5-0.8b` and `qwen3.5-2b` were added. `setModel()` now throws `MODEL_NOT_FOUND`
+  for a removed id, and `deleteModel()` still accepts one so apps can reclaim the file. To keep using
+  a removed model, register it with `registerModel()`.
+
+### Changed
+
+- LiteRT-LM is now 0.19.1 on both platforms (was 0.10.0 on Android and 0.12.0 on iOS).
+- Gemma 4 models report their license as `Apache-2.0`, matching their model cards.
+
 ## 0.18.5
 
 ### Fixed

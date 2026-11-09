@@ -674,7 +674,7 @@ const hits = store.search(queryVector, { topK: 4 });
 // SetModelOptions: { backend?: 'auto' | 'gpu' | 'cpu'; generation?: GenerationConfig }`}
       </CodeBlock>
       <CodeBlock language="typescript">
-        {`await setModel('qwen3-1.7b', { generation: { temperature: 0.7, topK: 40 } });`}
+        {`await setModel('qwen3.5-2b', { generation: { temperature: 0.7, topK: 40 } });`}
       </CodeBlock>
 
       <h3 id="unloadmodel">unloadModel()</h3>

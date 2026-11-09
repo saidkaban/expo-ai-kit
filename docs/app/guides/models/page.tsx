@@ -37,8 +37,8 @@ export default function ModelsPage() {
         expo-ai-kit runs two kinds of model. <strong>Built-in</strong> models are
         provided and maintained by the OS, Apple Foundation Models on iOS and
         ML Kit on Android. Android may prepare its model on first use, but it is
-        not bundled into your app. <strong>Downloadable</strong> models (Gemma, Qwen,
-        Phi) are fetched at runtime via LiteRT-LM and run on both platforms. You
+        not bundled into your app. <strong>Downloadable</strong> models (Gemma and Qwen)
+        are fetched at runtime via LiteRT-LM and run on both platforms. You
         switch between any of them with <code>setModel()</code>. Both kinds
         need the <code>llm</code> build option (see{" "}
         <a href="/guides/llm#enable" className="text-accent hover:underline">Enable the LLM</a>).
@@ -84,27 +84,20 @@ export default function ModelsPage() {
           </tr>
         </thead>
         <tbody>
-          <tr><td><code>qwen3-0.6b</code></td><td>0.6B</td><td>~0.5 GB</td><td>Apache-2.0</td></tr>
-          <tr><td><code>qwen3-1.7b</code></td><td>1.7B</td><td>~2.1 GB</td><td>Apache-2.0</td></tr>
-          <tr><td><code>gemma-e2b</code></td><td>2.3B</td><td>~2.6 GB</td><td>Gemma</td></tr>
-          <tr><td><code>qwen3-4b</code></td><td>4B</td><td>~2.7 GB</td><td>Apache-2.0</td></tr>
-          <tr><td><code>gemma-e4b</code></td><td>4.5B</td><td>~3.7 GB</td><td>Gemma</td></tr>
-          <tr><td><code>phi-4-mini</code></td><td>3.8B</td><td>~3.9 GB</td><td>MIT</td></tr>
+          <tr><td><code>qwen3.5-0.8b</code></td><td>0.8B</td><td>~1 GB</td><td>Apache-2.0</td></tr>
+          <tr><td><code>qwen3.5-2b</code></td><td>2B</td><td>~2.1 GB</td><td>Apache-2.0</td></tr>
+          <tr><td><code>gemma-e2b</code></td><td>2.3B</td><td>~2.6 GB</td><td>Apache-2.0</td></tr>
+          <tr><td><code>gemma-e4b</code></td><td>4.5B</td><td>~3.7 GB</td><td>Apache-2.0</td></tr>
         </tbody>
       </table>
 
-      <Callout type="info" title="Qwen3 runs on the CPU backend by default">
+      <Callout type="info" title="Qwen3.5 runs on the CPU backend by default">
         <p>
           Registry entries can pin a <code>preferredBackend</code> that{" "}
-          <code>setModel()</code> uses when you don&apos;t pass one. The Qwen3
-          entries pin <code>&apos;cpu&apos;</code>: their GPU path is broken in
-          the current LiteRT-LM runtime (device-verified, a native crash on
-          Android and degenerate output on iOS), while CPU generates correctly
-          on both platforms. An explicit{" "}
-          <code>setModel(id, {"{ backend }"})</code> always wins. Qwen3 is also
-          a thinking model, see <code>stripThinking()</code> if you call the
-          raw <code>sendMessage()</code> (the orchestrated APIs and the AI SDK
-          provider already handle its <code>&lt;think&gt;</code> blocks).
+          <code>setModel()</code> uses when you don&apos;t pass one. The Qwen3.5
+          entries pin <code>&apos;cpu&apos;</code>: on the GPU these files take
+          far longer to load and use more memory, at similar speed. An explicit{" "}
+          <code>setModel(id, {"{ backend }"})</code> always wins.
         </p>
       </Callout>
 
@@ -120,12 +113,12 @@ export default function ModelsPage() {
       <CodeBlock language="typescript" filename="setup.ts">
         {`import { downloadModel, setModel, unloadModel } from 'expo-ai-kit';
 
-await downloadModel('qwen3-1.7b', {
+await downloadModel('qwen3.5-2b', {
   onProgress: (p) => console.log(\`\${Math.round(p * 100)}%\`),
 });
 
-await setModel('qwen3-1.7b', { generation: { temperature: 0.7 } });
-// ...all inference now runs on Qwen3 1.7B
+await setModel('qwen3.5-2b', { generation: { temperature: 0.7 } });
+// ...all inference now runs on Qwen3.5 2B
 
 await unloadModel(); // back to the OS model`}
       </CodeBlock>
@@ -189,22 +182,22 @@ if (best) await downloadModel(best.id);`}
         {`import { registerModel, downloadModel, setModel } from 'expo-ai-kit';
 
 registerModel({
-  id: 'qwen3-4b-custom',
-  name: 'Qwen3 4B',
+  id: 'qwen3.5-4b-custom',
+  name: 'Qwen3.5 4B',
   parameterCount: '4B',
   quantization: 'int4',
   downloadUrl:
-    'https://huggingface.co/litert-community/Qwen3-4B/resolve/84cc5a35c9c65cd18fcd65bb1f3a7d77a4acfe6e/qwen3_4b_mixed_int4.litertlm',
-  sha256: 'f0794bc77efeaaf4f7af815f04c483b19b8f2ae4a102cef1b7b760a25848a18e',
-  sizeBytes: 2_659_057_664,
+    'https://huggingface.co/litert-community/Qwen3.5-4B/resolve/187a97159b08a1dd0fadd5b896b9859ade6a7b95/Qwen3.5-4B_mixed_int4.litertlm',
+  sha256: '878e5d1926ecc4930e24c62de43a7038edeeb0c57446231086b139892984a5fd',
+  sizeBytes: 2_754_166_784,
   contextWindow: 4096,
   minRamBytes: 3_000_000_000,
   supportedPlatforms: ['ios', 'android'],
   license: 'Apache-2.0',
 });
 
-await downloadModel('qwen3-4b-custom');
-await setModel('qwen3-4b-custom');`}
+await downloadModel('qwen3.5-4b-custom');
+await setModel('qwen3.5-4b-custom');`}
       </CodeBlock>
 
       <Callout type="warning" title="Re-register on each launch">
@@ -228,7 +221,7 @@ await setModel('qwen3-4b-custom');`}
         {`import { fetchModelMetadata } from 'expo-ai-kit';
 
 const { sha256, sizeBytes } = await fetchModelMetadata(
-  'https://huggingface.co/litert-community/Qwen3-4B/resolve/84cc5a35c9c65cd18fcd65bb1f3a7d77a4acfe6e/qwen3_4b_mixed_int4.litertlm',
+  'https://huggingface.co/litert-community/Qwen3.5-4B/resolve/187a97159b08a1dd0fadd5b896b9859ade6a7b95/Qwen3.5-4B_mixed_int4.litertlm',
 );`}
       </CodeBlock>
 
