@@ -84,47 +84,14 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     supportedPlatforms: ['ios', 'android'],
     license: 'Apache-2.0',
   },
-  // --- Qwen3.5 (Apache-2.0), litert-community builds. preferredBackend 'cpu':
-  // upstream's phone benchmarks for these files show GPU engine creation of
-  // about 90 s and 4 GB or more of memory on a Galaxy S26, against 12 to 19 s
-  // and 2 to 3 GB on CPU, at similar decode speed. ---
-  {
-    id: 'qwen3.5-0.8b',
-    name: 'Qwen3.5 0.8B',
-    parameterCount: '0.8B',
-    quantization: 'dynamic-int8',
-    downloadUrl:
-      'https://huggingface.co/litert-community/Qwen3.5-0.8B/resolve/d2ecfb5cceb4916329d59181f3f24e59e4f25a19/Qwen3.5-0.8B_int8.litertlm',
-    sha256: 'd6702088983b3a997db5299558a37d2fd924a94daf2b09bd42c4e618c6f694a4',
-    sizeBytes: 964_657_152, // 965MB (exact, HF LFS)
-    // Conservative default (not stated by the build). TODO: benchmark on device.
-    contextWindow: 4_096,
-    minRamBytes: 2_000_000_000, // 2GB, about 2GB peak on CPU (Galaxy S26)
-    supportedPlatforms: ['ios', 'android'],
-    license: 'Apache-2.0',
-    preferredBackend: 'cpu',
-  },
-  {
-    id: 'qwen3.5-2b',
-    name: 'Qwen3.5 2B',
-    parameterCount: '2B',
-    quantization: 'dynamic-int8',
-    downloadUrl:
-      'https://huggingface.co/litert-community/Qwen3.5-2B/resolve/f24013ba6844bd39be2d1f68e8d2421a77eed1f2/Qwen3.5-2B_int8.litertlm',
-    sha256: 'c2438cb9c050220e667366b4beeca4daac56e693b226420674f53fc40f007c49',
-    sizeBytes: 2_119_843_840, // 2.12GB (exact, HF LFS)
-    // Conservative default (not stated by the build). TODO: benchmark on device.
-    contextWindow: 4_096,
-    minRamBytes: 3_000_000_000, // 3GB, about 3.2GB peak on CPU (Galaxy S26)
-    supportedPlatforms: ['ios', 'android'],
-    license: 'Apache-2.0',
-    preferredBackend: 'cpu',
-  },
 ];
 
-// Ids removed from MODEL_REGISTRY. setModel() refuses them, because their files
-// were built for older LiteRT-LM runtimes, but deleteModel() still accepts them
-// so apps can reclaim a file downloaded before the removal.
+// Ids removed from MODEL_REGISTRY. setModel() refuses them, but deleteModel()
+// still accepts them so apps can reclaim a file downloaded before the removal.
+// Qwen is not offered on LiteRT-LM 0.19: the published Qwen3 files carry a
+// string-only chat template the runtime can no longer render, and Qwen3.5 keeps
+// recurrent state between conversations on one engine (LiteRT-LM issue #3165).
+// Phi-4 Mini could not be verified on 0.19: the app died downloading it on phones.
 const RETIRED_MODEL_IDS = new Set(['qwen3-0.6b', 'qwen3-1.7b', 'qwen3-4b', 'phi-4-mini']);
 
 /** Whether an id belonged to a model that has been removed from the registry. */
@@ -284,7 +251,7 @@ export function validateModelEntry(entry: ModelRegistryEntry): string[] {
  * ```ts
  * const { sha256, sizeBytes } = await fetchModelMetadata(url); // dev-time
  * registerModel({
- *   id: 'qwen3-8b', name: 'Qwen3 8B', parameterCount: '8B', quantization: 'int4',
+ *   id: 'my-model', name: 'My Model', parameterCount: '8B', quantization: 'int4',
  *   downloadUrl: url, sha256, sizeBytes,
  *   contextWindow: 4096, minRamBytes: 6_000_000_000,
  *   supportedPlatforms: ['ios', 'android'], license: 'Apache-2.0',

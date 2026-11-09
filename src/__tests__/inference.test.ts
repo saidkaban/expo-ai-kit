@@ -79,14 +79,14 @@ beforeEach(() => {
 
 describe('retired models', () => {
   it('setModel refuses a retired id without reaching native', async () => {
-    await expect(setModel('phi-4-mini')).rejects.toMatchObject({ code: 'MODEL_NOT_FOUND' });
+    await expect(setModel('qwen3-4b')).rejects.toMatchObject({ code: 'MODEL_NOT_FOUND' });
     expect(native.setModel).not.toHaveBeenCalled();
   });
 
   it('deleteModel still reclaims a retired id', async () => {
     native.deleteModel.mockResolvedValue(undefined);
-    await deleteModel('phi-4-mini');
-    expect(native.deleteModel).toHaveBeenCalledWith('phi-4-mini');
+    await deleteModel('qwen3-4b');
+    expect(native.deleteModel).toHaveBeenCalledWith('qwen3-4b');
   });
 
   it('deleteModel rejects an id that never existed', async () => {

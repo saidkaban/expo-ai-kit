@@ -148,12 +148,6 @@ describe('registerModel / getRegistryEntry', () => {
     );
   });
 
-  it('pins qwen3.5 models to the CPU backend', () => {
-    for (const id of ['qwen3.5-0.8b', 'qwen3.5-2b']) {
-      expect(getRegistryEntry(id)?.preferredBackend).toBe('cpu');
-    }
-  });
-
   it('removes retired models from the registry but still recognizes their ids', () => {
     for (const id of ['qwen3-0.6b', 'qwen3-1.7b', 'qwen3-4b', 'phi-4-mini']) {
       expect(getRegistryEntry(id)).toBeUndefined();
