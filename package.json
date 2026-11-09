@@ -1,6 +1,6 @@
 {
   "name": "expo-ai-kit",
-  "version": "0.18.5",
+  "version": "0.19.0",
   "description": "On-device AI for React Native and Expo: LLMs, speech-to-text, vision, and embeddings. Each capability is opt-in at build time. No API key. Zero runtime JavaScript dependencies.",
   "main": "build/index.js",
   "types": "build/index.d.ts",
