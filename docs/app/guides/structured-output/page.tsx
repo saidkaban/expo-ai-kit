@@ -39,7 +39,7 @@ export default function StructuredOutputPage() {
         want; the model is prompted to produce it, the JSON is extracted and
         validated against the schema, and on a mismatch the error is fed back and
         the model is re-prompted. It works on every backend, Apple Foundation
-        Models, ML Kit, and downloadable Gemma and Qwen.
+        Models, ML Kit, and downloadable Gemma models.
       </p>
 
       <Callout type="info" title="When to use it">

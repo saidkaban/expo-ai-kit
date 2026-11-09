@@ -4,15 +4,21 @@
 
 ### Breaking
 
-- The curated model list changed. `qwen3-0.6b`, `qwen3-1.7b`, `qwen3-4b`, and `phi-4-mini` were
-  removed, and `qwen3.5-0.8b` and `qwen3.5-2b` were added. `setModel()` now throws `MODEL_NOT_FOUND`
-  for a removed id, and `deleteModel()` still accepts one so apps can reclaim the file. To keep using
-  a removed model, register it with `registerModel()`.
+- `qwen3-0.6b`, `qwen3-1.7b`, `qwen3-4b`, and `phi-4-mini` were removed from the curated model list.
+  The published Qwen3 files do not work on LiteRT-LM 0.19, and Phi-4 Mini could not be verified on
+  it. `setModel()` now throws `MODEL_NOT_FOUND` for these ids, and `deleteModel()` still accepts them
+  so apps can reclaim the files. Gemma 4 remains available. To keep using another model, register a
+  compatible file with `registerModel()`.
 
 ### Changed
 
 - LiteRT-LM is now 0.19.1 on both platforms (was 0.10.0 on Android and 0.12.0 on iOS).
 - Gemma 4 models report their license as `Apache-2.0`, matching their model cards.
+
+### Fixed
+
+- Downloadable models now receive the system prompt and chat history with their real roles. All of
+  it used to be joined into one user message, so models could lose track of who said what.
 
 ## 0.18.5
 

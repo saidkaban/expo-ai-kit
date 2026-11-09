@@ -40,7 +40,7 @@ export default function LlmPage() {
         By default the LLM runs on the OS model, <strong>Apple Foundation
         Models</strong> on iOS 26+ and the <strong>ML Kit Prompt API</strong>{" "}
         on supported Android devices, and you can switch to a downloadable
-        Gemma or Qwen model with{" "}
+        Gemma model with{" "}
         <code>setModel()</code> (see{" "}
         <Link href="/guides/models" className="text-accent hover:underline">
           Models

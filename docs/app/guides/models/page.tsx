@@ -37,8 +37,7 @@ export default function ModelsPage() {
         expo-ai-kit runs two kinds of model. <strong>Built-in</strong> models are
         provided and maintained by the OS, Apple Foundation Models on iOS and
         ML Kit on Android. Android may prepare its model on first use, but it is
-        not bundled into your app. <strong>Downloadable</strong> models (Gemma and Qwen)
-        are fetched at runtime via LiteRT-LM and run on both platforms. You
+        not bundled into your app. <strong>Downloadable</strong> models (Gemma) are fetched at runtime via LiteRT-LM and run on both platforms. You
         switch between any of them with <code>setModel()</code>. Both kinds
         need the <code>llm</code> build option (see{" "}
         <a href="/guides/llm#enable" className="text-accent hover:underline">Enable the LLM</a>).
@@ -84,22 +83,10 @@ export default function ModelsPage() {
           </tr>
         </thead>
         <tbody>
-          <tr><td><code>qwen3.5-0.8b</code></td><td>0.8B</td><td>~1 GB</td><td>Apache-2.0</td></tr>
-          <tr><td><code>qwen3.5-2b</code></td><td>2B</td><td>~2.1 GB</td><td>Apache-2.0</td></tr>
           <tr><td><code>gemma-e2b</code></td><td>2.3B</td><td>~2.6 GB</td><td>Apache-2.0</td></tr>
           <tr><td><code>gemma-e4b</code></td><td>4.5B</td><td>~3.7 GB</td><td>Apache-2.0</td></tr>
         </tbody>
       </table>
-
-      <Callout type="info" title="Qwen3.5 runs on the CPU backend by default">
-        <p>
-          Registry entries can pin a <code>preferredBackend</code> that{" "}
-          <code>setModel()</code> uses when you don&apos;t pass one. The Qwen3.5
-          entries pin <code>&apos;cpu&apos;</code>: on the GPU these files take
-          far longer to load and use more memory, at similar speed. An explicit{" "}
-          <code>setModel(id, {"{ backend }"})</code> always wins.
-        </p>
-      </Callout>
 
       <h2 id="download-and-switch">Download &amp; Switch</h2>
       <p>
@@ -113,12 +100,12 @@ export default function ModelsPage() {
       <CodeBlock language="typescript" filename="setup.ts">
         {`import { downloadModel, setModel, unloadModel } from 'expo-ai-kit';
 
-await downloadModel('qwen3.5-2b', {
+await downloadModel('gemma-e2b', {
   onProgress: (p) => console.log(\`\${Math.round(p * 100)}%\`),
 });
 
-await setModel('qwen3.5-2b', { generation: { temperature: 0.7 } });
-// ...all inference now runs on Qwen3.5 2B
+await setModel('gemma-e2b', { generation: { temperature: 0.7 } });
+// ...all inference now runs on Gemma 4 E2B
 
 await unloadModel(); // back to the OS model`}
       </CodeBlock>
@@ -182,22 +169,22 @@ if (best) await downloadModel(best.id);`}
         {`import { registerModel, downloadModel, setModel } from 'expo-ai-kit';
 
 registerModel({
-  id: 'qwen3.5-4b-custom',
-  name: 'Qwen3.5 4B',
+  id: 'my-model',
+  name: 'My Model',
   parameterCount: '4B',
   quantization: 'int4',
   downloadUrl:
-    'https://huggingface.co/litert-community/Qwen3.5-4B/resolve/187a97159b08a1dd0fadd5b896b9859ade6a7b95/Qwen3.5-4B_mixed_int4.litertlm',
-  sha256: '878e5d1926ecc4930e24c62de43a7038edeeb0c57446231086b139892984a5fd',
-  sizeBytes: 2_754_166_784,
+    'https://huggingface.co/your-org/your-model/resolve/<commit>/model.litertlm',
+  sha256: '<sha256>',
+  sizeBytes: 2_659_057_664,
   contextWindow: 4096,
   minRamBytes: 3_000_000_000,
   supportedPlatforms: ['ios', 'android'],
   license: 'Apache-2.0',
 });
 
-await downloadModel('qwen3.5-4b-custom');
-await setModel('qwen3.5-4b-custom');`}
+await downloadModel('my-model');
+await setModel('my-model');`}
       </CodeBlock>
 
       <Callout type="warning" title="Re-register on each launch">
@@ -221,7 +208,7 @@ await setModel('qwen3.5-4b-custom');`}
         {`import { fetchModelMetadata } from 'expo-ai-kit';
 
 const { sha256, sizeBytes } = await fetchModelMetadata(
-  'https://huggingface.co/litert-community/Qwen3.5-4B/resolve/187a97159b08a1dd0fadd5b896b9859ade6a7b95/Qwen3.5-4B_mixed_int4.litertlm',
+  'https://huggingface.co/your-org/your-model/resolve/<commit>/model.litertlm',
 );`}
       </CodeBlock>
 
