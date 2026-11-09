@@ -153,6 +153,13 @@ describe('registerModel / getRegistryEntry', () => {
     }
   });
 
+  it('pins every registry download to a Hugging Face commit, not a branch', () => {
+    expect(MODEL_REGISTRY.length).toBeGreaterThan(0);
+    for (const entry of MODEL_REGISTRY) {
+      expect(parseHuggingFaceUrl(entry.downloadUrl)?.revision).toMatch(/^[0-9a-f]{40}$/);
+    }
+  });
+
   it('re-registering the same id overwrites it', () => {
     registerModel(validEntry({ id: 'my-model', name: 'First' }));
     registerModel(validEntry({ id: 'my-model', name: 'Second' }));

@@ -2,10 +2,18 @@
 
 ## 0.18.3
 
+### Fixed
+
+- `downloadModel()` failed for `qwen3-0.6b` (404) and for `qwen3-1.7b` and `qwen3-4b`
+  (`DOWNLOAD_CORRUPT` after the full download), because upstream removed or replaced those files on
+  the Hugging Face `main` branch. Every downloadable model now pins a Hugging Face commit, so the
+  registry's URLs, hashes, and sizes can no longer drift apart. Model ids and files are unchanged,
+  and already downloaded models keep working.
+
 ### Changed
 
 - README: npm version, downloads, license, and platform badges; a short list of why to run AI on
-  the device; a `streamMessage` example in the LLM section. No code changes.
+  the device; a `streamMessage` example in the LLM section.
 
 ## 0.18.2
 

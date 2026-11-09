@@ -52,6 +52,9 @@ export type ModelRegistryEntry = {
   preferredBackend?: InferenceBackend;
 };
 
+// Every downloadUrl pins a HuggingFace commit, never a branch: upstream replaces
+// and removes files on `main`, which turns a pinned sha256 into a 404 or a
+// DOWNLOAD_CORRUPT after the whole file has downloaded.
 export const MODEL_REGISTRY: ModelRegistryEntry[] = [
   {
     id: 'gemma-e2b',
@@ -59,7 +62,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     parameterCount: '2.3B',
     quantization: 'mixed-2/4/8-bit',
     downloadUrl:
-      'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm',
+      'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/3d48132a00cf76de57d926de30f5c5c5ed9b8c0d/gemma-4-E2B-it.litertlm',
     sha256: '181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c',
     sizeBytes: 2_588_147_712, // 2.59GB (exact, HF LFS)
     // Conservative limit for 4GB RAM devices.
@@ -75,7 +78,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     parameterCount: '4.5B',
     quantization: 'mixed-4/8-bit',
     downloadUrl:
-      'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm',
+      'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/71064b01bd5e2bfd9a5f9dd52df86ae4800138c1/gemma-4-E4B-it.litertlm',
     sha256: '0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0',
     sizeBytes: 3_659_530_240, // 3.66GB (exact, HF LFS)
     contextWindow: 16_000,
@@ -94,7 +97,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     parameterCount: '0.6B',
     quantization: 'mixed-int4',
     downloadUrl:
-      'https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/qwen3_0_6b_mixed_int4.litertlm',
+      'https://huggingface.co/litert-community/Qwen3-0.6B/resolve/8414150f2e9dcc82449bcc9c5abc404b399a4d06/qwen3_0_6b_mixed_int4.litertlm',
     sha256: 'b1baab462f6be49d70eada79d715c2c52cd9ece0cad00bddf6a2c097d23498e9',
     sizeBytes: 497_664_000, // 475MB (exact, HF LFS)
     // The int4 build ships a 2048-token KV. TODO: benchmark on device.
@@ -110,7 +113,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     parameterCount: '1.7B',
     quantization: 'dynamic-int8',
     downloadUrl:
-      'https://huggingface.co/litert-community/Qwen3-1.7B/resolve/main/Qwen3_1.7B.litertlm',
+      'https://huggingface.co/litert-community/Qwen3-1.7B/resolve/73fbc3fe8271c162a603ee66f6e7ed25b6211195/Qwen3_1.7B.litertlm',
     sha256: '66064a4e9269cb693e124c4e3040bcb8a446b10bca42663896329495add3861c',
     sizeBytes: 2_056_729_520, // 2.06GB (exact, HF LFS)
     // Conservative default (not marked in the filename). TODO: benchmark on device.
@@ -126,7 +129,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     parameterCount: '4B',
     quantization: 'mixed-int4',
     downloadUrl:
-      'https://huggingface.co/litert-community/Qwen3-4B/resolve/main/qwen3_4b_mixed_int4.litertlm',
+      'https://huggingface.co/litert-community/Qwen3-4B/resolve/84cc5a35c9c65cd18fcd65bb1f3a7d77a4acfe6e/qwen3_4b_mixed_int4.litertlm',
     sha256: 'f0794bc77efeaaf4f7af815f04c483b19b8f2ae4a102cef1b7b760a25848a18e',
     sizeBytes: 2_659_057_664, // 2.66GB (exact, HF LFS)
     // Conservative default (not marked in the filename). TODO: benchmark on device.
@@ -143,7 +146,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     parameterCount: '3.8B',
     quantization: 'int8',
     downloadUrl:
-      'https://huggingface.co/litert-community/Phi-4-mini-instruct/resolve/main/Phi-4-mini-instruct_multi-prefill-seq_q8_ekv4096.litertlm',
+      'https://huggingface.co/litert-community/Phi-4-mini-instruct/resolve/edafb1440931b748aeb7d0ae767109903d3d6d8d/Phi-4-mini-instruct_multi-prefill-seq_q8_ekv4096.litertlm',
     sha256: '7764d4deb53800578307be33039476b38a6c370fff71bedb3c0552563e23ab02',
     sizeBytes: 3_910_090_752, // 3.91GB (exact, HF LFS)
     contextWindow: 4_096, // ekv4096 build

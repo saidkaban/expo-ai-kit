@@ -194,7 +194,7 @@ registerModel({
   parameterCount: '4B',
   quantization: 'int4',
   downloadUrl:
-    'https://huggingface.co/litert-community/Qwen3-4B/resolve/main/qwen3_4b_mixed_int4.litertlm',
+    'https://huggingface.co/litert-community/Qwen3-4B/resolve/84cc5a35c9c65cd18fcd65bb1f3a7d77a4acfe6e/qwen3_4b_mixed_int4.litertlm',
   sha256: 'f0794bc77efeaaf4f7af815f04c483b19b8f2ae4a102cef1b7b760a25848a18e',
   sizeBytes: 2_659_057_664,
   contextWindow: 4096,
@@ -228,7 +228,7 @@ await setModel('qwen3-4b-custom');`}
         {`import { fetchModelMetadata } from 'expo-ai-kit';
 
 const { sha256, sizeBytes } = await fetchModelMetadata(
-  'https://huggingface.co/litert-community/Qwen3-4B/resolve/main/qwen3_4b_mixed_int4.litertlm',
+  'https://huggingface.co/litert-community/Qwen3-4B/resolve/84cc5a35c9c65cd18fcd65bb1f3a7d77a4acfe6e/qwen3_4b_mixed_int4.litertlm',
 );`}
       </CodeBlock>
 
