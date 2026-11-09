@@ -41,17 +41,9 @@ export default function GetStartedPage() {
         In an existing React Native app, <a href="https://docs.expo.dev/bare/installing-expo-modules/">install Expo modules</a> first,
         then set the same option by hand: <code>expoAiKit.llm=true</code> in <code>android/gradle.properties</code> and{" "}
         <code>{`"expoAiKit.llm": "true"`}</code> in <code>ios/Podfile.properties.json</code> (or <code>$ExpoAiKitLLM = true</code> in the Podfile).
-        The <code>llm</code> and <code>speech</code> options need Android <code>minSdkVersion</code> 26.
+        The <code>llm</code> and <code>speech</code> options need Android <code>minSdkVersion</code> 26, so set that by hand too.
+        In an Expo project, the config plugin sets it for you.
       </p>
-      <details>
-        <summary>Set the Android minimum SDK in an Expo project</summary>
-        <CodeBlock language="bash">{`npx expo install expo-build-properties`}</CodeBlock>
-        <CodeBlock language="json" filename="app.json">{`{
-  "expo": {
-    "plugins": [["expo-build-properties", { "android": { "minSdkVersion": 26 } }]]
-  }
-}`}</CodeBlock>
-      </details>
 
       <h2 id="build">2. Build the app</h2>
       <p>Plugin options change native code, so run a native build for your platform, or create an EAS development build.</p>
