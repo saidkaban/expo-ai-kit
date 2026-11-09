@@ -70,7 +70,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     contextWindow: 8_000,
     minRamBytes: 2_000_000_000, // 2GB, LiteRT-LM memory-maps weights, actual RSS ~1.5GB
     supportedPlatforms: ['ios', 'android'],
-    license: 'Gemma',
+    license: 'Apache-2.0',
   },
   {
     id: 'gemma-e4b',
@@ -84,7 +84,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     contextWindow: 16_000,
     minRamBytes: 3_000_000_000, // 3GB, LiteRT-LM memory-maps weights
     supportedPlatforms: ['ios', 'android'],
-    license: 'Gemma',
+    license: 'Apache-2.0',
   },
   // --- Qwen3 (Apache-2.0), official litert-community builds. A size ladder
   // from a sub-GB model that runs anywhere up to a 4B that rivals Gemma E4B.
@@ -214,7 +214,7 @@ export const ANDROID_EMBEDDING_MODEL: AndroidEmbeddingModelAsset = {
   maxSequenceLength: 512,
   tasksTextVersion: '1.0.0', // keep in sync with android/build.gradle
   formatContextProtocol: 'tfc1',
-  license: 'Gemma',
+  license: 'Apache-2.0',
 };
 
 /**
