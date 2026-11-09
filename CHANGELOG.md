@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.18.3
+## 0.18.4
+
+0.18.3 was tagged but never published, so this is the first release with these changes.
 
 ### Fixed
 
