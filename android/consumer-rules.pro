@@ -37,6 +37,11 @@
     <init>(expo.modules.aikit.vision.VisionSupport);
 }
 
+# LiteRT-LM ships no consumer rules; its JNI layer resolves Kotlin classes by
+# name. These rules are inert when the classes are absent (llm disabled).
+-keep class com.google.ai.edge.litertlm.** { *; }
+-dontwarn com.google.ai.edge.litertlm.**
+
 # MediaPipe tasks-text ships no consumer rules; its JNI layer resolves Java
 # classes by name. These rules are inert when the classes are absent
 # (embeddings disabled).
