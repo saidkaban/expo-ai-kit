@@ -8,8 +8,8 @@
 
 set -euo pipefail
 
-LITERTLM_VERSION="v0.12.0"
-LITERTLM_SHA256="3c2a11ecc8511d1e74efa7ca308dc7130c95223325c33212337ffb0563b79cde"
+LITERTLM_VERSION="v0.19.1"
+LITERTLM_SHA256="21cf294b3dfdd9c8166b0f7934ed392d5c69c8bfa57cd1a20e341a7d16874017"
 LITERTLM_URL="https://github.com/google-ai-edge/LiteRT-LM/releases/download/${LITERTLM_VERSION}/CLiteRTLM.xcframework.zip"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,7 +25,7 @@ if [[ -d "${XCFRAMEWORK_PATH}" ]] && [[ -f "${VERSION_STAMP}" ]] && [[ "$(cat "$
   exit 0
 fi
 
-echo "[ExpoAiKit] Downloading CLiteRTLM.xcframework ${LITERTLM_VERSION} (~122MB)..."
+echo "[ExpoAiKit] Downloading CLiteRTLM.xcframework ${LITERTLM_VERSION} (~96MB)..."
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TMP_DIR}"' EXIT

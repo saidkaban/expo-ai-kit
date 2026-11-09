@@ -1,6 +1,28 @@
 import Foundation
 import CryptoKit
 
+/// One non-system message passed to LiteRT-LM with its real role.
+struct ChatTurn: Sendable {
+  let isAssistant: Bool
+  var text: String
+
+  /// Chat templates can require alternating roles, so consecutive messages from
+  /// one side become a single turn.
+  static func from(_ messages: [[String: Any]]) -> [ChatTurn] {
+    var turns: [ChatTurn] = []
+    for message in messages {
+      let isAssistant = (message["role"] as? String) == "assistant"
+      let text = message["content"] as? String ?? ""
+      if let last = turns.last, last.isAssistant == isAssistant {
+        turns[turns.count - 1].text += "\n" + text
+      } else {
+        turns.append(ChatTurn(isAssistant: isAssistant, text: text))
+      }
+    }
+    return turns
+  }
+}
+
 /// Compiled only when the `llm` option is on: ExpoAiKit.podspec excludes this
 /// file (and the LiteRT-LM wrapper sources it depends on) otherwise.
 actor GemmaInferenceClient {
@@ -115,15 +137,27 @@ actor GemmaInferenceClient {
   /// Replace the current conversation with a fresh one for a single call, see
   /// `conversationConfig` for why inference never reuses one across calls.
   /// (Reassigning releases the previous conversation's native handle.)
-  private func freshConversation() async throws -> Conversation {
+  ///
+  /// The system prompt and earlier turns go in as real roles, and the returned
+  /// text is the last turn, to send on the new conversation.
+  private func freshConversation(
+    turns: [ChatTurn],
+    systemPrompt: String
+  ) async throws -> (conversation: Conversation, prompt: String) {
     guard let eng = engine else {
       throw GemmaError.modelNotDownloaded(loadedModelId ?? "unknown")
     }
     conversation = nil
+    let system = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+    let config = ConversationConfig(
+      systemMessage: system.isEmpty ? nil : Message(system, role: .system),
+      initialMessages: turns.dropLast().map { Message($0.text, role: $0.isAssistant ? .model : .user) },
+      samplerConfig: conversationConfig?.samplerConfig
+    )
     do {
-      let conv = try await eng.createConversation(with: conversationConfig)
+      let conv = try await eng.createConversation(with: config)
       conversation = conv
-      return conv
+      return (conv, turns.last?.text ?? "")
     } catch {
       throw GemmaError.inferenceFailed(
         loadedModelId ?? "unknown", reason: "Failed to create conversation: \(error)"
@@ -160,11 +194,10 @@ actor GemmaInferenceClient {
   // MARK: - Inference
 
   /// Generate a complete response. Blocks until done.
-  func generateText(prompt: String, systemPrompt: String) async throws -> String {
-    let conv = try await freshConversation()
-    let fullPrompt = buildFullPrompt(prompt: prompt, systemPrompt: systemPrompt)
+  func generateText(turns: [ChatTurn], systemPrompt: String) async throws -> String {
+    let (conv, prompt) = try await freshConversation(turns: turns, systemPrompt: systemPrompt)
     do {
-      let response = try await conv.sendMessage(Message(fullPrompt))
+      let response = try await conv.sendMessage(Message(prompt))
       return response.toString
     } catch {
       throw GemmaError.inferenceFailed(loadedModelId ?? "unknown", reason: "\(error)")
@@ -179,7 +212,7 @@ actor GemmaInferenceClient {
   /// or a delta, mirror Android's detection logic to handle both safely.
   func generateTextStream(
     sessionId: String,
-    prompt: String,
+    turns: [ChatTurn],
     systemPrompt: String,
     onChunk: @Sendable (_ token: String, _ accumulatedText: String, _ isDone: Bool) -> Void
   ) async throws {
@@ -197,14 +230,13 @@ actor GemmaInferenceClient {
       return
     }
 
-    let conv = try await freshConversation()
-    let fullPrompt = buildFullPrompt(prompt: prompt, systemPrompt: systemPrompt)
+    let (conv, prompt) = try await freshConversation(turns: turns, systemPrompt: systemPrompt)
 
     var accumulated = ""
     var previousText = ""
 
     do {
-      let stream = conv.sendMessageStream(Message(fullPrompt))
+      let stream = conv.sendMessageStream(Message(prompt))
       streamConversation = conv
       // A stop that arrived while the conversation was being created.
       if streamCancelRequested { try? conv.cancel() }
@@ -263,11 +295,6 @@ actor GemmaInferenceClient {
     }
     streamCancelRequested = true
     try? streamConversation?.cancel()
-  }
-
-  private nonisolated func buildFullPrompt(prompt: String, systemPrompt: String) -> String {
-    let trimmed = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-    return trimmed.isEmpty ? prompt : "\(trimmed)\n\n\(prompt)"
   }
 
   // MARK: - Download

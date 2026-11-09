@@ -27,6 +27,27 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
+/** One non-system message passed to LiteRT-LM with its real role. */
+data class ChatTurn(val isAssistant: Boolean, val text: String) {
+  companion object {
+    /** Chat templates can require alternating roles, so consecutive messages from one side become a single turn. */
+    fun from(messages: List<Map<String, Any>>): List<ChatTurn> {
+      val turns = mutableListOf<ChatTurn>()
+      for (message in messages) {
+        val isAssistant = message["role"] == "assistant"
+        val text = message["content"] as? String ?: ""
+        val last = turns.lastOrNull()
+        if (last != null && last.isAssistant == isAssistant) {
+          turns[turns.lastIndex] = last.copy(text = last.text + "\n" + text)
+        } else {
+          turns.add(ChatTurn(isAssistant, text))
+        }
+      }
+      return turns
+    }
+  }
+}
+
 /**
  * Wrapper around LiteRT-LM Engine for Gemma 4 models.
  *
@@ -224,20 +245,32 @@ class GemmaInferenceClient(private val context: Context) {
   /**
    * Replace the current conversation with a fresh one for a single call.
    * Must be called with the mutex held. See [convConfig] for why inference
-   * never reuses a conversation across calls.
+   * never reuses a conversation across calls. The system prompt and earlier
+   * turns go in as real roles, and the returned text is the last turn, to send
+   * on the new conversation.
    */
-  private fun freshConversation(): Conversation {
+  private fun freshConversation(
+    turns: List<ChatTurn>,
+    systemPrompt: String
+  ): Pair<Conversation, String> {
     val eng = engine
       ?: throw RuntimeException("MODEL_NOT_DOWNLOADED:${loadedModelId ?: "unknown"}:No model loaded")
     conversation?.close()
     conversation = null
+    val config = ConversationConfig(
+      systemInstruction = systemPrompt.takeIf { it.isNotBlank() }?.let { Contents.of(it) },
+      initialMessages = turns.dropLast(1).map {
+        if (it.isAssistant) Message.model(it.text) else Message.user(it.text)
+      },
+      samplerConfig = convConfig.samplerConfig
+    )
     val conv = try {
-      eng.createConversation(convConfig)
+      eng.createConversation(config)
     } catch (e: Exception) {
       throw RuntimeException("INFERENCE_FAILED:${loadedModelId ?: "unknown"}:Failed to create conversation: ${e.message}")
     }
     conversation = conv
-    return conv
+    return conv to (turns.lastOrNull()?.text ?: "")
   }
 
   /**
@@ -304,15 +337,13 @@ class GemmaInferenceClient(private val context: Context) {
    * Generate a complete response. Blocks until done.
    * The mutex ensures this cannot run concurrently with load/unload.
    */
-  suspend fun generateText(prompt: String, systemPrompt: String): String = mutex.withLock {
-    val conv = freshConversation()
-
-    val fullPrompt = buildFullPrompt(prompt, systemPrompt)
+  suspend fun generateText(turns: List<ChatTurn>, systemPrompt: String): String = mutex.withLock {
+    val (conv, prompt) = freshConversation(turns, systemPrompt)
 
     try {
       val result = StringBuilder()
       var previousText = ""
-      runInference(conv, fullPrompt) { messageText ->
+      runInference(conv, prompt) { messageText ->
         // LiteRT-LM may deliver accumulated text or delta tokens
         // (observed: deltas on-device), detect which, exactly like
         // generateTextStream, so the final text isn't just the last chunk.
@@ -344,18 +375,16 @@ class GemmaInferenceClient(private val context: Context) {
    * the delta token.
    */
   suspend fun generateTextStream(
-    prompt: String,
+    turns: List<ChatTurn>,
     systemPrompt: String,
     onChunk: (token: String, accumulatedText: String, isDone: Boolean) -> Unit
   ) = mutex.withLock {
-    val conv = freshConversation()
-
-    val fullPrompt = buildFullPrompt(prompt, systemPrompt)
+    val (conv, prompt) = freshConversation(turns, systemPrompt)
 
     try {
       val accumulatedBuilder = StringBuilder()
       var previousText = ""
-      runInference(conv, fullPrompt) { messageText ->
+      runInference(conv, prompt) { messageText ->
         // LiteRT-LM may deliver accumulated text or delta tokens depending
         // on the version. Detect which by checking if messageText extends
         // what we've seen before.
@@ -472,14 +501,6 @@ class GemmaInferenceClient(private val context: Context) {
   // -------------------------------------------------------------------------
   // Private helpers
   // -------------------------------------------------------------------------
-
-  private fun buildFullPrompt(prompt: String, systemPrompt: String): String {
-    return if (systemPrompt.isNotBlank()) {
-      "$systemPrompt\n\n$prompt"
-    } else {
-      prompt
-    }
-  }
 
   private companion object {
     // Upper bound on waiting for LiteRT-LM to acknowledge cancelProcess().

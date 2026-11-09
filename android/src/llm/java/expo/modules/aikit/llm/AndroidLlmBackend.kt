@@ -50,21 +50,17 @@ class AndroidLlmBackend(context: Context, private val events: LlmEventSink) : Ll
       ?.get("content") as? String
       ?: fallbackSystemPrompt.ifBlank { "You are a helpful, friendly assistant." }
 
-  // ML Kit has no conversation API: role-prefixed transcript. Gemma/LiteRT-LM's
-  // Conversation API formats turns itself; adding "USER:"/"ASSISTANT:" markers
-  // double-formats and garbles the output, so it gets raw content only.
-  private fun conversationPromptOf(messages: List<Map<String, Any>>, forMlKit: Boolean): String {
-    val nonSystem = messages.filter { it["role"] != "system" }
-    return if (forMlKit) {
-      nonSystem.joinToString("\n") { msg ->
-        val role = (msg["role"] as? String ?: "user").uppercase()
-        val content = msg["content"] as? String ?: ""
-        "$role: $content"
-      } + "\nASSISTANT:"
-    } else {
-      nonSystem.joinToString("\n") { msg -> msg["content"] as? String ?: "" }
-    }
-  }
+  // ML Kit has no conversation API: role-prefixed transcript.
+  private fun mlKitPromptOf(messages: List<Map<String, Any>>): String =
+    messages.filter { it["role"] != "system" }.joinToString("\n") { msg ->
+      val role = (msg["role"] as? String ?: "user").uppercase()
+      val content = msg["content"] as? String ?: ""
+      "$role: $content"
+    } + "\nASSISTANT:"
+
+  // LiteRT-LM's Conversation API formats turns from their roles.
+  private fun chatTurnsOf(messages: List<Map<String, Any>>): List<ChatTurn> =
+    ChatTurn.from(messages.filter { it["role"] != "system" })
 
   private fun emitModelState(modelId: String, status: String) {
     events.send("onModelStateChange", mapOf("modelId" to modelId, "status" to status))
@@ -87,9 +83,9 @@ class AndroidLlmBackend(context: Context, private val events: LlmEventSink) : Ll
   ): Map<String, Any?> {
     val systemPrompt = systemPromptOf(messages, fallbackSystemPrompt)
     val text = if (activeModelId == "mlkit") {
-      promptClient.generateText(conversationPromptOf(messages, forMlKit = true), systemPrompt)
+      promptClient.generateText(mlKitPromptOf(messages), systemPrompt)
     } else {
-      gemmaClient.generateText(conversationPromptOf(messages, forMlKit = false), systemPrompt)
+      gemmaClient.generateText(chatTurnsOf(messages), systemPrompt)
     }
     return mapOf("text" to text)
   }
@@ -120,11 +116,11 @@ class AndroidLlmBackend(context: Context, private val events: LlmEventSink) : Ll
       try {
         if (activeModelId == "mlkit") {
           promptClient.generateTextStream(
-            conversationPromptOf(messages, forMlKit = true), systemPrompt, streamCallback
+            mlKitPromptOf(messages), systemPrompt, streamCallback
           )
         } else {
           gemmaClient.generateTextStream(
-            conversationPromptOf(messages, forMlKit = false), systemPrompt, streamCallback
+            chatTurnsOf(messages), systemPrompt, streamCallback
           )
         }
       } catch (e: CancellationException) {

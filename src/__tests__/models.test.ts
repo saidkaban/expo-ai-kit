@@ -6,6 +6,7 @@ import {
   getRegisteredModels,
   getAllModels,
   getRegistryEntry,
+  isRetiredModelId,
   filterDownloadedModels,
   ANDROID_EMBEDDING_MODEL,
   MODEL_REGISTRY,
@@ -147,10 +148,12 @@ describe('registerModel / getRegistryEntry', () => {
     );
   });
 
-  it('pins qwen3 models to the CPU backend (GPU path broken in LiteRT-LM 0.10.0)', () => {
-    for (const id of ['qwen3-0.6b', 'qwen3-1.7b', 'qwen3-4b']) {
-      expect(getRegistryEntry(id)?.preferredBackend).toBe('cpu');
+  it('removes retired models from the registry but still recognizes their ids', () => {
+    for (const id of ['qwen3-0.6b', 'qwen3-1.7b', 'qwen3-4b', 'phi-4-mini']) {
+      expect(getRegistryEntry(id)).toBeUndefined();
+      expect(isRetiredModelId(id)).toBe(true);
     }
+    expect(isRetiredModelId('gemma-e2b')).toBe(false);
   });
 
   it('pins every registry download to a Hugging Face commit, not a branch', () => {

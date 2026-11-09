@@ -14,7 +14,7 @@ apps and React Native apps with Expo modules installed. No API keys, no cloud.
 - **Private and offline.** Inference runs on the device. Prompts, audio, and images never leave it.
 - **No API key, no per-request cost.** Nothing to provision, meter, or proxy.
 - **One TypeScript API for both platforms.** Apple Foundation Models, Speech, and Vision on iOS;
-  ML Kit and MediaPipe on Android; LiteRT-LM for downloadable models such as Gemma, Qwen, and Phi.
+  ML Kit and MediaPipe on Android; LiteRT-LM for downloadable models such as Gemma.
 - **Pay only for what you use.** Every feature is opt-in, so unused native code, models, and
   permissions never ship. Zero runtime JavaScript dependencies.
 
@@ -61,7 +61,7 @@ const answer = await ask('Explain gravity in one sentence.');
 
 The built-in text model requires Apple Intelligence on iOS 26+ or a supported Android device.
 Android may download its model during preparation. You can also
-[download a model](https://expo-ai-kit.dev/guides/models) such as Gemma, Qwen, or Phi.
+[download a model](https://expo-ai-kit.dev/guides/models) such as Gemma.
 
 ## LLM
 

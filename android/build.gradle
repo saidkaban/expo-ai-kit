@@ -105,9 +105,9 @@ android {
   }
 }
 
-// litertlm-android 0.10.0 ships Kotlin 2.3.0 metadata. Expo SDK 55 pins
-// the Kotlin compiler to 2.1.x which can only read up to 2.2.0 metadata.
-// This flag tells the compiler to skip the metadata version check.
+// litertlm-android ships Kotlin metadata newer than the compiler Expo pins,
+// which can only read one version ahead of itself. This flag tells the
+// compiler to skip the metadata version check.
 if (llmEnabled) {
   tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
     kotlinOptions {
@@ -119,7 +119,11 @@ if (llmEnabled) {
 dependencies {
   if (llmEnabled) {
     implementation "com.google.mlkit:genai-prompt:1.0.0-beta2"
-    implementation "com.google.ai.edge.litertlm:litertlm-android:0.10.0"
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.19.1") {
+      // kotlin-reflect 2.4.0 would raise kotlin-stdlib for the whole app, and
+      // Expo's Kotlin compiler cannot read 2.4 metadata in any other module.
+      exclude group: "org.jetbrains.kotlin", module: "kotlin-reflect"
+    }
   }
   if (androidEmbeddingsEnabled) {
     // Keep in sync with tasksTextVersion in src/models.ts, it is part of the

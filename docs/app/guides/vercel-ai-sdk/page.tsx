@@ -240,7 +240,7 @@ const { embeddings } = await embedMany({
       <Callout type="info" title="Thinking models surface reasoning parts">
         <p>
           When the active model reasons in <code>&lt;think&gt;</code> blocks
-          (e.g. Qwen3), the provider strips them out of text and tool output and
+          (such as DeepSeek-R1 style models), the provider strips them out of text and tool output and
           emits them as spec <code>reasoning</code> parts, so{" "}
           <code>generateText()</code>&apos;s <code>reasoning</code> field just
           works and JSON/tool parsing can&apos;t be derailed by reasoning text.

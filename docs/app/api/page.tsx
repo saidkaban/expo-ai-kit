@@ -276,7 +276,7 @@ const { text } = await generateText(
       <h3 id="stripthinking">stripThinking()</h3>
       <p>
         Pure helper that splits <code>&lt;think&gt;…&lt;/think&gt;</code>{" "}
-        reasoning (Qwen3-style models) from the answer. <code>generateObject</code>{" "}
+        reasoning (DeepSeek-R1 style models) from the answer. <code>generateObject</code>{" "}
         and <code>generateText</code> apply it internally.
       </p>
       <CodeBlock language="typescript">
@@ -674,7 +674,7 @@ const hits = store.search(queryVector, { topK: 4 });
 // SetModelOptions: { backend?: 'auto' | 'gpu' | 'cpu'; generation?: GenerationConfig }`}
       </CodeBlock>
       <CodeBlock language="typescript">
-        {`await setModel('qwen3-1.7b', { generation: { temperature: 0.7, topK: 40 } });`}
+        {`await setModel('gemma-e2b', { generation: { temperature: 0.7, topK: 40 } });`}
       </CodeBlock>
 
       <h3 id="unloadmodel">unloadModel()</h3>

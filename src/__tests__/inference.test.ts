@@ -33,8 +33,8 @@ jest.mock('../ExpoAiKitModule', () => ({
     addListener: jest.fn(),
     getActiveModel: jest.fn(),
     setModel: jest.fn(),
-    unloadModel: jest.fn(),
     deleteModel: jest.fn(),
+    unloadModel: jest.fn(),
     getBuiltInModels: jest.fn(),
     getDeviceRamBytes: jest.fn(),
   },
@@ -75,6 +75,23 @@ beforeEach(() => {
   }) as never);
   native.startStreaming.mockResolvedValue(undefined);
   native.stopStreaming.mockResolvedValue(undefined);
+});
+
+describe('retired models', () => {
+  it('setModel refuses a retired id without reaching native', async () => {
+    await expect(setModel('qwen3-4b')).rejects.toMatchObject({ code: 'MODEL_NOT_FOUND' });
+    expect(native.setModel).not.toHaveBeenCalled();
+  });
+
+  it('deleteModel still reclaims a retired id', async () => {
+    native.deleteModel.mockResolvedValue(undefined);
+    await deleteModel('qwen3-4b');
+    expect(native.deleteModel).toHaveBeenCalledWith('qwen3-4b');
+  });
+
+  it('deleteModel rejects an id that never existed', async () => {
+    await expect(deleteModel('not-a-model')).rejects.toMatchObject({ code: 'MODEL_NOT_FOUND' });
+  });
 });
 
 describe('sendMessage', () => {

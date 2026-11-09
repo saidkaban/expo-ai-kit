@@ -44,9 +44,7 @@ export type ModelRegistryEntry = {
   license: string;
   /**
    * Backend setModel() uses when the caller doesn't pass one. Set to 'cpu' for
-   * models whose GPU path is broken in the current runtime (device-verified:
-   * Qwen3 on LiteRT-LM 0.10.0 SIGSEGVs on Android GPU and emits degenerate
-   * output on iOS GPU; CPU is correct on both). An explicit
+   * models that are a poor fit for the GPU in the current runtime. An explicit
    * `setModel(id, { backend })` always wins over this hint.
    */
   preferredBackend?: InferenceBackend;
@@ -70,7 +68,7 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     contextWindow: 8_000,
     minRamBytes: 2_000_000_000, // 2GB, LiteRT-LM memory-maps weights, actual RSS ~1.5GB
     supportedPlatforms: ['ios', 'android'],
-    license: 'Gemma',
+    license: 'Apache-2.0',
   },
   {
     id: 'gemma-e4b',
@@ -84,77 +82,22 @@ export const MODEL_REGISTRY: ModelRegistryEntry[] = [
     contextWindow: 16_000,
     minRamBytes: 3_000_000_000, // 3GB, LiteRT-LM memory-maps weights
     supportedPlatforms: ['ios', 'android'],
-    license: 'Gemma',
-  },
-  // --- Qwen3 (Apache-2.0), official litert-community builds. A size ladder
-  // from a sub-GB model that runs anywhere up to a 4B that rivals Gemma E4B.
-  // preferredBackend 'cpu': Qwen3's GPU path is broken in LiteRT-LM 0.10.0,
-  // device-verified as a native SIGSEGV on Android (Mali) and degenerate "!!!"
-  // output on iOS (A19) with GPU/auto, while CPU generates correctly on both. ---
-  {
-    id: 'qwen3-0.6b',
-    name: 'Qwen3 0.6B',
-    parameterCount: '0.6B',
-    quantization: 'mixed-int4',
-    downloadUrl:
-      'https://huggingface.co/litert-community/Qwen3-0.6B/resolve/8414150f2e9dcc82449bcc9c5abc404b399a4d06/qwen3_0_6b_mixed_int4.litertlm',
-    sha256: 'b1baab462f6be49d70eada79d715c2c52cd9ece0cad00bddf6a2c097d23498e9',
-    sizeBytes: 497_664_000, // 475MB (exact, HF LFS)
-    // The int4 build ships a 2048-token KV. TODO: benchmark on device.
-    contextWindow: 2_048,
-    minRamBytes: 1_000_000_000, // 1GB, tiny; runs on virtually any modern device
-    supportedPlatforms: ['ios', 'android'],
     license: 'Apache-2.0',
-    preferredBackend: 'cpu',
-  },
-  {
-    id: 'qwen3-1.7b',
-    name: 'Qwen3 1.7B',
-    parameterCount: '1.7B',
-    quantization: 'dynamic-int8',
-    downloadUrl:
-      'https://huggingface.co/litert-community/Qwen3-1.7B/resolve/73fbc3fe8271c162a603ee66f6e7ed25b6211195/Qwen3_1.7B.litertlm',
-    sha256: '66064a4e9269cb693e124c4e3040bcb8a446b10bca42663896329495add3861c',
-    sizeBytes: 2_056_729_520, // 2.06GB (exact, HF LFS)
-    // Conservative default (not marked in the filename). TODO: benchmark on device.
-    contextWindow: 4_096,
-    minRamBytes: 2_000_000_000, // 2GB
-    supportedPlatforms: ['ios', 'android'],
-    license: 'Apache-2.0',
-    preferredBackend: 'cpu',
-  },
-  {
-    id: 'qwen3-4b',
-    name: 'Qwen3 4B',
-    parameterCount: '4B',
-    quantization: 'mixed-int4',
-    downloadUrl:
-      'https://huggingface.co/litert-community/Qwen3-4B/resolve/84cc5a35c9c65cd18fcd65bb1f3a7d77a4acfe6e/qwen3_4b_mixed_int4.litertlm',
-    sha256: 'f0794bc77efeaaf4f7af815f04c483b19b8f2ae4a102cef1b7b760a25848a18e',
-    sizeBytes: 2_659_057_664, // 2.66GB (exact, HF LFS)
-    // Conservative default (not marked in the filename). TODO: benchmark on device.
-    contextWindow: 4_096,
-    minRamBytes: 3_000_000_000, // 3GB, 4B params need more headroom than the similarly-sized E2B
-    supportedPlatforms: ['ios', 'android'],
-    license: 'Apache-2.0',
-    preferredBackend: 'cpu',
-  },
-  // --- Phi-4 Mini (MIT), strong reasoning; q8 build, the heaviest downloadable. ---
-  {
-    id: 'phi-4-mini',
-    name: 'Phi-4 Mini',
-    parameterCount: '3.8B',
-    quantization: 'int8',
-    downloadUrl:
-      'https://huggingface.co/litert-community/Phi-4-mini-instruct/resolve/edafb1440931b748aeb7d0ae767109903d3d6d8d/Phi-4-mini-instruct_multi-prefill-seq_q8_ekv4096.litertlm',
-    sha256: '7764d4deb53800578307be33039476b38a6c370fff71bedb3c0552563e23ab02',
-    sizeBytes: 3_910_090_752, // 3.91GB (exact, HF LFS)
-    contextWindow: 4_096, // ekv4096 build
-    minRamBytes: 4_000_000_000, // 4GB, q8 weights, heaviest downloadable
-    supportedPlatforms: ['ios', 'android'],
-    license: 'MIT',
   },
 ];
+
+// Ids removed from MODEL_REGISTRY. setModel() refuses them, but deleteModel()
+// still accepts them so apps can reclaim a file downloaded before the removal.
+// Qwen is not offered on LiteRT-LM 0.19: the published Qwen3 files carry a
+// string-only chat template the runtime can no longer render, and Qwen3.5 keeps
+// recurrent state between conversations on one engine (LiteRT-LM issue #3165).
+// Phi-4 Mini could not be verified on 0.19: the app died downloading it on phones.
+const RETIRED_MODEL_IDS = new Set(['qwen3-0.6b', 'qwen3-1.7b', 'qwen3-4b', 'phi-4-mini']);
+
+/** Whether an id belonged to a model that has been removed from the registry. */
+export function isRetiredModelId(modelId: string): boolean {
+  return RETIRED_MODEL_IDS.has(modelId);
+}
 
 // ---------------------------------------------------------------------------
 // Android embedding model asset (EmbeddingGemma via MediaPipe TextEmbedder).
@@ -308,7 +251,7 @@ export function validateModelEntry(entry: ModelRegistryEntry): string[] {
  * ```ts
  * const { sha256, sizeBytes } = await fetchModelMetadata(url); // dev-time
  * registerModel({
- *   id: 'qwen3-8b', name: 'Qwen3 8B', parameterCount: '8B', quantization: 'int4',
+ *   id: 'my-model', name: 'My Model', parameterCount: '8B', quantization: 'int4',
  *   downloadUrl: url, sha256, sizeBytes,
  *   contextWindow: 4096, minRamBytes: 6_000_000_000,
  *   supportedPlatforms: ['ios', 'android'], license: 'Apache-2.0',

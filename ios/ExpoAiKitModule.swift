@@ -345,13 +345,9 @@ public class ExpoAiKitModule: Module {
               "DEVICE_NOT_SUPPORTED", "apple-fm", "Apple Foundation Models requires iOS 26 or later")
           }
         } else {
-          // Gemma/LiteRT-LM: Conversation API handles turn formatting; pass raw content joined.
-          let conversationPrompt = nonSystemMessages
-            .map { ($0["content"] as? String) ?? "" }
-            .joined(separator: "\n")
-
+          // Gemma/LiteRT-LM: the Conversation API formats turns from their roles.
           let text = try await self.gemmaClient.generateText(
-            prompt: conversationPrompt, systemPrompt: baseSystemPrompt
+            turns: ChatTurn.from(nonSystemMessages), systemPrompt: baseSystemPrompt
           )
           return ["text": text]
         }
@@ -446,9 +442,7 @@ public class ExpoAiKitModule: Module {
         }
       } else {
         // Gemma/LiteRT-LM path
-        let conversationPrompt = nonSystemMessages
-          .map { ($0["content"] as? String) ?? "" }
-          .joined(separator: "\n")
+        let turns = ChatTurn.from(nonSystemMessages)
 
         // Not tracked in activeStreamTasks: stopStreaming stops LiteRT-LM
         // natively instead of cancelling this task (see cancelStream).
@@ -456,7 +450,7 @@ public class ExpoAiKitModule: Module {
           do {
             try await self.gemmaClient.generateTextStream(
               sessionId: sessionId,
-              prompt: conversationPrompt,
+              turns: turns,
               systemPrompt: baseSystemPrompt
             ) { token, accumulatedText, isDone in
               self.sendEvent("onStreamToken", [
