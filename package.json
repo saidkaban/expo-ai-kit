@@ -32,9 +32,9 @@
     "open:android": "open -a \"Android Studio\" example/android",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "publish:patch": "npm version patch && npm publish",
-    "publish:minor": "npm version minor && npm publish",
-    "publish:major": "npm version major && npm publish",
+    "publish:patch": "npm whoami && npm version patch && npm publish",
+    "publish:minor": "npm whoami && npm version minor && npm publish",
+    "publish:major": "npm whoami && npm version major && npm publish",
     "publish:only": "npm publish"
   },
   "keywords": [
